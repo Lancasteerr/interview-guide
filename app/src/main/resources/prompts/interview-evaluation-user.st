@@ -16,7 +16,8 @@
 {referenceContext}
 
 ## 评估要求
-1. 逐题评估每道问题的回答质量，给出分数和具体反馈
+0. 记录中的 `questionIndex` 是题目唯一标识（0-based）：返回结果 `questionEvaluations` 中每一项的 `questionIndex` 必须与对应题目完全一致，原样复制，不要自行加减 1 或重新编号
+1. 逐题评估每道问题的回答质量，给出分数和具体反馈；标注（追问，针对 questionIndex=N）的题目需结合 questionIndex=N 的主问题回答一起理解
 2. 按技术类别统计各领域得分
 3. 分析候选人的优势和待改进项
 4. 为每道题提供参考答案和核心要点

@@ -45,7 +45,7 @@ public class UnifiedEvaluationService {
     private final ResourceLoader resourceLoader;
 
     // 批次评估结果
-    private record BatchReportDTO(
+    record BatchReportDTO(
         int overallScore,
         String overallFeedback,
         List<String> strengths,
@@ -53,7 +53,7 @@ public class UnifiedEvaluationService {
         List<QuestionEvalDTO> questionEvaluations
     ) {}
 
-    private record QuestionEvalDTO(
+    record QuestionEvalDTO(
         int questionIndex,
         int score,
         String feedback,
@@ -62,12 +62,16 @@ public class UnifiedEvaluationService {
     ) {}
 
     private record BatchResult(
-        int startIndex,
-        int endIndex,
+        List<Integer> questionIndexes,
         BatchReportDTO report
     ) {}
 
-    private record SummaryDTO(
+    /**
+     * 问答组：主问题与其追问构成的不可拆分单元
+     */
+    private record QaGroup(List<QaRecord> records) {}
+
+    record SummaryDTO(
         String overallFeedback,
         List<String> strengths,
         List<String> improvements
@@ -152,13 +156,62 @@ public class UnifiedEvaluationService {
                                                  String resumeContext, List<QaRecord> qaRecords,
                                                  String referenceContext) {
         List<BatchResult> results = new ArrayList<>();
-        for (int start = 0; start < qaRecords.size(); start += evaluationBatchSize) {
-            int end = Math.min(start + evaluationBatchSize, qaRecords.size());
-            List<QaRecord> batch = qaRecords.subList(start, end);
+        for (List<QaRecord> batch : packBatches(buildGroups(qaRecords))) {
             BatchReportDTO report = evaluateBatch(chatClient, sessionId, resumeContext, referenceContext, batch);
-            results.add(new BatchResult(start, end, report));
+            results.add(new BatchResult(
+                batch.stream().map(QaRecord::questionIndex).toList(), report));
         }
         return results;
+    }
+
+    /**
+     * 按输入顺序建立问答组：主问题为组 Key，合法追问挂到父问题所在组；
+     * 父问题不存在、父索引指向未来题目等异常关系降级为独立组并告警
+     */
+    private List<QaGroup> buildGroups(List<QaRecord> qaRecords) {
+        Set<Integer> knownIndexes = qaRecords.stream()
+            .map(QaRecord::questionIndex).collect(Collectors.toSet());
+        Map<Integer, QaGroup> groupByIndex = new HashMap<>();
+        List<QaGroup> orderedGroups = new ArrayList<>();
+        for (QaRecord q : qaRecords) {
+            QaGroup target = null;
+            if (q.followUp() && q.parentQuestionIndex() != null) {
+                int parent = q.parentQuestionIndex();
+                if (knownIndexes.contains(parent) && parent < q.questionIndex()) {
+                    target = groupByIndex.get(parent);
+                } else {
+                    log.warn("追问父索引异常，降级为独立组: questionIndex={}, parentQuestionIndex={}",
+                        q.questionIndex(), parent);
+                }
+            }
+            if (target == null) {
+                target = new QaGroup(new ArrayList<>());
+                orderedGroups.add(target);
+            }
+            target.records().add(q);
+            groupByIndex.put(q.questionIndex(), target);
+        }
+        return orderedGroups;
+    }
+
+    /**
+     * 以组为不可拆分单元装批；加入下一组会超过批次大小时先提交当前批次；
+     * 单个组超过批次大小时允许其独占一个超限批次，优先保证上下文完整
+     */
+    private List<List<QaRecord>> packBatches(List<QaGroup> groups) {
+        List<List<QaRecord>> batches = new ArrayList<>();
+        List<QaRecord> current = new ArrayList<>();
+        for (QaGroup group : groups) {
+            if (!current.isEmpty() && current.size() + group.records().size() > evaluationBatchSize) {
+                batches.add(current);
+                current = new ArrayList<>();
+            }
+            current.addAll(group.records());
+        }
+        if (!current.isEmpty()) {
+            batches.add(current);
+        }
+        return batches;
     }
 
     private BatchReportDTO evaluateBatch(ChatClient chatClient, String sessionId,
@@ -191,31 +244,53 @@ public class UnifiedEvaluationService {
     private String buildQARecords(List<QaRecord> batch) {
         StringBuilder sb = new StringBuilder();
         for (QaRecord q : batch) {
-            sb.append(String.format("问题%d [%s]: %s\n",
-                q.questionIndex() + 1, q.category(), q.question()));
+            String relation = q.followUp() && q.parentQuestionIndex() != null
+                ? String.format("（追问，针对 questionIndex=%d）", q.parentQuestionIndex())
+                : "";
+            sb.append(String.format("问题 questionIndex=%d [%s]%s: %s\n",
+                q.questionIndex(), q.category(), relation, q.question()));
             sb.append(String.format("回答: %s\n\n",
                 q.userAnswer() != null ? q.userAnswer() : "(未回答)"));
         }
         return sb.toString();
     }
 
+    /**
+     * 按模型返回的 questionIndex 显式映射回原始题目；
+     * 非法（不属于本批、重复）或缺失的索引只降级该位置为 0 分；
+     * 仅当返回数量与输入一致且索引不可用时才按位置兜底
+     */
     private List<QuestionEvalDTO> mergeQuestionEvaluations(List<BatchResult> batchResults) {
         List<QuestionEvalDTO> merged = new ArrayList<>();
         for (BatchResult result : batchResults) {
-            int expectedSize = result.endIndex() - result.startIndex();
+            List<Integer> expectedIndexes = result.questionIndexes();
             List<QuestionEvalDTO> current =
                 result.report() != null && result.report().questionEvaluations() != null
                     ? result.report().questionEvaluations()
                     : List.of();
-            for (int i = 0; i < expectedSize; i++) {
-                if (i < current.size() && current.get(i) != null) {
-                    merged.add(current.get(i));
-                } else {
-                    merged.add(new QuestionEvalDTO(
-                        result.startIndex() + i, 0,
-                        "该题未成功生成评估结果，系统按 0 分处理。", "", List.of()
-                    ));
+
+            Map<Integer, QuestionEvalDTO> byIndex = new HashMap<>();
+            for (QuestionEvalDTO dto : current) {
+                if (dto == null || !expectedIndexes.contains(dto.questionIndex())) {
+                    continue;
                 }
+                byIndex.putIfAbsent(dto.questionIndex(), dto);
+            }
+            boolean indexesUsable = byIndex.size() == expectedIndexes.size();
+
+            for (int i = 0; i < expectedIndexes.size(); i++) {
+                int originalIndex = expectedIndexes.get(i);
+                QuestionEvalDTO dto = byIndex.get(originalIndex);
+                if (dto == null && !indexesUsable && current.size() == expectedIndexes.size()
+                    && current.get(i) != null) {
+                    dto = current.get(i);
+                }
+                if (dto != null && dto.questionIndex() != originalIndex) {
+                    dto = new QuestionEvalDTO(originalIndex, dto.score(), dto.feedback(),
+                        dto.referenceAnswer(), dto.keyPoints());
+                }
+                merged.add(dto != null ? dto : new QuestionEvalDTO(
+                    originalIndex, 0, "该题未成功生成评估结果，系统按 0 分处理。", "", List.of()));
             }
         }
         return merged;

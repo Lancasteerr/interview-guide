@@ -49,7 +49,8 @@ public class AnswerEvaluationService {
         try {
             // 转为通用问答记录
             List<QaRecord> qaRecords = questions.stream()
-                .map(q -> new QaRecord(q.questionIndex(), q.question(), q.category(), q.userAnswer()))
+                .map(q -> new QaRecord(q.questionIndex(), q.question(), q.category(), q.userAnswer(),
+                    q.isFollowUp(), q.parentQuestionIndex()))
                 .toList();
 
             String referenceContext = buildQuestionReferenceContext(questions);
