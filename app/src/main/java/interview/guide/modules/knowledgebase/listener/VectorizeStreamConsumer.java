@@ -4,7 +4,11 @@ import interview.guide.common.async.AbstractStreamConsumer;
 import interview.guide.common.constant.AsyncTaskStreamConstants;
 import interview.guide.infrastructure.redis.RedisService;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
+import interview.guide.common.exception.BusinessException;
+import interview.guide.common.exception.ErrorCode;
+import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
+import interview.guide.modules.knowledgebase.service.KnowledgeBaseParseService;
 import interview.guide.modules.knowledgebase.service.KnowledgeBaseVectorService;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.stream.StreamMessageId;
@@ -22,18 +26,21 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
 
     private final KnowledgeBaseVectorService vectorService;
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final KnowledgeBaseParseService parseService;
 
     public VectorizeStreamConsumer(
         RedisService redisService,
         KnowledgeBaseVectorService vectorService,
-        KnowledgeBaseRepository knowledgeBaseRepository
+        KnowledgeBaseRepository knowledgeBaseRepository,
+        KnowledgeBaseParseService parseService
     ) {
         super(redisService);
         this.vectorService = vectorService;
         this.knowledgeBaseRepository = knowledgeBaseRepository;
+        this.parseService = parseService;
     }
 
-    record VectorizePayload(Long kbId, String content) {}
+    record VectorizePayload(Long kbId) {}
 
     @Override
     protected String taskDisplayName() {
@@ -63,12 +70,12 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
     @Override
     protected VectorizePayload parsePayload(StreamMessageId messageId, Map<String, String> data) {
         String kbIdStr = data.get(AsyncTaskStreamConstants.FIELD_KB_ID);
-        String content = data.get(AsyncTaskStreamConstants.FIELD_CONTENT);
-        if (kbIdStr == null || content == null) {
+        if (kbIdStr == null) {
             log.warn("消息格式错误，跳过: messageId={}", messageId);
             return null;
         }
-        return new VectorizePayload(Long.parseLong(kbIdStr), content);
+        // 兼容旧格式消息：其中的 content 字段直接忽略，正文以数据库实体 + RustFS 为事实来源
+        return new VectorizePayload(Long.parseLong(kbIdStr));
     }
 
     @Override
@@ -91,11 +98,23 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
     @Override
     protected void processBusiness(VectorizePayload payload) {
         Long kbId = payload.kbId();
-        if (!knowledgeBaseRepository.existsById(kbId)) {
+        KnowledgeBaseEntity kb = knowledgeBaseRepository.findById(kbId).orElse(null);
+        if (kb == null) {
             log.warn("知识库已被删除，跳过向量化任务: kbId={}", kbId);
             return;
         }
-        vectorService.vectorizeAndStore(payload.kbId(), payload.content());
+        if (isBlank(kb.getStorageKey()) || isBlank(kb.getOriginalFilename())) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "知识库缺少存储信息，无法下载原文件");
+        }
+        String content = parseService.downloadAndParseContent(kb.getStorageKey(), kb.getOriginalFilename());
+        if (content == null || content.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "无法从文件中提取文本内容");
+        }
+        vectorService.vectorizeAndStore(kbId, content);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     @Override
@@ -111,11 +130,9 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
     @Override
     protected void retryMessage(VectorizePayload payload, int retryCount) {
         Long kbId = payload.kbId();
-        String content = payload.content();
         try {
             Map<String, String> message = Map.of(
                 AsyncTaskStreamConstants.FIELD_KB_ID, kbId.toString(),
-                AsyncTaskStreamConstants.FIELD_CONTENT, content,
                 AsyncTaskStreamConstants.FIELD_RETRY_COUNT, String.valueOf(retryCount)
             );
 

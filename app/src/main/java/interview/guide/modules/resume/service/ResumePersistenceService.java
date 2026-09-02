@@ -90,6 +90,17 @@ public class ResumePersistenceService {
     }
     
     /**
+     * 回填简历正文（独立短事务，供 Stream 消费者从 RustFS 恢复文本后使用）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateResumeText(Long resumeId, String resumeText) {
+        ResumeEntity resume = resumeRepository.findById(resumeId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND, "简历不存在"));
+        resume.setResumeText(resumeText);
+        resumeRepository.save(resume);
+    }
+
+    /**
      * 保存简历评测结果
      */
     @Transactional(rollbackFor = Exception.class)

@@ -20,7 +20,7 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
 
-    record VectorizeTaskPayload(Long kbId, String content) {}
+    record VectorizeTaskPayload(Long kbId) {}
 
     public VectorizeStreamProducer(RedisService redisService, KnowledgeBaseRepository knowledgeBaseRepository) {
         super(redisService);
@@ -30,11 +30,10 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
     /**
      * 发送向量化任务到 Redis Stream
      *
-     * @param kbId    知识库ID
-     * @param content 文档内容
+     * @param kbId 知识库ID
      */
-    public void sendVectorizeTask(Long kbId, String content) {
-        sendTask(new VectorizeTaskPayload(kbId, content));
+    public void sendVectorizeTask(Long kbId) {
+        sendTask(new VectorizeTaskPayload(kbId));
     }
 
     @Override
@@ -51,7 +50,6 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
     protected Map<String, String> buildMessage(VectorizeTaskPayload payload) {
         return Map.of(
             AsyncTaskStreamConstants.FIELD_KB_ID, payload.kbId().toString(),
-            AsyncTaskStreamConstants.FIELD_CONTENT, payload.content(),
             AsyncTaskStreamConstants.FIELD_RETRY_COUNT, "0"
         );
     }

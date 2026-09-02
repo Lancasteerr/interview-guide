@@ -22,7 +22,7 @@ public class AnalyzeStreamProducer extends AbstractStreamProducer<AnalyzeStreamP
     private final ResumeRepository resumeRepository;
     private final TransactionalExecutor transactionalExecutor;
 
-    record AnalyzeTaskPayload(Long resumeId, String content) {}
+    record AnalyzeTaskPayload(Long resumeId) {}
 
     public AnalyzeStreamProducer(
         RedisService redisService,
@@ -38,10 +38,9 @@ public class AnalyzeStreamProducer extends AbstractStreamProducer<AnalyzeStreamP
      * 发送分析任务到 Redis Stream
      *
      * @param resumeId 简历ID
-     * @param content  简历内容
      */
-    public void sendAnalyzeTask(Long resumeId, String content) {
-        sendTask(new AnalyzeTaskPayload(resumeId, content));
+    public void sendAnalyzeTask(Long resumeId) {
+        sendTask(new AnalyzeTaskPayload(resumeId));
     }
 
     @Override
@@ -58,7 +57,6 @@ public class AnalyzeStreamProducer extends AbstractStreamProducer<AnalyzeStreamP
     protected Map<String, String> buildMessage(AnalyzeTaskPayload payload) {
         return Map.of(
             AsyncTaskStreamConstants.FIELD_RESUME_ID, payload.resumeId().toString(),
-            AsyncTaskStreamConstants.FIELD_CONTENT, payload.content(),
             AsyncTaskStreamConstants.FIELD_RETRY_COUNT, "0"
         );
     }

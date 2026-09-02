@@ -1,0 +1,174 @@
+package interview.guide.modules.resume.listener;
+
+import interview.guide.common.exception.BusinessException;
+import interview.guide.common.transaction.TransactionalExecutor;
+import interview.guide.infrastructure.redis.RedisService;
+import interview.guide.modules.interview.model.ResumeAnalysisResponse;
+import interview.guide.modules.resume.model.ResumeEntity;
+import interview.guide.modules.resume.repository.ResumeRepository;
+import interview.guide.modules.resume.service.ResumeGradingService;
+import interview.guide.modules.resume.service.ResumeParseService;
+import interview.guide.modules.resume.service.ResumePersistenceService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.redisson.api.stream.StreamMessageId;
+
+import java.util.Map;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("简历分析 Stream ID-only 消息测试")
+class AnalyzeStreamTest {
+
+  @Mock
+  private RedisService redisService;
+  @Mock
+  private ResumeRepository resumeRepository;
+  @Mock
+  private TransactionalExecutor transactionalExecutor;
+  @Mock
+  private ResumeGradingService gradingService;
+  @Mock
+  private ResumePersistenceService persistenceService;
+  @Mock
+  private ResumeParseService parseService;
+
+  private AnalyzeStreamProducer producer;
+  private AnalyzeStreamConsumer consumer;
+
+  @BeforeEach
+  void setUp() {
+    producer = new AnalyzeStreamProducer(redisService, resumeRepository, transactionalExecutor);
+    consumer = new AnalyzeStreamConsumer(redisService, gradingService,
+        persistenceService, resumeRepository, parseService);
+  }
+
+  private ResumeAnalysisResponse analysis() {
+    return new ResumeAnalysisResponse(0, null, null, null, null, null);
+  }
+
+  private ResumeEntity resume(String resumeText, String storageKey, String filename) {
+    ResumeEntity resume = new ResumeEntity();
+    resume.setId(5L);
+    resume.setResumeText(resumeText);
+    resume.setStorageKey(storageKey);
+    resume.setOriginalFilename(filename);
+    return resume;
+  }
+
+  @Nested
+  @DisplayName("生产者")
+  class ProducerTests {
+
+    @Test
+    @DisplayName("Stream 消息只包含 resumeId 与 retryCount")
+    void shouldSendIdOnlyMessage() {
+      producer.sendAnalyzeTask(5L);
+
+      @SuppressWarnings("unchecked")
+      ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+      verify(redisService).streamAdd(anyString(), captor.capture(), anyInt());
+      assertThat(captor.getValue())
+          .containsEntry("resumeId", "5")
+          .containsEntry("retryCount", "0")
+          .hasSize(2);
+    }
+  }
+
+  @Nested
+  @DisplayName("消费者")
+  class ConsumerTests {
+
+    @Test
+    @DisplayName("解析旧格式消息时忽略 content 字段")
+    void shouldIgnoreLegacyContentField() {
+      AnalyzeStreamConsumer.AnalyzePayload payload = consumer.parsePayload(
+          new StreamMessageId(0, 0),
+          Map.of("resumeId", "5", "content", "旧格式正文", "retryCount", "0"));
+
+      assertThat(payload.resumeId()).isEqualTo(5L);
+    }
+
+    @Test
+    @DisplayName("从数据库正文直接分析")
+    void shouldAnalyzeFromDatabaseText() {
+      when(resumeRepository.findById(5L))
+          .thenReturn(Optional.of(resume("数据库中的简历正文", "resume/5", "a.pdf")));
+      when(gradingService.analyzeResume("数据库中的简历正文")).thenReturn(analysis());
+
+      consumer.processBusiness(new AnalyzeStreamConsumer.AnalyzePayload(5L));
+
+      verify(parseService, never()).downloadAndParseContent(anyString(), anyString());
+      verify(persistenceService).saveAnalysis(any(ResumeEntity.class), any(ResumeAnalysisResponse.class));
+    }
+
+    @Test
+    @DisplayName("历史正文为空时从 RustFS 恢复并回填后分析")
+    void shouldRestoreTextFromStorageWhenMissing() {
+      when(resumeRepository.findById(5L))
+          .thenReturn(Optional.of(resume(null, "resume/5", "a.pdf")));
+      when(parseService.downloadAndParseContent("resume/5", "a.pdf")).thenReturn("恢复的简历正文");
+      when(gradingService.analyzeResume("恢复的简历正文")).thenReturn(analysis());
+
+      consumer.processBusiness(new AnalyzeStreamConsumer.AnalyzePayload(5L));
+
+      verify(persistenceService).updateResumeText(5L, "恢复的简历正文");
+      verify(persistenceService).saveAnalysis(any(ResumeEntity.class), any(ResumeAnalysisResponse.class));
+    }
+
+    @Test
+    @DisplayName("恢复后正文仍为空时抛出业务异常")
+    void shouldThrowWhenRestoredTextStillEmpty() {
+      when(resumeRepository.findById(5L))
+          .thenReturn(Optional.of(resume("", "resume/5", "a.pdf")));
+      when(parseService.downloadAndParseContent("resume/5", "a.pdf")).thenReturn(" ");
+
+      assertThatThrownBy(() -> consumer.processBusiness(new AnalyzeStreamConsumer.AnalyzePayload(5L)))
+          .isInstanceOf(BusinessException.class)
+          .hasMessageContaining("无法获取简历文本内容");
+      verify(gradingService, never()).analyzeResume(anyString());
+    }
+
+    @Test
+    @DisplayName("实体已删除时跳过且不分析")
+    void shouldSkipWhenEntityDeleted() {
+      when(resumeRepository.findById(5L)).thenReturn(Optional.empty());
+
+      consumer.processBusiness(new AnalyzeStreamConsumer.AnalyzePayload(5L));
+
+      verify(gradingService, never()).analyzeResume(anyString());
+    }
+
+    @Test
+    @DisplayName("重试消息只携带 resumeId 与 retryCount")
+    void shouldRetryWithIdOnlyMessage() {
+      consumer.retryMessage(new AnalyzeStreamConsumer.AnalyzePayload(5L), 3);
+
+      @SuppressWarnings("unchecked")
+      ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+      verify(redisService).streamAdd(anyString(), captor.capture(), anyInt());
+      assertThat(captor.getValue())
+          .containsEntry("resumeId", "5")
+          .containsEntry("retryCount", "3")
+          .hasSize(2);
+      assertThat(captor.getValue().keySet()).doesNotContain("content");
+    }
+  }
+}

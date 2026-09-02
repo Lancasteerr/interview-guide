@@ -41,7 +41,7 @@ export interface UploadKnowledgeBaseResponse {
     name: string;
     category: string;
     fileSize: number;
-    contentLength: number;
+    vectorStatus: VectorStatus;
   };
   storage: {
     fileKey: string;

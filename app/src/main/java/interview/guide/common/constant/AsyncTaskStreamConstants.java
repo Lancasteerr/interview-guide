@@ -17,11 +17,6 @@ public final class AsyncTaskStreamConstants {
      */
     public static final String FIELD_RETRY_COUNT = "retryCount";
 
-    /**
-     * 文档内容字段
-     */
-    public static final String FIELD_CONTENT = "content";
-
     // ========== 通用消费者配置 ==========
 
     /**

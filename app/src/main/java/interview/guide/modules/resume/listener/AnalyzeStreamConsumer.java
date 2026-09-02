@@ -2,12 +2,15 @@ package interview.guide.modules.resume.listener;
 
 import interview.guide.common.async.AbstractStreamConsumer;
 import interview.guide.common.constant.AsyncTaskStreamConstants;
+import interview.guide.common.exception.BusinessException;
+import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.model.AsyncTaskStatus;
 import interview.guide.infrastructure.redis.RedisService;
 import interview.guide.modules.interview.model.ResumeAnalysisResponse;
 import interview.guide.modules.resume.model.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeRepository;
 import interview.guide.modules.resume.service.ResumeGradingService;
+import interview.guide.modules.resume.service.ResumeParseService;
 import interview.guide.modules.resume.service.ResumePersistenceService;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.stream.StreamMessageId;
@@ -26,20 +29,23 @@ public class AnalyzeStreamConsumer extends AbstractStreamConsumer<AnalyzeStreamC
     private final ResumeGradingService gradingService;
     private final ResumePersistenceService persistenceService;
     private final ResumeRepository resumeRepository;
+    private final ResumeParseService parseService;
 
     public AnalyzeStreamConsumer(
         RedisService redisService,
         ResumeGradingService gradingService,
         ResumePersistenceService persistenceService,
-        ResumeRepository resumeRepository
+        ResumeRepository resumeRepository,
+        ResumeParseService parseService
     ) {
         super(redisService);
         this.gradingService = gradingService;
         this.persistenceService = persistenceService;
         this.resumeRepository = resumeRepository;
+        this.parseService = parseService;
     }
 
-    record AnalyzePayload(Long resumeId, String content) {}
+    record AnalyzePayload(Long resumeId) {}
 
     @Override
     protected String taskDisplayName() {
@@ -69,12 +75,12 @@ public class AnalyzeStreamConsumer extends AbstractStreamConsumer<AnalyzeStreamC
     @Override
     protected AnalyzePayload parsePayload(StreamMessageId messageId, Map<String, String> data) {
         String resumeIdStr = data.get(AsyncTaskStreamConstants.FIELD_RESUME_ID);
-        String content = data.get(AsyncTaskStreamConstants.FIELD_CONTENT);
-        if (resumeIdStr == null || content == null) {
+        if (resumeIdStr == null) {
             log.warn("消息格式错误，跳过: messageId={}", messageId);
             return null;
         }
-        return new AnalyzePayload(Long.parseLong(resumeIdStr), content);
+        // 兼容旧格式消息：其中的 content 字段直接忽略，正文以数据库实体为事实来源
+        return new AnalyzePayload(Long.parseLong(resumeIdStr));
     }
 
     @Override
@@ -97,18 +103,34 @@ public class AnalyzeStreamConsumer extends AbstractStreamConsumer<AnalyzeStreamC
     @Override
     protected void processBusiness(AnalyzePayload payload) {
         Long resumeId = payload.resumeId();
-        if (!resumeRepository.existsById(resumeId)) {
+        ResumeEntity resume = resumeRepository.findById(resumeId).orElse(null);
+        if (resume == null) {
             log.warn("简历已被删除，跳过分析任务: resumeId={}", resumeId);
             return;
         }
 
-        ResumeAnalysisResponse analysis = gradingService.analyzeResume(payload.content());
-        ResumeEntity resume = resumeRepository.findById(resumeId).orElse(null);
-        if (resume == null) {
+        String resumeText = resume.getResumeText();
+        if (isBlank(resumeText)) {
+            // 历史数据正文为空时，从 RustFS 恢复文本并以独立短事务回填后再分析
+            resumeText = parseService.downloadAndParseContent(
+                resume.getStorageKey(), resume.getOriginalFilename());
+            if (isBlank(resumeText)) {
+                throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED, "无法获取简历文本内容");
+            }
+            persistenceService.updateResumeText(resumeId, resumeText);
+        }
+
+        ResumeAnalysisResponse analysis = gradingService.analyzeResume(resumeText);
+        ResumeEntity latestResume = resumeRepository.findById(resumeId).orElse(null);
+        if (latestResume == null) {
             log.warn("简历在分析期间被删除，跳过保存结果: resumeId={}", resumeId);
             return;
         }
-        persistenceService.saveAnalysis(resume, analysis);
+        persistenceService.saveAnalysis(latestResume, analysis);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     @Override
@@ -124,11 +146,9 @@ public class AnalyzeStreamConsumer extends AbstractStreamConsumer<AnalyzeStreamC
     @Override
     protected void retryMessage(AnalyzePayload payload, int retryCount) {
         Long resumeId = payload.resumeId();
-        String content = payload.content();
         try {
             Map<String, String> message = Map.of(
                 AsyncTaskStreamConstants.FIELD_RESUME_ID, resumeId.toString(),
-                AsyncTaskStreamConstants.FIELD_CONTENT, content,
                 AsyncTaskStreamConstants.FIELD_RETRY_COUNT, String.valueOf(retryCount)
             );
 

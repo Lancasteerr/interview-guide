@@ -87,8 +87,8 @@ public class ResumeUploadService {
         // 6. 保存简历到数据库（状态为 PENDING）
         ResumeEntity savedResume = persistenceService.saveResume(file, resumeText, fileKey, fileUrl);
 
-        // 7. 发送分析任务到 Redis Stream（异步处理）
-        analyzeStreamProducer.sendAnalyzeTask(savedResume.getId(), resumeText);
+        // 7. 发送分析任务到 Redis Stream（异步处理，正文以数据库实体为事实来源）
+        analyzeStreamProducer.sendAnalyzeTask(savedResume.getId());
 
         long totalTime = System.currentTimeMillis() - startTime;
         log.info("简历上传处理完成: {}, resumeId={} - 总耗时: {}ms (解析+存储+入库)",
@@ -166,70 +166,28 @@ public class ResumeUploadService {
 
     /**
      * 重新分析简历（手动重试）
-     * 从数据库获取简历文本并发送分析任务
+     * 只投递简历 ID，正文以数据库实体为事实来源；
+     * 历史正文为空时由消费者从 RustFS 恢复并回填
      *
      * @param resumeId 简历ID
      */
     public void reanalyze(Long resumeId) {
-        ResumeReanalyzeSource source = loadReanalyzeSource(resumeId);
+        resumeRepository.findById(resumeId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND, "简历不存在"));
 
-        log.info("开始重新分析简历: resumeId={}, filename={}", resumeId, source.originalFilename());
+        log.info("开始重新分析简历: resumeId={}", resumeId);
 
-        String resumeText = source.resumeText();
-        boolean shouldCacheResumeText = !hasText(resumeText);
-        if (shouldCacheResumeText) {
-            // 如果没有缓存的文本，尝试重新解析
-            resumeText = parseService.downloadAndParseContent(
-                source.storageKey(), source.originalFilename());
-            if (!hasText(resumeText)) {
-                throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED, "无法获取简历文本内容");
-            }
-        }
-
-        String taskContent = resumeText;
-        transactionalExecutor.run(
-            () -> updateResumeForReanalysis(resumeId, taskContent, shouldCacheResumeText));
+        transactionalExecutor.run(() -> {
+            ResumeEntity resume = resumeRepository.findById(resumeId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND, "简历不存在"));
+            resume.setAnalyzeStatus(AsyncTaskStatus.PENDING);
+            resume.setAnalyzeError(null);
+            resumeRepository.save(resume);
+        });
 
         // 事务提交后再发送分析任务到 Stream
-        analyzeStreamProducer.sendAnalyzeTask(resumeId, taskContent);
+        analyzeStreamProducer.sendAnalyzeTask(resumeId);
 
         log.info("重新分析任务已发送: resumeId={}", resumeId);
-    }
-
-    private ResumeReanalyzeSource loadReanalyzeSource(Long resumeId) {
-        ResumeEntity resume = resumeRepository.findById(resumeId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND, "简历不存在"));
-        return new ResumeReanalyzeSource(
-            resume.getOriginalFilename(),
-            resume.getStorageKey(),
-            resume.getResumeText()
-        );
-    }
-
-    private void updateResumeForReanalysis(
-        Long resumeId,
-        String resumeText,
-        boolean shouldCacheResumeText
-    ) {
-        ResumeEntity resume = resumeRepository.findById(resumeId)
-            .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND, "简历不存在"));
-
-        if (shouldCacheResumeText || !hasText(resume.getResumeText())) {
-            resume.setResumeText(resumeText);
-        }
-        resume.setAnalyzeStatus(AsyncTaskStatus.PENDING);
-        resume.setAnalyzeError(null);
-        resumeRepository.save(resume);
-    }
-
-    private boolean hasText(String value) {
-        return value != null && !value.trim().isEmpty();
-    }
-
-    private record ResumeReanalyzeSource(
-        String originalFilename,
-        String storageKey,
-        String resumeText
-    ) {
     }
 }
