@@ -205,6 +205,16 @@ app:
 
   # Voice interview configuration
   voice-interview:
+    # 上下文压缩：enabled=false 是唯一关闭方式（仅本地排查用）；
+    # enabled=true 时无论何种模式都执行字符硬预算（摘要 + 近期历史 <= max-history-chars）
+    context-compression:
+      enabled: ${APP_VOICE_INTERVIEW_CONTEXT_COMPRESSION_ENABLED:true}
+      mode: ${APP_VOICE_INTERVIEW_CONTEXT_COMPRESSION_MODE:SUMMARY}
+      window-size: ${APP_VOICE_INTERVIEW_CONTEXT_COMPRESSION_WINDOW_SIZE:20}
+      summary-batch-size: ${APP_VOICE_INTERVIEW_CONTEXT_COMPRESSION_SUMMARY_BATCH_SIZE:10}
+      max-history-chars: ${APP_VOICE_INTERVIEW_CONTEXT_COMPRESSION_MAX_HISTORY_CHARS:12000}
+      max-summary-chars: ${APP_VOICE_INTERVIEW_CONTEXT_COMPRESSION_MAX_SUMMARY_CHARS:4000}
+
     # Phase duration settings (minutes)
     phase:
       intro:

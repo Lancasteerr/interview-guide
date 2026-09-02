@@ -22,9 +22,10 @@ import java.util.Map;
  *
  * <p>设计要点（详见 docs/语音面试上下文压缩_技术方案设计.md）：
  * <ul>
- *   <li>mode=NONE：不压缩，返回全部（默认行为，向后兼容）</li>
- *   <li>mode=WINDOW：仅保留最近 windowSize 轮原文，更早轮次丢弃</li>
- *   <li>mode=SUMMARY：保留最近窗口原文 + 早期轮次增量摘要（按 summaryBatchSize 触发，降低 LLM 摘要调用频率）</li>
+ *   <li>enabled=false：完全关闭（唯一关闭方式，仅用于本地排查），返回全部历史</li>
+ *   <li>mode=NONE：不摘要、不裁窗口，但仍执行字符硬预算</li>
+ *   <li>mode=WINDOW：仅保留最近 windowSize 轮原文 + 字符硬预算，不调用 LLM</li>
+ *   <li>mode=SUMMARY：最近窗口原文 + 早期轮次增量摘要（按 summaryBatchSize 触发）+ 字符硬预算</li>
  * </ul>
  */
 @Slf4j
@@ -63,10 +64,16 @@ public class VoiceContextCompressor {
                                        String cachedSummary, int coveredTurns,
                                        String llmProvider) {
         var cfg = properties.getContextCompression();
-        // 未启用 / NONE 模式 / 未达到窗口大小：不压缩，返回全量（向后兼容）
-        if (!cfg.isEnabled() || cfg.getMode() == VoiceInterviewProperties.Mode.NONE
-                || turns.size() <= cfg.getWindowSize()) {
+        // enabled=false 是唯一关闭方式：不压缩、不做字符硬预算，返回全量（仅用于本地排查）
+        if (!cfg.isEnabled()) {
             return new CompressedHistory(null, turns, turns.size(), false);
+        }
+
+        // NONE 模式 / 未达到窗口大小：不摘要、不裁窗口，但仍执行字符硬预算
+        if (cfg.getMode() == VoiceInterviewProperties.Mode.NONE
+                || turns.size() <= cfg.getWindowSize()) {
+            List<VoiceInterviewMessageEntity> budgeted = applyCharBudget(null, turns);
+            return new CompressedHistory(null, budgeted, 0, false);
         }
 
         int total = turns.size();
@@ -74,6 +81,7 @@ public class VoiceContextCompressor {
         int earlyCount = total - window;
         String summary = cachedSummary;
         boolean changed = false;
+        boolean summaryFailed = false;
         int effectiveCoveredTurns = VoiceInterviewMessageEntity.trimToNull(cachedSummary) == null
             ? 0
             : Math.min(Math.max(coveredTurns, 0), earlyCount);
@@ -85,21 +93,86 @@ public class VoiceContextCompressor {
             // earlyCount > coveredTurns 防御上游脏数据（如被损坏的 SUMMARY 行），避免 subList(from > to) 抛异常
             List<String> earlyTurns = formatRecent(turns.subList(effectiveCoveredTurns, earlyCount));
             String newSummary = summarize(cachedSummary, earlyTurns, llmProvider);
-            if (newSummary != null && !newSummary.equals(cachedSummary)) {
+            if (newSummary == null) {
+                // 摘要生成失败：有旧摘要保留旧摘要，无旧摘要降级 WINDOW；不允许恢复为全量历史
+                summaryFailed = true;
+            } else if (!newSummary.equals(cachedSummary)) {
                 summary = newSummary;
                 effectiveCoveredTurns = earlyCount;
                 changed = true;
             } else {
-                // 摘要未变化（或生成失败降级）：保持现状，不标记 changed，避免无谓持久化
-                summary = newSummary != null ? newSummary : cachedSummary;
+                summary = newSummary;
             }
         }
 
-        int recentStart = cfg.getMode() == VoiceInterviewProperties.Mode.SUMMARY
+        int recentStart = cfg.getMode() == VoiceInterviewProperties.Mode.SUMMARY && !summaryFailed
             ? effectiveCoveredTurns
             : earlyCount;
-        List<VoiceInterviewMessageEntity> recent = turns.subList(recentStart, total);
-        return new CompressedHistory(summary, recent, effectiveCoveredTurns, changed);
+        String budgetedSummary = truncateSummary(summary);
+        List<VoiceInterviewMessageEntity> recent =
+            applyCharBudget(budgetedSummary, turns.subList(recentStart, total));
+        return new CompressedHistory(budgetedSummary, recent, effectiveCoveredTurns, changed);
+    }
+
+    /**
+     * 摘要超过 maxSummaryChars 时从尾部截断并附加标记。
+     */
+    private String truncateSummary(String summary) {
+        if (summary == null) {
+            return null;
+        }
+        int max = properties.getContextCompression().getMaxSummaryChars();
+        if (max <= 0 || summary.length() <= max) {
+            return summary;
+        }
+        String marker = "(摘要已截断)";
+        int keep = Math.max(0, max - marker.length());
+        return summary.substring(0, keep) + marker;
+    }
+
+    /**
+     * 字符硬预算：摘要字符数 + 近期历史格式化后字符数 <= maxHistoryChars。
+     * 超出时从最早的近期消息开始删除，始终保留最近消息。
+     */
+    private List<VoiceInterviewMessageEntity> applyCharBudget(String summary,
+                                                              List<VoiceInterviewMessageEntity> recent) {
+        int max = properties.getContextCompression().getMaxHistoryChars();
+        if (max <= 0 || recent.isEmpty()) {
+            return recent;
+        }
+        int used = summary != null ? summary.length() : 0;
+        int start = recent.size();
+        while (start > 0) {
+            int cost = formattedCharCost(recent.get(start - 1));
+            if (used + cost > max) {
+                break;
+            }
+            used += cost;
+            start--;
+        }
+        if (start == 0) {
+            return recent;
+        }
+        log.info("上下文超出字符预算，丢弃最早近期消息: inputTurns={}, outputTurns={}, summaryChars={}, budget={}",
+            recent.size(), recent.size() - start, summary != null ? summary.length() : 0, max);
+        return recent.subList(start, recent.size());
+    }
+
+    /**
+     * 单条轮次格式化后的字符成本，与 formatRecent 的输出一致：
+     * 每个非空文本都会以「面试官：/候选人：」前缀各占一行。
+     */
+    private int formattedCharCost(VoiceInterviewMessageEntity msg) {
+        int cost = 0;
+        String aiText = VoiceInterviewMessageEntity.trimToNull(msg.getAiGeneratedText());
+        String userText = VoiceInterviewMessageEntity.trimToNull(msg.getUserRecognizedText());
+        if (aiText != null) {
+            cost += "面试官：".length() + aiText.length();
+        }
+        if (userText != null) {
+            cost += "候选人：".length() + userText.length();
+        }
+        return cost;
     }
 
     /**
@@ -138,7 +211,7 @@ public class VoiceContextCompressor {
     }
 
     /**
-     * 将早期轮次增量合并进已有摘要。摘要生成失败则降级沿用已有摘要，不阻塞主链路。
+     * 将早期轮次增量合并进已有摘要。生成失败返回 null，由调用方降级为最近窗口，不阻塞主链路。
      */
     private String summarize(String prevSummary, List<String> earlyTurns, String llmProvider) {
         if (earlyTurns == null || earlyTurns.isEmpty()) {
@@ -155,10 +228,10 @@ public class VoiceContextCompressor {
                     ? llmProviderRegistry.getPlainChatClient()
                     : llmProviderRegistry.getPlainChatClient(llmProvider))
                     .prompt().user(prompt).call().content();
-            return (result == null || result.isBlank()) ? prevSummary : result.trim();
+            return (result == null || result.isBlank()) ? null : result.trim();
         } catch (Exception e) {
-            log.warn("上下文摘要生成失败，降级沿用已有摘要", e);
-            return prevSummary;
+            log.warn("上下文摘要生成失败: error={}", e.getMessage(), e);
+            return null;
         }
     }
 

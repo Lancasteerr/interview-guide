@@ -1,8 +1,12 @@
 package interview.guide.modules.voiceinterview.config;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Min;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import org.springframework.validation.annotation.Validated;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +17,7 @@ import java.util.Map;
  */
 @Data
 @Component
+@Validated
 @ConfigurationProperties(prefix = "app.voice-interview")
 public class VoiceInterviewProperties {
 
@@ -22,6 +27,7 @@ public class VoiceInterviewProperties {
     private AudioConfig audio = new AudioConfig();
     private QwenConfig qwen = new QwenConfig();
     private OpeningConfig opening = new OpeningConfig();
+    @Valid
     private ContextCompressionConfig contextCompression = new ContextCompressionConfig();
 
     /**
@@ -171,21 +177,51 @@ public class VoiceInterviewProperties {
     @Data
     public static class ContextCompressionConfig {
         /**
-         * 是否启用上下文压缩。默认关闭，保证向后兼容（关闭时行为与改前完全一致）。
+         * 是否启用上下文压缩。enabled=false 是唯一关闭方式：返回全量历史，仅用于本地排查。
+         * enabled=true 时无论何种模式都执行字符硬预算。
          */
-        private boolean enabled = false;
+        private boolean enabled = true;
         /**
-         * 压缩模式：NONE=不压缩；WINDOW=仅保留最近窗口原文；SUMMARY=窗口原文+早期轮次增量摘要。
+         * 压缩模式：NONE=不摘要不裁窗口但仍有字符硬预算；WINDOW=窗口+字符硬预算；
+         * SUMMARY=摘要+窗口+字符硬预算（生产默认）。
          */
         private Mode mode = Mode.SUMMARY;
         /**
          * 保留的最近轮次数量（滑动窗口大小）。
          */
+        @Min(value = 1, message = "windowSize 必须大于等于 1")
         private int windowSize = 20;
         /**
          * 早期轮次每越过该批次数，触发一次增量摘要合并（降低 LLM 摘要调用频率）。
          */
+        @Min(value = 1, message = "summaryBatchSize 必须大于等于 1")
         private int summaryBatchSize = 10;
+        /**
+         * 历史总字符预算：摘要字符数 + 近期历史格式化后字符数 <= maxHistoryChars。
+         */
+        @Min(value = 1, message = "maxHistoryChars 必须大于 0")
+        private int maxHistoryChars = 12000;
+        /**
+         * 摘要字符上限：摘要字符数 <= maxSummaryChars，超出时从尾部截断。
+         */
+        @Min(value = 0, message = "maxSummaryChars 不能为负数")
+        private int maxSummaryChars = 4000;
+
+        /**
+         * 摘要占满上限后至少要给近期消息留出空间。
+         */
+        @AssertTrue(message = "maxHistoryChars 必须大于等于 maxSummaryChars")
+        public boolean isBudgetConsistent() {
+            return maxHistoryChars >= maxSummaryChars;
+        }
+
+        /**
+         * SUMMARY 模式依赖摘要，摘要上限必须为正数。
+         */
+        @AssertTrue(message = "SUMMARY 模式下 maxSummaryChars 必须大于 0")
+        public boolean isSummaryBudgetPositive() {
+            return mode != Mode.SUMMARY || maxSummaryChars > 0;
+        }
     }
 
     public enum Mode {
