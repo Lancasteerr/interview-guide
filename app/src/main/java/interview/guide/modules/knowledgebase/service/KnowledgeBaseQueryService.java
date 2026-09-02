@@ -88,7 +88,7 @@ public class KnowledgeBaseQueryService {
     }
 
     private ChatClient getChatClient() {
-        return llmProviderRegistry.getDefaultChatClient();
+        return llmProviderRegistry.getPlainChatClient();
     }
 
     /**
