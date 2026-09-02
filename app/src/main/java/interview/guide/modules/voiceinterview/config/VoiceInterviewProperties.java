@@ -188,6 +188,8 @@ public class VoiceInterviewProperties {
         private Mode mode = Mode.SUMMARY;
         /**
          * 保留的最近轮次数量（滑动窗口大小）。
+         * 注意：SUMMARY 模式在两次摘要批次之间最多保留 windowSize + summaryBatchSize - 1 轮，
+         * 轮数有界；Prompt 的最终硬上限由 maxHistoryChars 字符预算保证。
          */
         @Min(value = 1, message = "windowSize 必须大于等于 1")
         private int windowSize = 20;

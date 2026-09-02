@@ -2,6 +2,7 @@ package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.PromptSecurityConstants;
+import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.modules.knowledgebase.model.QueryRequest;
@@ -110,8 +111,9 @@ public class KnowledgeBaseQueryService {
      * @return AI回答
      */
     public String answerQuestion(List<Long> knowledgeBaseIds, String question) {
-        log.info("收到知识库提问: kbIds={}, questionLength={}", knowledgeBaseIds, question.length());
-        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalizeQuestion(question).isBlank()) {
+        String normalized = normalizeQuestion(question);
+        log.info("收到知识库提问: kbIds={}, questionLength={}", knowledgeBaseIds, normalized.length());
+        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalized.isBlank()) {
             return NO_RESULT_RESPONSE;
         }
 
@@ -143,7 +145,7 @@ public class KnowledgeBaseQueryService {
             return answer;
 
         } catch (Exception e) {
-            log.error("知识库问答失败: {}", e.getMessage(), e);
+            log.error("知识库问答失败: {}", ErrorLogSanitizer.summarize(e), e);
             throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_QUERY_FAILED, "知识库查询失败：" + e.getMessage());
         }
     }
@@ -202,9 +204,10 @@ public class KnowledgeBaseQueryService {
      * @return 流式响应
      */
     public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history) {
+        String normalized = normalizeQuestion(question);
         log.info("收到知识库流式提问: kbIds={}, questionLength={}, historySize={}", knowledgeBaseIds,
-                question.length(), history != null ? history.size() : 0);
-        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalizeQuestion(question).isBlank()) {
+                normalized.length(), history != null ? history.size() : 0);
+        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalized.isBlank()) {
             return Flux.just(NO_RESULT_RESPONSE);
         }
 
@@ -246,12 +249,12 @@ public class KnowledgeBaseQueryService {
             return normalizeStreamOutput(responseFlux)
                 .doOnComplete(() -> log.info("流式输出完成: kbIds={}", knowledgeBaseIds))
                 .onErrorResume(e -> {
-                    log.error("流式输出失败: kbIds={}, error={}", knowledgeBaseIds, e.getMessage(), e);
+                    log.error("流式输出失败: kbIds={}, error={}", knowledgeBaseIds, ErrorLogSanitizer.summarize(e), e);
                     return Flux.just("【错误】知识库查询失败：AI服务暂时不可用，请稍后重试。");
                 });
 
         } catch (Exception e) {
-            log.error("知识库流式问答失败: {}", e.getMessage(), e);
+            log.error("知识库流式问答失败: {}", ErrorLogSanitizer.summarize(e), e);
             return Flux.just("【错误】知识库查询失败：" + e.getMessage());
         }
     }
@@ -338,7 +341,7 @@ public class KnowledgeBaseQueryService {
                 question.length(), normalized.length(), !normalized.equals(question), history.size());
             return normalized;
         } catch (Exception e) {
-            log.warn("Query rewrite 失败，使用原问题继续检索: {}", e.getMessage(), e);
+            log.warn("Query rewrite 失败，使用原问题继续检索: {}", ErrorLogSanitizer.summarize(e), e);
             return question;
         }
     }

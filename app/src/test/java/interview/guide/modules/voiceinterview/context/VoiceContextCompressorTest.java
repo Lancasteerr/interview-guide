@@ -413,8 +413,8 @@ class VoiceContextCompressorTest {
         }
 
         @Test
-        @DisplayName("最近一条消息单独超预算时仍保留该消息，不返回空历史")
-        void alwaysKeepsMostRecentMessage() {
+        @DisplayName("最近一条消息单独超预算时保留身份并截断文本，总字符不超过预算")
+        void alwaysKeepsMostRecentMessageWithinBudget() {
             properties.getContextCompression().setEnabled(true);
             properties.getContextCompression().setMode(VoiceInterviewProperties.Mode.WINDOW);
             properties.getContextCompression().setWindowSize(3);
@@ -426,8 +426,14 @@ class VoiceContextCompressorTest {
 
             VoiceContextCompressor.CompressedHistory r = compressor.compress(all, null, 0);
 
+            // 保留最近消息身份（sequenceNum=3），且总字符仍受硬预算约束
             assertFalse(r.recent().isEmpty());
             assertEquals(3, r.recent().getLast().getSequenceNum());
+            List<String> lines = compressor.formatRecent(r.recent());
+            int total = lines.stream().mapToInt(String::length).sum();
+            assertTrue(total <= 50, "格式化后总字符 " + total + " 应不超过预算 50");
+            // 原实体未被修改
+            assertEquals(500, all.get(2).getAiGeneratedText().length());
         }
 
         @Test

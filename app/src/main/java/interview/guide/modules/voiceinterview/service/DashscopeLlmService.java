@@ -2,6 +2,7 @@ package interview.guide.modules.voiceinterview.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.PromptSanitizer;
+import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.resume.model.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeRepository;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
@@ -53,7 +54,7 @@ public class DashscopeLlmService {
             return optimized;
 
         } catch (Exception e) {
-            log.error("LLM chat error for session {}: {}", session.getId(), e.getMessage(), e);
+            log.error("LLM chat error for session {}: {}", session.getId(), ErrorLogSanitizer.summarize(e), e);
             return mapLlmErrorToUserMessage(e);
         }
     }
@@ -149,7 +150,7 @@ public class DashscopeLlmService {
                 session.getId(), optimized.length());
             return optimized;
         } catch (Exception e) {
-            log.error("LLM sentence stream error for session {}: {}", session.getId(), e.getMessage(), e);
+            log.error("LLM sentence stream error for session {}: {}", session.getId(), ErrorLogSanitizer.summarize(e), e);
             return mapLlmErrorToUserMessage(e);
         }
     }

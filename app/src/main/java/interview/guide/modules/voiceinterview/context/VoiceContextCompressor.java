@@ -150,16 +150,58 @@ public class VoiceContextCompressor {
             used += cost;
             start--;
         }
-        // 始终保留最近消息：即使最近一条单独超预算也不丢弃（单轮超长由 aiQuestionMaxChars 等上游约束兜底）
-        if (start == recent.size() && start > 0) {
-            start = recent.size() - 1;
-        }
         if (start == 0) {
             return recent;
         }
+        int summaryChars = summary != null ? summary.length() : 0;
+        if (start == recent.size()) {
+            // 连最近一条都放不下：保留最近消息的身份，按剩余预算截断其文本，硬上限不被绕过
+            VoiceInterviewMessageEntity truncated =
+                truncateMessageTail(recent.get(recent.size() - 1), max - summaryChars);
+            log.info("最近消息超出字符预算已截断: summaryChars={}, budget={}, inputTurns={}, outputTurns=1",
+                summaryChars, max, recent.size());
+            return List.of(truncated);
+        }
         log.info("上下文超出字符预算，丢弃最早近期消息: inputTurns={}, outputTurns={}, summaryChars={}, budget={}",
-            recent.size(), recent.size() - start, summary != null ? summary.length() : 0, max);
+            recent.size(), recent.size() - start, summaryChars, max);
         return recent.subList(start, recent.size());
+    }
+
+    /**
+     * 截断单条消息文本以适配剩余预算，保留尾部语义（候选人最后的表述更接近当前语境）。
+     * 返回副本，不修改原实体。
+     */
+    private VoiceInterviewMessageEntity truncateMessageTail(VoiceInterviewMessageEntity msg, int remaining) {
+        String aiText = VoiceInterviewMessageEntity.trimToNull(msg.getAiGeneratedText());
+        String userText = VoiceInterviewMessageEntity.trimToNull(msg.getUserRecognizedText());
+        int aiLen = aiText != null ? "面试官：".length() + aiText.length() : 0;
+        int userLen = userText != null ? "候选人：".length() + userText.length() : 0;
+        int budget = Math.max(remaining, 0);
+
+        // 优先保留候选人回答（含前缀），再给面试官问题分配剩余空间，两者都从尾部保留
+        int userKeep = Math.min(userLen, budget);
+        int aiKeep = Math.min(aiLen, budget - userKeep);
+
+        VoiceInterviewMessageEntity copy = VoiceInterviewMessageEntity.builder()
+            .sequenceNum(msg.getSequenceNum())
+            .messageType(msg.getMessageType())
+            .build();
+        if (aiText != null) {
+            int keepText = Math.max(aiKeep - "面试官：".length(), 0);
+            copy.setAiGeneratedText(keepTail(aiText, keepText));
+        }
+        if (userText != null) {
+            int keepText = Math.max(userKeep - "候选人：".length(), 0);
+            copy.setUserRecognizedText(keepTail(userText, keepText));
+        }
+        return copy;
+    }
+
+    private String keepTail(String text, int keepChars) {
+        if (keepChars >= text.length()) {
+            return text;
+        }
+        return keepChars <= 0 ? "" : text.substring(text.length() - keepChars);
     }
 
     /**

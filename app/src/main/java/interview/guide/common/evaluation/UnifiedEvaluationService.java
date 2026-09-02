@@ -258,8 +258,10 @@ public class UnifiedEvaluationService {
     /**
      * 按模型返回的 questionIndex 显式映射回原始题目：
      * - 索引全部合法：按索引写回对应位置
-     * - 索引不可用且返回数量与输入一致：对整批按位置对齐（避免半索引半位置导致同一份评估被重复消费）
-     * - 其余情况：合法索引按索引写回，非法或缺失的索引只降级该位置为 0 分
+     * - 返回数量与输入一致且索引完全不可用（无任何合法索引，或整批呈现一致的 1-based 偏移）：
+     *   对整批按位置对齐
+     * - 其余情况：合法索引按索引写回，非法或缺失的索引只降级该位置为 0 分，
+     *   不做半索引半位置的混用（避免同一份评估被重复消费或错位）
      */
     private List<QuestionEvalDTO> mergeQuestionEvaluations(List<BatchResult> batchResults) {
         List<QuestionEvalDTO> merged = new ArrayList<>();
@@ -271,15 +273,22 @@ public class UnifiedEvaluationService {
                     : List.of();
 
             Map<Integer, QuestionEvalDTO> byIndex = new HashMap<>();
+            Set<Integer> returnedIndexes = new LinkedHashSet<>();
             for (QuestionEvalDTO dto : current) {
-                if (dto == null || !expectedIndexes.contains(dto.questionIndex())) {
+                if (dto == null) {
                     continue;
                 }
-                byIndex.putIfAbsent(dto.questionIndex(), dto);
+                returnedIndexes.add(dto.questionIndex());
+                if (expectedIndexes.contains(dto.questionIndex())) {
+                    byIndex.putIfAbsent(dto.questionIndex(), dto);
+                }
             }
-            boolean indexesUsable = byIndex.size() == expectedIndexes.size();
-            // 索引整体不可用但数量一致时按位置对齐整批，不做逐位置混用
-            boolean positionalFallback = !indexesUsable && current.size() == expectedIndexes.size();
+            boolean countsMatch = current.size() == expectedIndexes.size();
+            boolean allMapped = byIndex.size() == expectedIndexes.size();
+            boolean oneBasedShift = !allMapped && countsMatch
+                && isConsistentOneBasedShift(returnedIndexes, expectedIndexes);
+            boolean noUsableIndex = byIndex.isEmpty() && countsMatch;
+            boolean positionalFallback = oneBasedShift || noUsableIndex;
 
             for (int i = 0; i < expectedIndexes.size(); i++) {
                 int originalIndex = expectedIndexes.get(i);
@@ -295,6 +304,16 @@ public class UnifiedEvaluationService {
             }
         }
         return merged;
+    }
+
+    /**
+     * 判断返回的索引是否为整批一致的 1-based 重编号（每个原始索引 +1，且数量一致）
+     */
+    private boolean isConsistentOneBasedShift(Set<Integer> returnedIndexes,
+                                              List<Integer> expectedIndexes) {
+        Set<Integer> shifted = expectedIndexes.stream()
+            .map(i -> i + 1).collect(Collectors.toSet());
+        return returnedIndexes.equals(shifted);
     }
 
     private String mergeOverallFeedback(List<BatchResult> batchResults) {

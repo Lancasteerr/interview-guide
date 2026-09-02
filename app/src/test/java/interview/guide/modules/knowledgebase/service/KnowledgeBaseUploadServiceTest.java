@@ -83,6 +83,38 @@ class KnowledgeBaseUploadServiceTest {
   }
 
   @Test
+  @DisplayName("重复上传响应与新上传契约一致：含 vectorStatus，不含 contentLength")
+  void shouldReturnConsistentContractForDuplicateUpload() {
+    MultipartFile file = new MockMultipartFile("file", "a.pdf", "application/pdf", new byte[] {1, 2, 3});
+    when(parseService.detectContentType(file)).thenReturn("application/pdf");
+    when(fileHashService.calculateHash(file)).thenReturn("hash-dup");
+    KnowledgeBaseEntity existing = new KnowledgeBaseEntity();
+    existing.setId(21L);
+    existing.setName("a.pdf");
+    existing.setFileSize(3L);
+    existing.setVectorStatus(interview.guide.modules.knowledgebase.model.VectorStatus.COMPLETED);
+    when(knowledgeBaseRepository.findByFileHash("hash-dup")).thenReturn(Optional.of(existing));
+    when(persistenceService.handleDuplicateKnowledgeBase(existing, "hash-dup")).thenReturn(Map.of(
+        "knowledgeBase", Map.of(
+            "id", existing.getId(),
+            "name", existing.getName(),
+            "category", "",
+            "fileSize", existing.getFileSize(),
+            "vectorStatus", existing.getVectorStatus().name()),
+        "storage", Map.of("fileKey", "kb/21", "fileUrl", "http://rustfs/kb/21"),
+        "duplicate", true));
+
+    Map<String, Object> result = service.uploadKnowledgeBase(file, null, null);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> knowledgeBase = (Map<String, Object>) result.get("knowledgeBase");
+    assertThat(knowledgeBase).doesNotContainKey("contentLength");
+    assertThat(knowledgeBase).containsEntry("vectorStatus", "COMPLETED");
+    assertThat((Boolean) result.get("duplicate")).isTrue();
+    verify(vectorizeStreamProducer, never()).sendVectorizeTask(anyLong());
+  }
+
+  @Test
   @DisplayName("重新向量化只校验存储信息并投递 ID，不下载解析")
   void shouldRevectorizeWithIdOnly() {
     KnowledgeBaseEntity kb = new KnowledgeBaseEntity();

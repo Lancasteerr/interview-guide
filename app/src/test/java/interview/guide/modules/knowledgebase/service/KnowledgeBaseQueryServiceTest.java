@@ -169,6 +169,39 @@ class KnowledgeBaseQueryServiceTest {
     }
 
     @Test
+    @DisplayName("null 问题不抛 NPE 且返回无结果响应")
+    void shouldReturnNoResultForNullQuestion() throws Exception {
+      service = buildService(false);
+
+      String answer = service.answerQuestion(List.of(1L), null);
+      List<String> chunks = service.answerQuestionStream(List.of(1L), null).collectList().block();
+
+      assertThat(answer).contains("未检索到相关信息");
+      assertThat(chunks).hasSize(1);
+      verify(llmProviderRegistry, never()).getPlainChatClient();
+    }
+
+    @Test
+    @DisplayName("异常消息超长时日志只保留类名与截断消息")
+    void shouldTruncateLongExceptionMessageInLogs() throws Exception {
+      String tail = "敏感尾部标记MARKER-ERR-TAIL-1a2b3c4d5e6f";
+      service = buildService(true);
+      mockPlainClient();
+      stubDocuments();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenThrow(new IllegalStateException("x".repeat(500) + tail));
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).call().content())
+          .thenReturn("同步回答");
+
+      service.answerQuestion(List.of(1L), "正常问题");
+
+      String logs = capturedLogs();
+      assertThat(logs).doesNotContain(tail);
+      assertThat(logs).contains("IllegalStateException: ");
+      assertThat(logs).contains("…");
+    }
+
+    @Test
     @DisplayName("改写失败回退时异常日志保留错误消息且不包含问题原文")
     void shouldKeepErrorTypeWithoutQuestionText() throws Exception {
       String questionMarker = "问题敏感标记MARKER-Q-ERR-51d0";
