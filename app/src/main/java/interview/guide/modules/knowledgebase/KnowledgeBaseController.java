@@ -104,8 +104,9 @@ public class KnowledgeBaseController {
     @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 5)
     @RateLimit(dimension = RateLimit.Dimension.IP, count = 5)
     public Flux<String> queryKnowledgeBaseStream(@Valid @RequestBody QueryRequest request) {
-        log.debug("收到知识库流式查询请求: kbIds={}, question={}, 线程: {} (虚拟线程: {})",
-            request.knowledgeBaseIds(), request.question(), Thread.currentThread(), Thread.currentThread().isVirtual());
+        log.debug("收到知识库流式查询请求: kbIds={}, questionLength={}, 线程: {} (虚拟线程: {})",
+            request.knowledgeBaseIds(), request.question().length(), Thread.currentThread(),
+            Thread.currentThread().isVirtual());
         return queryService.answerQuestionStream(request.knowledgeBaseIds(), request.question());
     }
 

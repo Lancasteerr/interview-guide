@@ -123,8 +123,8 @@ public class KnowledgeBaseVectorService {
      * @return 相关文档列表
      */
     public List<Document> similaritySearch(String query, List<Long> knowledgeBaseIds, int topK, double minScore) {
-        log.info("向量相似度搜索: query={}, kbIds={}, topK={}, minScore={}",
-            query, knowledgeBaseIds, topK, minScore);
+        log.info("向量相似度搜索: queryLength={}, kbIds={}, topK={}, minScore={}",
+            query.length(), knowledgeBaseIds, topK, minScore);
         
         try {
             SearchRequest.Builder builder = SearchRequest.builder()

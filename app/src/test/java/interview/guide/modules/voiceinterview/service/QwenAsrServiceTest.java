@@ -6,6 +6,16 @@ import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
+import java.lang.reflect.Method;
+import java.util.function.Consumer;
 
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CountDownLatch;
@@ -186,5 +196,93 @@ class QwenAsrServiceTest {
         java.lang.reflect.Field f = obj.getClass().getDeclaredField(name);
         f.setAccessible(true);
         return f.get(obj);
+    }
+
+    @Nested
+    @DisplayName("ASR 事件日志隐私")
+    class EventLogPrivacy {
+
+        private final Logger asrLogger =
+                (Logger) LoggerFactory.getLogger(QwenAsrService.class);
+        private final ListAppender<ILoggingEvent> appender =
+                new ListAppender<>();
+        private Level originalLevel;
+
+        @BeforeEach
+        void setUpAppender() {
+            originalLevel = asrLogger.getLevel();
+            asrLogger.setLevel(Level.DEBUG);
+            appender.start();
+            asrLogger.addAppender(appender);
+        }
+
+        @AfterEach
+        void detachAppender() {
+            asrLogger.setLevel(originalLevel);
+            asrLogger.detachAppender(appender);
+        }
+
+        private String capturedLogs() {
+            StringBuilder sb = new StringBuilder();
+            for (ILoggingEvent event : appender.list) {
+                sb.append(event.getFormattedMessage()).append('\n');
+            }
+            return sb.toString();
+        }
+
+        private void invokeHandleServerEvent(String sessionId, JsonObject message) throws Exception {
+            Method method = QwenAsrService.class.getDeclaredMethod(
+                    "handleServerEvent", String.class, JsonObject.class,
+                    Consumer.class, Consumer.class,
+                    Consumer.class);
+            method.setAccessible(true);
+            method.invoke(asrService, sessionId, message,
+                    (Consumer<String>) text -> { },
+                    (Consumer<String>) text -> { },
+                    (Consumer<Throwable>) error -> { });
+        }
+
+        @Test
+        @DisplayName("转写完成事件日志不包含转写原文，只记录长度")
+        void shouldNotLogTranscriptText() throws Exception {
+            String marker = "转写敏感标记MARKER-ASR-4d8e";
+            JsonObject message = JsonParser.parseString(
+                    "{\"type\":\"conversation.item.input_audio_transcription.completed\","
+                            + "\"transcript\":\"" + marker + "\",\"language\":\"zh\"}").getAsJsonObject();
+
+            invokeHandleServerEvent("sess-log-1", message);
+
+                assertTrue(capturedLogs().contains("textLength: " + marker.length()));
+                assertFalse(capturedLogs().contains(marker));
+        }
+
+        @Test
+        @DisplayName("转写失败事件日志不包含完整 JSON 消息体")
+        void shouldNotLogFailedEventPayload() throws Exception {
+            String marker = "失败事件敏感标记MARKER-ASR-FAIL-6a1f";
+            JsonObject message = JsonParser.parseString(
+                    "{\"type\":\"conversation.item.input_audio_transcription.failed\","
+                            + "\"transcript\":\"" + marker + "\"}").getAsJsonObject();
+
+            invokeHandleServerEvent("sess-log-2", message);
+
+                assertTrue(capturedLogs().contains("sess-log-2"));
+                assertFalse(capturedLogs().contains(marker));
+        }
+
+        @Test
+        @DisplayName("未处理转写事件日志只记录事件类型")
+        void shouldNotLogUnhandledEventPayload() throws Exception {
+            String marker = "未处理事件敏感标记MARKER-ASR-UNHANDLED-77aa";
+            JsonObject message = JsonParser.parseString(
+                    "{\"type\":\"conversation.item.input_audio_transcription.unknown\","
+                            + "\"transcript\":\"" + marker + "\"}").getAsJsonObject();
+
+            invokeHandleServerEvent("sess-log-3", message);
+
+                assertTrue(capturedLogs().contains(
+                        "conversation.item.input_audio_transcription.unknown"));
+                assertFalse(capturedLogs().contains(marker));
+        }
     }
 }

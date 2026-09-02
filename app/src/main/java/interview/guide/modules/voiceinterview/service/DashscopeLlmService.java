@@ -47,8 +47,8 @@ public class DashscopeLlmService {
             String content = response.chatResponse().getResult().getOutput().getText();
             String optimized = optimizeForVoice(content);
 
-            log.info("LLM response generated for session {}: {}", session.getId(),
-                     optimized.substring(0, Math.min(100, optimized.length())));
+            log.info("LLM response generated for session {}: replyLength={}",
+                     session.getId(), optimized.length());
 
             return optimized;
 
@@ -145,8 +145,8 @@ public class DashscopeLlmService {
                 onToken.accept(optimized);
             }
 
-            log.info("LLM sentence stream response for session {}: {}", session.getId(),
-                optimized.substring(0, Math.min(100, optimized.length())));
+            log.info("LLM sentence stream response for session {}: replyLength={}",
+                session.getId(), optimized.length());
             return optimized;
         } catch (Exception e) {
             log.error("LLM sentence stream error for session {}: {}", session.getId(), e.getMessage(), e);

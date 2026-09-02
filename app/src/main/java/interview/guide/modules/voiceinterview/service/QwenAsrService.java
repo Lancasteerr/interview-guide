@@ -487,8 +487,8 @@ public class QwenAsrService {
                     String emotion = transcriptObj.has("emotion") ?
                             transcriptObj.get("emotion").getAsString() : "neutral";
 
-                    log.debug("[Session: {}] Transcription completed - language: {}, emotion: {}, text: {}",
-                            sessionId, language, emotion, transcript);
+                    log.debug("[Session: {}] Transcription completed - language: {}, emotion: {}, textLength: {}",
+                            sessionId, language, emotion, transcript.length());
 
                     onFinal.accept(transcript);
                     break;
@@ -516,12 +516,12 @@ public class QwenAsrService {
                     break;
 
                 case "conversation.item.input_audio_transcription.failed":
-                    log.error("[Session: {}] ASR transcription failed (single utterance): {}", sessionId, message);
+                    log.error("[Session: {}] ASR transcription failed (single utterance)", sessionId);
                     break;
 
                 default:
                     if (eventType != null && eventType.contains("transcription")) {
-                        log.debug("[Session: {}] Unhandled transcription-related event: {}", sessionId, message);
+                        log.debug("[Session: {}] Unhandled transcription-related event: type={}", sessionId, eventType);
                     } else {
                         log.trace("[Session: {}] Unhandled event type: {}", sessionId, eventType);
                     }
@@ -546,7 +546,7 @@ public class QwenAsrService {
         if (text != null && !text.isBlank()) {
             onPartial.accept(text);
         } else {
-            log.trace("[Session: {}] Partial ASR event without extractable text: {}", sessionId, message);
+            log.trace("[Session: {}] Partial ASR event without extractable text", sessionId);
         }
     }
 

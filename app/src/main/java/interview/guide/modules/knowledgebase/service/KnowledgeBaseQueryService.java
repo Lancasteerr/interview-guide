@@ -110,7 +110,7 @@ public class KnowledgeBaseQueryService {
      * @return AI回答
      */
     public String answerQuestion(List<Long> knowledgeBaseIds, String question) {
-        log.info("收到知识库提问: kbIds={}, question={}", knowledgeBaseIds, question);
+        log.info("收到知识库提问: kbIds={}, questionLength={}", knowledgeBaseIds, question.length());
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalizeQuestion(question).isBlank()) {
             return NO_RESULT_RESPONSE;
         }
@@ -202,8 +202,8 @@ public class KnowledgeBaseQueryService {
      * @return 流式响应
      */
     public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history) {
-        log.info("收到知识库流式提问: kbIds={}, question={}, historySize={}", knowledgeBaseIds, question,
-                history != null ? history.size() : 0);
+        log.info("收到知识库流式提问: kbIds={}, questionLength={}, historySize={}", knowledgeBaseIds,
+                question.length(), history != null ? history.size() : 0);
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalizeQuestion(question).isBlank()) {
             return Flux.just(NO_RESULT_RESPONSE);
         }
@@ -281,17 +281,23 @@ public class KnowledgeBaseQueryService {
 
 //    向量检索
     private List<Document> retrieveRelevantDocs(QueryContext queryContext, List<Long> knowledgeBaseIds) {
-        for (String candidateQuery : queryContext.candidateQueries()) {
+        List<String> candidates = queryContext.candidateQueries();
+        for (int i = 0; i < candidates.size(); i++) {
+            String candidateQuery = candidates.get(i);
             if (candidateQuery.isBlank()) {
                 continue;
             }
+            long startNanos = System.nanoTime();
             List<Document> docs = vectorService.similaritySearch(
                 candidateQuery,
                 knowledgeBaseIds,
                 queryContext.searchParams().topK(),
                 queryContext.searchParams().minScore()
             );
-            log.info("检索候选 query='{}'，命中 {} 条", candidateQuery, docs.size());
+            long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
+            log.info("RAG 检索完成: kbCount={}, questionLength={}, queryVariant={}, hits={}, durationMs={}",
+                knowledgeBaseIds.size(), candidateQuery.length(),
+                i == 0 ? "rewritten" : "original", docs.size(), durationMs);
             if (hasEffectiveHit(docs)) {
                 return docs;
             }
@@ -328,10 +334,11 @@ public class KnowledgeBaseQueryService {
                 return question;
             }
             String normalized = rewritten.trim();
-            log.info("Query rewrite: origin='{}', rewritten='{}', historySize={}", question, normalized, history.size());
+            log.info("Query rewrite 完成: originLength={}, rewrittenLength={}, changed={}, historySize={}",
+                question.length(), normalized.length(), !normalized.equals(question), history.size());
             return normalized;
         } catch (Exception e) {
-            log.warn("Query rewrite 失败，使用原问题继续检索: {}", e.getMessage());
+            log.warn("Query rewrite 失败，使用原问题继续检索: {}", e.getMessage(), e);
             return question;
         }
     }

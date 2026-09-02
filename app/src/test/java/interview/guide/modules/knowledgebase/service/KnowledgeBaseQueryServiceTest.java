@@ -1,6 +1,11 @@
 package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -13,6 +18,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ResourceLoader;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 
 import java.nio.charset.StandardCharsets;
@@ -109,6 +115,83 @@ class KnowledgeBaseQueryServiceTest {
       assertThat(chunks).containsExactly("流式回答");
       verify(llmProviderRegistry, atLeastOnce()).getPlainChatClient();
       verify(llmProviderRegistry, never()).getDefaultChatClient();
+    }
+  }
+
+  @Nested
+  @DisplayName("日志隐私")
+  class LogPrivacy {
+
+    private final Logger queryServiceLogger =
+        (Logger) LoggerFactory.getLogger(KnowledgeBaseQueryService.class);
+    private final ListAppender<ILoggingEvent> logAppender = new ListAppender<>();
+
+    @BeforeEach
+    void setUpAppender() {
+      logAppender.start();
+      queryServiceLogger.addAppender(logAppender);
+    }
+
+    @AfterEach
+    void tearDownAppender() {
+      queryServiceLogger.detachAppender(logAppender);
+    }
+
+    private String capturedLogs() {
+      StringBuilder sb = new StringBuilder();
+      for (ILoggingEvent event : logAppender.list) {
+        sb.append(event.getFormattedMessage()).append('\n');
+      }
+      return sb.toString();
+    }
+
+    @Test
+    @DisplayName("同步问答日志不包含问题与改写原文，只记录长度和命中数")
+    void shouldNotLogQuestionOrRewrittenQuery() throws Exception {
+      String questionMarker = "问题敏感标记MARKER-Q-8f21";
+      String rewriteMarker = "改写敏感标记MARKER-R-3c55";
+      service = buildService(true);
+      mockPlainClient();
+      stubDocuments();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenReturn(rewriteMarker);
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).call().content())
+          .thenReturn("同步回答");
+
+      service.answerQuestion(List.of(1L), questionMarker);
+
+      String logs = capturedLogs();
+      assertThat(logs).doesNotContain(questionMarker);
+      assertThat(logs).doesNotContain(rewriteMarker);
+      assertThat(logs).contains("questionLength=" + questionMarker.length());
+      assertThat(logs).contains("rewrittenLength=" + rewriteMarker.length());
+      assertThat(logs).contains("hits=1");
+    }
+
+    @Test
+    @DisplayName("改写失败回退时异常日志保留错误消息且不包含问题原文")
+    void shouldKeepErrorTypeWithoutQuestionText() throws Exception {
+      String questionMarker = "问题敏感标记MARKER-Q-ERR-51d0";
+      service = buildService(true);
+      mockPlainClient();
+      stubDocuments();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenThrow(new IllegalStateException("LLM 连接超时"));
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).call().content())
+          .thenReturn("同步回答");
+
+      String answer = service.answerQuestion(List.of(1L), questionMarker);
+
+      assertThat(answer).isEqualTo("同步回答");
+      String logs = capturedLogs();
+      assertThat(logs).doesNotContain(questionMarker);
+      assertThat(logs).contains("Query rewrite 失败");
+      assertThat(logs).contains("LLM 连接超时");
+      ILoggingEvent warnEvent = logAppender.list.stream()
+          .filter(event -> event.getLevel() == Level.WARN)
+          .findFirst().orElse(null);
+      assertThat(warnEvent).isNotNull();
+      assertThat(warnEvent.getThrowableProxy()).isNotNull();
     }
   }
 

@@ -8,7 +8,14 @@ import interview.guide.modules.voiceinterview.service.DashscopeLlmService;
 import interview.guide.modules.voiceinterview.service.QwenAsrService;
 import interview.guide.modules.voiceinterview.service.QwenTtsService;
 import interview.guide.modules.voiceinterview.service.VoiceInterviewService;
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
+import org.slf4j.LoggerFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -181,5 +188,53 @@ class VoiceInterviewWebSocketHandlerTest {
     Field field = VoiceInterviewWebSocketHandler.class.getDeclaredField(fieldName);
     field.setAccessible(true);
     return (Map<String, Object>) field.get(handler);
+  }
+  @Nested
+  @DisplayName("STT 日志隐私")
+  class SttLogPrivacy {
+
+    private final Logger handlerLogger =
+        (Logger) LoggerFactory.getLogger(VoiceInterviewWebSocketHandler.class);
+    private final ListAppender<ILoggingEvent> logAppender = new ListAppender<>();
+    private ch.qos.logback.classic.Level originalLevel;
+
+    @BeforeEach
+    void setUpAppender() {
+      originalLevel = handlerLogger.getLevel();
+      handlerLogger.setLevel(ch.qos.logback.classic.Level.DEBUG);
+      logAppender.start();
+      handlerLogger.addAppender(logAppender);
+    }
+
+    @AfterEach
+    void tearDownAppender() {
+      handlerLogger.setLevel(originalLevel);
+      handlerLogger.detachAppender(logAppender);
+    }
+
+    @Test
+    @DisplayName("迟到与最终转写片段日志不包含转写原文，只记录长度")
+    void shouldNotLogSttText() throws Exception {
+      String lateMarker = "迟到转写敏感标记MARKER-STT-LATE-2e9b";
+      String finalMarker = "最终转写敏感标记MARKER-STT-FINAL-c47a";
+      WebSocketSession session = mock(WebSocketSession.class);
+      when(session.isOpen()).thenReturn(true);
+      handler = newHandler(new VoiceInterviewProperties(), new ObjectMapper());
+      prepareSttState("51", session, true);
+
+      invokeHandleSttResult("51", lateMarker, false);
+
+      prepareSttState("52", session, false);
+      invokeHandleSttResult("52", finalMarker, true);
+
+      StringBuilder logs = new StringBuilder();
+      for (ILoggingEvent event : logAppender.list) {
+        logs.append(event.getFormattedMessage()).append('\n');
+      }
+      assertThat(logs.toString()).doesNotContain(lateMarker);
+      assertThat(logs.toString()).doesNotContain(finalMarker);
+      assertThat(logs.toString()).contains("textLength=" + lateMarker.length());
+      assertThat(logs.toString()).contains("textLength=" + finalMarker.length());
+    }
   }
 }

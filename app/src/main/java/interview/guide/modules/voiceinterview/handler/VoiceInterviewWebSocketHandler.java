@@ -205,7 +205,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
         try {
             if (session.isOpen()) {
                 session.sendMessage(new TextMessage(message));
-                log.debug("Message sent to session: {}", message.substring(0, Math.min(100, message.length())));
+                log.debug("Message sent to session: length={}", message.length());
             } else {
                 log.warn("Session is closed, cannot send message");
             }
@@ -556,8 +556,8 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
         // 用户已提交或 AI 正在回答时，丢弃上一轮迟到的 partial/final，防止污染下一轮字幕。
         if (state.isProcessing().get() || state.isAiSpeakingOrCooldown()) {
-            log.debug("Discarding late STT result for session {}, final={}: {}",
-                sessionId, isFinalSegment, recognizedText);
+            log.debug("Discarding late STT result for session {}, final={}, textLength={}",
+                sessionId, isFinalSegment, recognizedText.length());
             return;
         }
 
@@ -567,7 +567,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             return;
         }
 
-        log.debug("STT final segment for session {}: {}", sessionId, recognizedText);
+        log.debug("STT final segment for session {}: textLength={}", sessionId, recognizedText.length());
         incrementCounter("app.voice.interview.asr.final_segments", "status", "received");
 
         // 合并多次 VAD 切段，只更新实时字幕；是否提交给 LLM 由前端手动 submit 控制
@@ -636,7 +636,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 return;
             }
 
-            log.info("Getting LLM response for session {}, text: {}", sessionId, userText);
+            log.info("Getting LLM response for session {}, textLength={}", sessionId, userText.length());
 
             VoiceInterviewSessionEntity sessionEntity = getSessionEntity(sessionId);
             if (sessionEntity == null) {
@@ -702,7 +702,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
                 recordTimerSinceNanos("app.voice.interview.llm.duration", llmStartNanos, "status", "success");
                 incrementCounter("app.voice.interview.llm.calls", "status", "success", "streaming", "true");
-                log.info("LLM response for session {}: '{}'", sessionId, aiReply);
+                log.info("LLM response for session {}: replyLength={}", sessionId, aiReply.length());
 
                 if (!session.isOpen()) {
                     log.warn("WebSocket closed during LLM processing, discarding response for session {}", sessionId);
@@ -798,7 +798,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 aiReply = llmService.chat(userText, sessionEntity, conversationHistory);
                 recordTimerSinceNanos("app.voice.interview.llm.duration", llmStartNanos, "status", "success");
                 incrementCounter("app.voice.interview.llm.calls", "status", "success", "streaming", "false");
-                log.info("LLM response for session {}: '{}'", sessionId, aiReply);
+                log.info("LLM response for session {}: replyLength={}", sessionId, aiReply.length());
 
                 if (!session.isOpen()) {
                     log.warn("WebSocket closed during LLM processing, discarding response for session {}", sessionId);
