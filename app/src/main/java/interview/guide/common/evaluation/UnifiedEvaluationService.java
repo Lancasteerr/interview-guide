@@ -256,9 +256,10 @@ public class UnifiedEvaluationService {
     }
 
     /**
-     * 按模型返回的 questionIndex 显式映射回原始题目；
-     * 非法（不属于本批、重复）或缺失的索引只降级该位置为 0 分；
-     * 仅当返回数量与输入一致且索引不可用时才按位置兜底
+     * 按模型返回的 questionIndex 显式映射回原始题目：
+     * - 索引全部合法：按索引写回对应位置
+     * - 索引不可用且返回数量与输入一致：对整批按位置对齐（避免半索引半位置导致同一份评估被重复消费）
+     * - 其余情况：合法索引按索引写回，非法或缺失的索引只降级该位置为 0 分
      */
     private List<QuestionEvalDTO> mergeQuestionEvaluations(List<BatchResult> batchResults) {
         List<QuestionEvalDTO> merged = new ArrayList<>();
@@ -277,14 +278,14 @@ public class UnifiedEvaluationService {
                 byIndex.putIfAbsent(dto.questionIndex(), dto);
             }
             boolean indexesUsable = byIndex.size() == expectedIndexes.size();
+            // 索引整体不可用但数量一致时按位置对齐整批，不做逐位置混用
+            boolean positionalFallback = !indexesUsable && current.size() == expectedIndexes.size();
 
             for (int i = 0; i < expectedIndexes.size(); i++) {
                 int originalIndex = expectedIndexes.get(i);
-                QuestionEvalDTO dto = byIndex.get(originalIndex);
-                if (dto == null && !indexesUsable && current.size() == expectedIndexes.size()
-                    && current.get(i) != null) {
-                    dto = current.get(i);
-                }
+                QuestionEvalDTO dto = positionalFallback
+                    ? current.get(i)
+                    : byIndex.get(originalIndex);
                 if (dto != null && dto.questionIndex() != originalIndex) {
                     dto = new QuestionEvalDTO(originalIndex, dto.score(), dto.feedback(),
                         dto.referenceAnswer(), dto.keyPoints());

@@ -280,10 +280,10 @@ class UnifiedEvaluationServiceTest {
 
       EvaluationReport report = service.evaluate(chatClient, "s8", records, null);
 
-      // 位置 0 缺失按位置兜底为 61；索引 1、2 有合法映射，按索引取回
+      // 索引整体不可用（1-based 重编号）但数量一致：整批按位置对齐，不重复消费同一份评估
       assertThat(scoreOf(report, 0)).isEqualTo(61);
-      assertThat(scoreOf(report, 1)).isEqualTo(61);
-      assertThat(scoreOf(report, 2)).isEqualTo(62);
+      assertThat(scoreOf(report, 1)).isEqualTo(62);
+      assertThat(scoreOf(report, 2)).isEqualTo(63);
     }
   }
 

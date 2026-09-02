@@ -413,6 +413,24 @@ class VoiceContextCompressorTest {
         }
 
         @Test
+        @DisplayName("最近一条消息单独超预算时仍保留该消息，不返回空历史")
+        void alwaysKeepsMostRecentMessage() {
+            properties.getContextCompression().setEnabled(true);
+            properties.getContextCompression().setMode(VoiceInterviewProperties.Mode.WINDOW);
+            properties.getContextCompression().setWindowSize(3);
+            properties.getContextCompression().setMaxHistoryChars(50);
+            List<VoiceInterviewMessageEntity> all = List.of(
+                turn(1, "短问题", "短回答"),
+                turn(2, "短问题", "短回答"),
+                turn(3, "超".repeat(500), "长".repeat(500)));
+
+            VoiceContextCompressor.CompressedHistory r = compressor.compress(all, null, 0);
+
+            assertFalse(r.recent().isEmpty());
+            assertEquals(3, r.recent().getLast().getSequenceNum());
+        }
+
+        @Test
         @DisplayName("重连：已有摘要覆盖全部早期轮次时不重复摘要")
         void reconnectReusesPersistedSummary() {
             enableSummary(12000, 4000);

@@ -150,6 +150,10 @@ public class VoiceContextCompressor {
             used += cost;
             start--;
         }
+        // 始终保留最近消息：即使最近一条单独超预算也不丢弃（单轮超长由 aiQuestionMaxChars 等上游约束兜底）
+        if (start == recent.size() && start > 0) {
+            start = recent.size() - 1;
+        }
         if (start == 0) {
             return recent;
         }
