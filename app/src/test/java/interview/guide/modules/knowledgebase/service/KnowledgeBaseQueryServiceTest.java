@@ -287,7 +287,7 @@ class KnowledgeBaseQueryServiceTest {
       List<RagQueryExecution.RetrievedDoc> docs = traces.getFirst().retrievedDocs();
       assertThat(docs).hasSize(8);
       assertThat(docs).extracting(RagQueryExecution.RetrievedDoc::text)
-          .containsExactly("片段-a", "片段-f", "片段-b", "片段-g", "片段-c", "片段-h", "片段-d", "片段-e");
+          .containsExactly("片段-a", "片段-f", "片段-b", "片段-g", "片段-c", "片段-h", "片段-d", "片段-i");
     }
 
     @Test
