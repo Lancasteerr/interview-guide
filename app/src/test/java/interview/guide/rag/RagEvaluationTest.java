@@ -154,7 +154,10 @@ class RagEvaluationTest {
     for (RagEvalSample sample : samples) {
       sampleResults.add(evaluateSample(sample, faithfulnessReview, badCases));
     }
-    return buildReport(samples, sampleResults, badCases, faithfulnessReview, chunkCounts);
+    final List<Map<String, Object>> results = sampleResults;
+    final List<Map<String, Object>> bad = badCases;
+    final List<Map<String, Object>> faith = faithfulnessReview;
+    return stage("REPORT", () -> buildReport(samples, results, bad, faith, chunkCounts));
   }
 
   private interface StageSupplier<T> {
@@ -410,9 +413,9 @@ class RagEvaluationTest {
         env("POSTGRES_USER", "postgres"), env("POSTGRES_PASSWORD", "123456"));
         var stmt = conn.createStatement();
         var rs = stmt.executeQuery(
-            "SELECT id, model, embedding_model, temperature, default_chat_provider_id, default_embedding_provider_id"
-                + " FROM llm_provider_config, llm_global_setting"
-                + " WHERE id = default_chat_provider_id OR id = default_embedding_provider_id")) {
+            "SELECT id, model, embedding_model, temperature FROM llm_provider_config"
+                + " WHERE id IN (SELECT default_chat_provider_id FROM llm_global_setting"
+                + "   UNION SELECT default_embedding_provider_id FROM llm_global_setting)")) {
       while (rs.next()) {
         String id = rs.getString("id");
         snapshot.put("provider:" + id + ".model", rs.getString("model"));
