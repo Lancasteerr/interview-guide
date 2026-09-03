@@ -230,11 +230,12 @@ public class KnowledgeBaseQueryService {
             long rewriteStart = System.nanoTime();
             List<Message> effectiveHistory = sanitizeHistory(history);
             QueryContext queryContext = buildQueryContext(question, effectiveHistory);
-            List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
+            List<String> attemptedQueries = new ArrayList<>();
+            List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds, attemptedQueries);
             long rewriteAndRetrievalMs = (System.nanoTime() - rewriteStart) / 1_000_000;
 
             if (!hasEffectiveHit(relevantDocs)) {
-                emitTrace(trace, question, queryContext, relevantDocs,
+                emitTrace(trace, question, queryContext, attemptedQueries, relevantDocs,
                     rewriteAndRetrievalMs, 0, NO_RESULT_RESPONSE, "NO_RESULT");
                 return Flux.just(NO_RESULT_RESPONSE);
             }
@@ -268,14 +269,14 @@ public class KnowledgeBaseQueryService {
                 .doOnComplete(() -> {
                     long generationMs = (System.nanoTime() - generationStart) / 1_000_000;
                     boolean rejected = NO_RESULT_RESPONSE.equals(collectedAnswer.toString());
-                    emitTrace(trace, question, queryContext, relevantDocs,
+                    emitTrace(trace, question, queryContext, attemptedQueries, relevantDocs,
                         rewriteAndRetrievalMs, generationMs, collectedAnswer.toString(),
                         rejected ? "NO_RESULT" : "ANSWERED");
                     log.info("流式输出完成: kbIds={}", knowledgeBaseIds);
                 })
                 .onErrorResume(e -> {
                     log.error("流式输出失败: kbIds={}, error={}", knowledgeBaseIds, ErrorLogSanitizer.summarize(e), e);
-                    emitTrace(trace, question, queryContext, List.of(),
+                    emitTrace(trace, question, queryContext, attemptedQueries, List.of(),
                         rewriteAndRetrievalMs, (System.nanoTime() - generationStart) / 1_000_000,
                         "【错误】知识库查询失败", "ERROR");
                     return Flux.just("【错误】知识库查询失败：AI服务暂时不可用，请稍后重试。");
@@ -284,7 +285,7 @@ public class KnowledgeBaseQueryService {
         } catch (Exception e) {
             log.error("知识库流式问答失败: {}", ErrorLogSanitizer.summarize(e), e);
             emitTrace(trace, normalizeQuestion(question), null, List.of(),
-                0, 0, "【错误】知识库查询失败", "ERROR");
+                List.of(), 0, 0, "【错误】知识库查询失败", "ERROR");
             return Flux.just("【错误】知识库查询失败：" + e.getMessage());
         }
     }
@@ -294,15 +295,12 @@ public class KnowledgeBaseQueryService {
      */
     private void emitTrace(java.util.function.Consumer<RagQueryExecution> trace,
                            String originalQuestion, QueryContext queryContext,
-                           List<Document> chosenDocs,
+                           List<String> attemptedQueries, List<Document> chosenDocs,
                            long rewriteAndRetrievalMs, long generationMs,
                            String answer, String outcome) {
         if (trace == null) {
             return;
         }
-        List<String> attemptedQueries = queryContext != null
-            ? queryContext.candidateQueries()
-            : List.of(normalizeQuestion(originalQuestion));
         List<RagQueryExecution.RetrievedDoc> docs = new ArrayList<>();
         for (int i = 0; i < chosenDocs.size(); i++) {
             Document doc = chosenDocs.get(i);
@@ -328,8 +326,12 @@ public class KnowledgeBaseQueryService {
     }
 
     private Double extractScore(Document doc) {
-        Object score = doc.getMetadata().get("distance");
-        return score != null && score instanceof Number number ? number.doubleValue() : null;
+        Double score = doc.getScore();
+        if (score != null) {
+            return score;
+        }
+        Object distance = doc.getMetadata().get("distance");
+        return distance != null && distance instanceof Number number ? number.doubleValue() : null;
     }
 
 
@@ -346,13 +348,14 @@ public class KnowledgeBaseQueryService {
         long start = System.nanoTime();
         List<Message> effectiveHistory = sanitizeHistory(history);
         QueryContext queryContext = buildQueryContext(question, effectiveHistory);
-        List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
+        List<String> attemptedQueries = new ArrayList<>();
+        List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds, attemptedQueries);
         long elapsedMs = (System.nanoTime() - start) / 1_000_000;
         boolean hit = hasEffectiveHit(relevantDocs);
         return new RagQueryExecution(
             normalized,
             queryContext.candidateQueries().getFirst(),
-            queryContext.candidateQueries(),
+            List.copyOf(attemptedQueries),
             queryContext.searchParams().topK(),
             queryContext.searchParams().minScore(),
             relevantDocs.stream()
@@ -391,13 +394,21 @@ public class KnowledgeBaseQueryService {
         return question == null ? "" : question.trim();
     }
 
-//    向量检索
+//    向量检索（attemptedQueries 非空时记录实际尝试过的候选，第一个命中后即返回）
     private List<Document> retrieveRelevantDocs(QueryContext queryContext, List<Long> knowledgeBaseIds) {
+        return retrieveRelevantDocs(queryContext, knowledgeBaseIds, null);
+    }
+
+    private List<Document> retrieveRelevantDocs(QueryContext queryContext, List<Long> knowledgeBaseIds,
+                                                List<String> attemptedQueries) {
         List<String> candidates = queryContext.candidateQueries();
         for (int i = 0; i < candidates.size(); i++) {
             String candidateQuery = candidates.get(i);
             if (candidateQuery.isBlank()) {
                 continue;
+            }
+            if (attemptedQueries != null) {
+                attemptedQueries.add(candidateQuery);
             }
             long startNanos = System.nanoTime();
             List<Document> docs = vectorService.similaritySearch(

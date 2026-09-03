@@ -6,3 +6,17 @@ app:
     rag:
       rewrite:
         enabled: ${APP_AI_RAG_REWRITE_ENABLED:false}
+
+# Redis 隔离：测评默认使用独立 database 1，避免消费开发环境 Stream 消息
+# （完整覆盖主配置的 redisson config 字符串；REDIS_DATABASE=0 会被测评测试的启动守卫拒绝）
+spring:
+  redis:
+    redisson:
+      config: |
+        singleServerConfig:
+          address: "redis://${REDIS_HOST:localhost}:${REDIS_PORT:6379}"
+          database: ${REDIS_DATABASE:1}
+          connectionMinimumIdleSize: 5
+          connectionPoolSize: 20
+          subscriptionConnectionMinimumIdleSize: 1
+          subscriptionConnectionPoolSize: 10

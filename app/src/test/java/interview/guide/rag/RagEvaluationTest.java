@@ -84,6 +84,12 @@ class RagEvaluationTest {
 
   @BeforeAll
   static void recreateDatabase() {
+    // rag-eval Profile 已把 Redis database 固定为 1（可用 REDIS_DATABASE 覆盖），
+    // 这里兜底拒绝显式指定 database 0 的运行，防止消费开发环境 Stream 消息
+    String redisDatabase = System.getenv("REDIS_DATABASE");
+    if ("0".equals(redisDatabase)) {
+      fail("REDIS_DATABASE=0 会连接开发环境 Redis，测评运行拒绝启动");
+    }
     String host = env("POSTGRES_HOST", "localhost");
     String port = env("POSTGRES_PORT", "5432");
     String user = env("POSTGRES_USER", "postgres");
@@ -117,43 +123,89 @@ class RagEvaluationTest {
   }
 
   @Test
-  void runEvaluation() throws Exception {
-    List<RagEvalSample> samples = loadSamples();
-    seedProvidersFromSourceDatabase();
-    Map<String, String> fixtureContents = loadFixtures(samples);
-    vectorizeFixtures(fixtureContents);
+  void runEvaluation() {
+    Map<String, Object> report = new LinkedHashMap<>();
+    try {
+      report = executeWithStages();
+      RagEvalReportWriter.write(Path.of(REPORT_DIR), RUN_ID, report);
+    } catch (Exception e) {
+      String stage = e instanceof HarnessStageException h ? h.stage : "UNKNOWN";
+      RagEvalReportWriter.writeHarnessError(Path.of(REPORT_DIR), RUN_ID, stage,
+          e.getClass().getSimpleName() + ": " + e.getMessage());
+      fail("RAG 测评在阶段 " + stage + " 失败：" + e.getMessage()
+          + "，错误报告见 " + REPORT_DIR + "/" + RUN_ID + ".json");
+    }
+    long harnessErrors = ((List<?>) report.getOrDefault("samples", List.of())).stream()
+        .filter(r -> "HARNESS_ERROR".equals(((Map<?, ?>) r).get("outcome"))).count();
+    if (harnessErrors > 0) {
+      fail(harnessErrors + " 个样本发生环境级错误，报告见 " + REPORT_DIR + "/" + RUN_ID + ".md");
+    }
+  }
+
+  private Map<String, Object> executeWithStages() throws Exception {
+    List<RagEvalSample> samples = stage("DATASET_LOAD", this::loadSamplesChecked);
+    Map<String, String> fixtureContents = stage("FIXTURE_LOAD", () -> loadFixtures(samples));
+    stageRun("PROVIDER_SETUP", this::seedProvidersFromSourceDatabase);
+    Map<String, Integer> chunkCounts = stage("VECTORIZATION", () -> vectorizeFixtures(fixtureContents));
 
     List<Map<String, Object>> sampleResults = new ArrayList<>();
     List<Map<String, Object>> badCases = new ArrayList<>();
     List<Map<String, Object>> faithfulnessReview = new ArrayList<>();
-    int[][] confusion = new int[2][2]; // [actualReject][predictedReject]
-
     for (RagEvalSample sample : samples) {
-      Map<String, Object> result = evaluateSample(sample, faithfulnessReview, badCases, confusion);
-      sampleResults.add(result);
+      sampleResults.add(evaluateSample(sample, faithfulnessReview, badCases));
     }
+    return buildReport(samples, sampleResults, badCases, faithfulnessReview, chunkCounts);
+  }
 
-    Map<String, Object> report = buildReport(samples, sampleResults, badCases, faithfulnessReview, confusion);
-    RagEvalReportWriter.write(Path.of(REPORT_DIR), RUN_ID, report);
+  private interface StageSupplier<T> {
+    T get() throws Exception;
+  }
 
-    long harnessErrors = sampleResults.stream().filter(r -> "HARNESS_ERROR".equals(r.get("outcome"))).count();
-    if (harnessErrors > 0) {
-      fail(harnessErrors + " 个样本发生环境级错误，报告见 " + REPORT_DIR + "/" + RUN_ID + ".md");
+  private interface StageRunnable {
+    void run() throws Exception;
+  }
+
+  private <T> T stage(String name, StageSupplier<T> supplier) throws Exception {
+    try {
+      return supplier.get();
+    } catch (Exception e) {
+      throw new HarnessStageException(name, e);
     }
+  }
+
+  private void stageRun(String name, StageRunnable runnable) throws Exception {
+    try {
+      runnable.run();
+    } catch (Exception e) {
+      throw new HarnessStageException(name, e);
+    }
+  }
+
+  private static final class HarnessStageException extends RuntimeException {
+    final String stage;
+
+    HarnessStageException(String stage, Exception cause) {
+      super(stage + ": " + cause.getMessage(), cause);
+      this.stage = stage;
+    }
+  }
+
+  private List<RagEvalSample> loadSamplesChecked() throws IOException {
+    return loadSamples();
   }
 
   // ========== 样本执行 ==========
 
   private Map<String, Object> evaluateSample(RagEvalSample sample,
                                              List<Map<String, Object>> faithfulnessReview,
-                                             List<Map<String, Object>> badCases,
-                                             int[][] confusion) {
+                                             List<Map<String, Object>> badCases) {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("id", sample.id());
     result.put("split", sample.split());
     result.put("tags", sample.tags());
     result.put("question", sample.question());
     result.put("shouldReject", sample.shouldReject());
+    result.put("evaluateGeneration", sample.evaluateGeneration());
     long totalStart = System.nanoTime();
     try {
       Long kbId = fixtureKbIds.get(sample.fixture());
@@ -200,9 +252,6 @@ class RagEvaluationTest {
           : (double) hitEvidenceIds.size() / sample.expectedEvidence().size();
       boolean predictedReject = "NO_RESULT".equals(execution.outcome());
 
-      if (sample.shouldReject()) {
-        confusion[sample.shouldReject() ? 1 : 0][predictedReject ? 1 : 0]++;
-      }
       if (sample.evaluateGeneration() && !sample.shouldReject()) {
         faithfulnessReview.add(faithfulnessEntry(sample, execution));
       }
@@ -212,7 +261,15 @@ class RagEvaluationTest {
       result.put("attemptedQueries", execution.attemptedQueries());
       result.put("resolvedTopK", execution.resolvedTopK());
       result.put("resolvedMinScore", execution.resolvedMinScore());
-      result.put("retrievedDocCount", execution.retrievedDocs().size());
+      result.put("answer", execution.answer());
+      result.put("retrievedDocs", execution.retrievedDocs().stream()
+          .map(d -> Map.of(
+              "rank", d.rank(),
+              "score", d.score() != null ? d.score() : -1.0,
+              "excerpt", d.text() != null && d.text().length() > 200
+                  ? d.text().substring(0, 200) : d.text(),
+              "contentHash", sha256Quiet(d.text())))
+          .toList());
       result.put("hit", hit);
       result.put("hitEvidenceIds", hitEvidenceIds);
       result.put("firstHitRank", firstHitRank);
@@ -230,34 +287,58 @@ class RagEvaluationTest {
       result.put("error", e.getClass().getSimpleName() + ": " + e.getMessage());
       result.put("totalMs", (System.nanoTime() - totalStart) / 1_000_000);
       badCases.add(badCase(sample, "HARNESS_ERROR",
-          e.getClass().getSimpleName() + ": " + e.getMessage()));
+          e.getClass().getSimpleName() + ": " + e.getMessage(), result));
       return result;
     }
   }
 
   private void collectBadCase(RagEvalSample sample, Map<String, Object> result, Integer firstHitRank,
                               double evidenceRecall, boolean predictedReject, List<Map<String, Object>> badCases) {
+    String reason = null;
+    String detail = null;
     if (sample.shouldReject() && !predictedReject) {
-      badCases.add(badCase(sample, "OOS_NOT_REJECTED", "知识库外问题未被拒答"));
+      reason = "OOS_NOT_REJECTED";
+      detail = "知识库外问题未被拒答";
     } else if (!sample.shouldReject() && predictedReject) {
-      badCases.add(badCase(sample, "FALSE_REJECT", "站内问题被误拒答"));
+      reason = "FALSE_REJECT";
+      detail = "站内问题被误拒答";
     } else if (!sample.shouldReject() && Boolean.FALSE.equals(result.get("hit"))) {
-      badCases.add(badCase(sample, "NO_EVIDENCE_HIT", "Top-K 内未命中任何证据锚点"));
+      reason = "NO_EVIDENCE_HIT";
+      detail = "Top-K 内未命中任何证据锚点";
     } else if (!sample.shouldReject() && evidenceRecall < 1.0) {
-      badCases.add(badCase(sample, "EVIDENCE_INCOMPLETE", "证据锚点未全部召回，Recall=" + evidenceRecall));
+      reason = "EVIDENCE_INCOMPLETE";
+      detail = "证据锚点未全部召回，Recall=" + evidenceRecall;
     } else if (!sample.shouldReject() && firstHitRank != null && firstHitRank > 3) {
-      badCases.add(badCase(sample, "LOW_FIRST_RANK", "首个命中排名=" + firstHitRank));
+      reason = "LOW_FIRST_RANK";
+      detail = "首个命中排名=" + firstHitRank;
+    }
+    if (reason != null) {
+      badCases.add(badCase(sample, reason, detail, result));
     }
   }
 
-  private Map<String, Object> badCase(RagEvalSample sample, String reason, String detail) {
+  @SuppressWarnings("unchecked")
+  private Map<String, Object> badCase(RagEvalSample sample, String reason, String detail,
+                                      Map<String, Object> result) {
     Map<String, Object> c = new LinkedHashMap<>();
     c.put("id", sample.id());
     c.put("question", sample.question());
     c.put("tags", sample.tags());
     c.put("reason", reason);
     c.put("detail", detail);
+    c.put("answerExcerpt", excerpt(result.get("answer"), 300));
+    c.put("topDocs", ((List<Map<String, Object>>) result.getOrDefault("retrievedDocs", List.of()))
+        .stream().limit(3).toList());
+    c.put("expectedEvidence", sample.expectedEvidence().stream()
+        .map(RagEvalSample.Evidence::text).toList());
     return c;
+  }
+
+  private String excerpt(Object text, int limit) {
+    if (!(text instanceof String s) || s.isEmpty()) {
+      return "(空)";
+    }
+    return s.length() > limit ? s.substring(0, limit) + "…" : s;
   }
 
   private Map<String, Object> faithfulnessEntry(RagEvalSample sample, RagQueryExecution execution) {
@@ -281,13 +362,13 @@ class RagEvaluationTest {
                                           List<Map<String, Object>> sampleResults,
                                           List<Map<String, Object>> badCases,
                                           List<Map<String, Object>> faithfulnessReview,
-                                          int[][] confusion) throws Exception {
+                                          Map<String, Integer> chunkCounts) throws Exception {
     Map<String, Object> report = new LinkedHashMap<>();
     report.put("runId", RUN_ID);
     report.put("timestamp", java.time.Instant.now().toString());
-    report.put("environment", buildEnvironment());
+    report.put("environment", buildEnvironment(chunkCounts));
     report.put("metrics", buildMetrics(sampleResults));
-    report.put("rejection", buildRejection(confusion));
+    report.put("rejection", RagEvalMetrics.rejectionMetrics(sampleResults));
     report.put("badCases", badCases);
     report.put("faithfulnessReview", faithfulnessReview);
     report.put("samples", sampleResults);
@@ -296,7 +377,7 @@ class RagEvaluationTest {
     return report;
   }
 
-  private Map<String, Object> buildEnvironment() throws Exception {
+  private Map<String, Object> buildEnvironment(Map<String, Integer> chunkCounts) throws Exception {
     Map<String, Object> env = new LinkedHashMap<>();
     env.put("gitSha", gitSha());
     env.put("datasetSha256", sha256(new ClassPathResource(DATASET).getInputStream().readAllBytes()));
@@ -311,72 +392,73 @@ class RagEvaluationTest {
     }
     env.put("rewriteEnabled", System.getenv("APP_AI_RAG_REWRITE_ENABLED") == null
         ? "false(rag-eval Profile 默认)" : System.getenv("APP_AI_RAG_REWRITE_ENABLED"));
-    env.put("redisDatabase", System.getenv().getOrDefault("REDIS_DATABASE", "0"));
+    env.put("redisDatabase", System.getenv().getOrDefault("REDIS_DATABASE", "1(rag-eval Profile 默认)"));
     env.put("evalDatabase", EVAL_DB + "（每 run 重建）");
     env.put("tokenUsage", "null（当前链路 .content() 无法取得 usage，补齐属 P1-04）");
+    env.put("springAiVersion", springAiVersion());
+    env.putAll(providerSnapshot());
+    chunkCounts.forEach((fixture, count) -> env.put("chunkCount:" + fixture, count));
     return env;
+  }
+
+  /**
+   * 从测评库读取 Provider 快照（模型、Embedding 模型、温度），不含密钥。
+   */
+  private Map<String, Object> providerSnapshot() throws Exception {
+    Map<String, Object> snapshot = new LinkedHashMap<>();
+    try (Connection conn = DriverManager.getConnection(evalDbUrl,
+        env("POSTGRES_USER", "postgres"), env("POSTGRES_PASSWORD", "123456"));
+        var stmt = conn.createStatement();
+        var rs = stmt.executeQuery(
+            "SELECT id, model, embedding_model, temperature, default_chat_provider_id, default_embedding_provider_id"
+                + " FROM llm_provider_config, llm_global_setting"
+                + " WHERE id = default_chat_provider_id OR id = default_embedding_provider_id")) {
+      while (rs.next()) {
+        String id = rs.getString("id");
+        snapshot.put("provider:" + id + ".model", rs.getString("model"));
+        snapshot.put("provider:" + id + ".embeddingModel", rs.getString("embedding_model"));
+        snapshot.put("provider:" + id + ".temperature", rs.getObject("temperature"));
+      }
+    }
+    try (Connection conn = DriverManager.getConnection(evalDbUrl,
+        env("POSTGRES_USER", "postgres"), env("POSTGRES_PASSWORD", "123456"));
+        var stmt = conn.createStatement();
+        var rs = stmt.executeQuery("SELECT default_chat_provider_id, default_embedding_provider_id"
+            + " FROM llm_global_setting")) {
+      while (rs.next()) {
+        snapshot.put("defaultChatProvider", rs.getString(1));
+        snapshot.put("defaultEmbeddingProvider", rs.getString(2));
+      }
+    }
+    return snapshot;
+  }
+
+  private String springAiVersion() {
+    Package pkg = org.springframework.ai.chat.client.ChatClient.class.getPackage();
+    String version = pkg != null ? pkg.getImplementationVersion() : null;
+    return version != null ? version : "unknown";
+  }
+
+  private String sha256Quiet(String text) {
+    try {
+      return sha256(text != null ? text.getBytes(StandardCharsets.UTF_8) : new byte[0]);
+    } catch (Exception e) {
+      return "error";
+    }
   }
 
   private Map<String, Object> buildMetrics(List<Map<String, Object>> results) {
     Map<String, Object> metrics = new LinkedHashMap<>();
-    metrics.put("overall", metricsOf(results));
-    metrics.put("dev", metricsOf(results.stream()
+    metrics.put("overall", RagEvalMetrics.metricsOf(results));
+    metrics.put("dev", RagEvalMetrics.metricsOf(results.stream()
         .filter(r -> "dev".equals(r.get("split"))).toList()));
-    metrics.put("holdout", metricsOf(results.stream()
+    metrics.put("holdout", RagEvalMetrics.metricsOf(results.stream()
         .filter(r -> "holdout".equals(r.get("split"))).toList()));
     results.stream().map(r -> (List<String>) r.get("tags"))
         .flatMap(List::stream).distinct().sorted()
-        .forEach(tag -> metrics.put("tag:" + tag, metricsOf(results.stream()
+        .forEach(tag -> metrics.put("tag:" + tag, RagEvalMetrics.metricsOf(results.stream()
             .filter(r -> ((List<String>) r.get("tags")).contains(tag)).toList())));
     return metrics;
-  }
-
-  private Map<String, Object> metricsOf(List<Map<String, Object>> results) {
-    Map<String, Object> m = new LinkedHashMap<>();
-    if (results.isEmpty()) {
-      return m;
-    }
-    List<Map<String, Object>> inScope = results.stream()
-        .filter(r -> !Boolean.TRUE.equals(r.get("shouldReject"))).toList();
-    double hitRate = inScope.isEmpty() ? 0 : inScope.stream()
-        .filter(r -> Boolean.TRUE.equals(r.get("hit"))).count() * 100.0 / inScope.size();
-    double mrr = inScope.isEmpty() ? 0 : inScope.stream()
-        .map(r -> (Integer) r.get("firstHitRank"))
-        .filter(java.util.Objects::nonNull)
-        .mapToInt(Integer::intValue)
-        .mapToDouble(rank -> 1.0 / rank).average().orElse(0);
-    double avgRecall = inScope.isEmpty() ? 0 : inScope.stream()
-        .mapToDouble(r -> (Double) r.get("evidenceRecall")).average().orElse(0);
-    List<Long> totals = results.stream()
-        .filter(r -> r.get("totalMs") instanceof Long)
-        .map(r -> (Long) r.get("totalMs")).sorted().toList();
-    m.put("samples", results.size());
-    m.put("inScope", inScope.size());
-    m.put("Hit@K(%)", round(hitRate));
-    m.put("MRR", round(mrr));
-    m.put("EvidenceRecall@K", round(avgRecall));
-    if (!totals.isEmpty()) {
-      m.put("totalMsP50", percentile(totals, 0.50));
-      m.put("totalMsP95", percentile(totals, 0.95));
-    }
-    return m;
-  }
-
-  private Map<String, Object> buildRejection(int[][] confusion) {
-    Map<String, Object> r = new LinkedHashMap<>();
-    int tp = confusion[1][1];
-    int fn = confusion[1][0];
-    int fp = confusion[0][1];
-    int tn = confusion[0][0];
-    r.put("confusion(actual x predicted)", "reject-correct=" + tp + ", reject-missed=" + fn
-        + ", false-reject=" + fp + ", reject-correct-true=" + tn);
-    double precision = tp + fp == 0 ? 0 : (double) tp / (tp + fp);
-    double recall = tp + fn == 0 ? 0 : (double) tp / (tp + fn);
-    double f1 = precision + recall == 0 ? 0 : 2 * precision * recall / (precision + recall);
-    r.put("precision", round(precision));
-    r.put("recall", round(recall));
-    r.put("f1", round(f1));
-    return r;
   }
 
   // ========== 数据准备 ==========
@@ -405,7 +487,8 @@ class RagEvaluationTest {
     return contents;
   }
 
-  private void vectorizeFixtures(Map<String, String> fixtureContents) {
+  private Map<String, Integer> vectorizeFixtures(Map<String, String> fixtureContents) {
+    Map<String, Integer> chunkCounts = new LinkedHashMap<>();
     fixtureContents.forEach((fixture, content) -> {
       KnowledgeBaseEntity kb = new KnowledgeBaseEntity();
       kb.setName("rag-eval-" + fixture);
@@ -417,7 +500,11 @@ class RagEvaluationTest {
       KnowledgeBaseEntity saved = knowledgeBaseRepository.save(kb);
       vectorService.vectorizeAndStore(saved.getId(), content);
       fixtureKbIds.put(fixture, saved.getId());
+      int chunks = org.springframework.ai.transformer.splitter.TokenTextSplitter.builder().build()
+          .apply(List.of(new org.springframework.ai.document.Document(content))).size();
+      chunkCounts.put(fixture, chunks);
     });
+    return chunkCounts;
   }
 
   /**

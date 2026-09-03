@@ -58,6 +58,7 @@ public record RagEvalSample(
         .replace("*", "")
         .replace("#", "")
         .replace("`", "")
-        .replace(">", "");
+        .replace(">", "")
+        .toLowerCase(java.util.Locale.ROOT);
   }
 }
