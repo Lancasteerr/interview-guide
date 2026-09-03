@@ -267,6 +267,30 @@ class KnowledgeBaseQueryServiceTest {
     }
 
     @Test
+    @DisplayName("去重后条数超过 Top K 时按分数降序截断")
+    void shouldTruncateToTopKAfterDedup() throws Exception {
+      service = buildMergeService();
+      mockPlainClient();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenReturn("改写问题");
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("回答"));
+      // 长问题走 topkLong=8：两路共 10 个不同 Document，最终应截为 8 个且分数最高在前
+      String longQuestion = "这是一条足够长的原始问题用于触发长问题分档";
+      when(vectorService.similaritySearch(eq("改写问题"), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("a", 0.91), doc("b", 0.81), doc("c", 0.71), doc("d", 0.61), doc("e", 0.51)));
+      when(vectorService.similaritySearch(eq(longQuestion), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("f", 0.86), doc("g", 0.76), doc("h", 0.66), doc("i", 0.56), doc("j", 0.46)));
+
+      List<RagQueryExecution> traces = answerCollect(service, longQuestion);
+
+      List<RagQueryExecution.RetrievedDoc> docs = traces.getFirst().retrievedDocs();
+      assertThat(docs).hasSize(8);
+      assertThat(docs).extracting(RagQueryExecution.RetrievedDoc::text)
+          .containsExactly("片段-a", "片段-f", "片段-b", "片段-g", "片段-c", "片段-h", "片段-d", "片段-e");
+    }
+
+    @Test
     @DisplayName("功能开关关闭：保持首个有效结果行为（改写命中即返回）")
     void shouldKeepFirstHitBehaviorWhenDisabled() throws Exception {
       service = buildService(true);   // 默认配置 mergeOriginalQuery=false

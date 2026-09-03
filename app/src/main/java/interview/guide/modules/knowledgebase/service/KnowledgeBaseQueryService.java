@@ -444,7 +444,8 @@ public class KnowledgeBaseQueryService {
                                             List<String> attemptedQueries) {
         Map<String, Document> merged = new LinkedHashMap<>();
         int topK = queryContext.searchParams().topK();
-        int totalHits = 0;
+        int rewrittenHits = 0;
+        int originalHits = 0;
         for (int i = 0; i < 2; i++) {
             String candidateQuery = queryContext.candidateQueries().get(i);
             if (candidateQuery.isBlank()) {
@@ -455,7 +456,11 @@ public class KnowledgeBaseQueryService {
             }
             List<Document> docs = vectorService.similaritySearch(
                 candidateQuery, knowledgeBaseIds, topK, queryContext.searchParams().minScore());
-            totalHits += docs.size();
+            if (i == 0) {
+                rewrittenHits = docs.size();
+            } else {
+                originalHits = docs.size();
+            }
             for (Document doc : docs) {
                 merged.merge(doc.getId(), doc, KnowledgeBaseQueryService::higherScore);
             }
@@ -464,8 +469,8 @@ public class KnowledgeBaseQueryService {
             .sorted(KnowledgeBaseQueryService::scoreDescendingNullsLast)
             .limit(topK)
             .collect(Collectors.toList());
-        log.info("RAG 双路融合完成: kbCount={}, totalHits={}, dedupedHits={}, finalHits={}, topK={}",
-            knowledgeBaseIds.size(), totalHits, merged.size(), result.size(), topK);
+        log.info("RAG 双路融合完成: kbCount={}, rewrittenHits={}, originalHits={}, dedupedHits={}, finalHits={}, topK={}",
+            knowledgeBaseIds.size(), rewrittenHits, originalHits, merged.size(), result.size(), topK);
         return result;
     }
 
