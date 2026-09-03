@@ -397,6 +397,8 @@ class RagEvaluationTest {
         ? "false(rag-eval Profile 默认)" : System.getenv("APP_AI_RAG_REWRITE_ENABLED"));
     env.put("mergeOriginalQuery", System.getenv("APP_AI_RAG_MERGE_ORIGINAL_QUERY") == null
         ? "false(默认)" : System.getenv("APP_AI_RAG_MERGE_ORIGINAL_QUERY"));
+    env.put("chunkSize", System.getenv("APP_AI_RAG_VECTORIZATION_CHUNK_SIZE") == null
+        ? "800(默认)" : System.getenv("APP_AI_RAG_VECTORIZATION_CHUNK_SIZE"));
     env.put("redisDatabase", System.getenv().getOrDefault("REDIS_DATABASE", "1(rag-eval Profile 默认)"));
     env.put("evalDatabase", EVAL_DB + "（每 run 重建）");
     env.put("tokenUsage", "null（当前链路 .content() 无法取得 usage，补齐属 P1-04）");
@@ -505,8 +507,9 @@ class RagEvaluationTest {
       KnowledgeBaseEntity saved = knowledgeBaseRepository.save(kb);
       vectorService.vectorizeAndStore(saved.getId(), content);
       fixtureKbIds.put(fixture, saved.getId());
-      int chunks = org.springframework.ai.transformer.splitter.TokenTextSplitter.builder().build()
-          .apply(List.of(new org.springframework.ai.document.Document(content))).size();
+      // 使用生产链路真实写入的 chunkCount（由向量化快照更新），保证与 chunk-size 配置一致
+      int chunks = knowledgeBaseRepository.findById(saved.getId())
+          .map(KnowledgeBaseEntity::getChunkCount).orElse(0);
       chunkCounts.put(fixture, chunks);
     });
     return chunkCounts;

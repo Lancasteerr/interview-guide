@@ -53,6 +53,19 @@ public class KnowledgeBasePersistenceService {
     }
 
     /**
+     * 向量化成功后的快照更新（独立短事务调用方保证）：Chunk 数、策略 JSON、完成时间。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void updateVectorizationSnapshot(Long knowledgeBaseId, int chunkCount, String vectorConfig) {
+        knowledgeBaseRepository.findById(knowledgeBaseId).ifPresent(kb -> {
+            kb.setChunkCount(chunkCount);
+            kb.setVectorConfig(vectorConfig);
+            kb.setVectorizedAt(java.time.LocalDateTime.now());
+            knowledgeBaseRepository.save(kb);
+        });
+    }
+
+    /**
      * 保存新知识库元数据到数据库
      */
     @Transactional(rollbackFor = Exception.class)

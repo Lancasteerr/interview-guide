@@ -171,6 +171,15 @@ app:
       search:
         # 双路召回融合（改写 Query + 原始 Query），测评证明收益前默认关闭
         merge-original-query: ${APP_AI_RAG_MERGE_ORIGINAL_QUERY:false}
+      # 向量化 Chunk 策略（仅 Spring AI 2.0 原生参数，无 overlap；调整后需重新向量化）
+      vectorization:
+        splitter: ${APP_AI_RAG_VECTORIZATION_SPLITTER:token}
+        chunk-size: ${APP_AI_RAG_VECTORIZATION_CHUNK_SIZE:800}
+        min-chunk-size-chars: ${APP_AI_RAG_VECTORIZATION_MIN_CHUNK_SIZE_CHARS:350}
+        min-chunk-length-to-embed: ${APP_AI_RAG_VECTORIZATION_MIN_CHUNK_LENGTH_TO_EMBED:5}
+        max-num-chunks: ${APP_AI_RAG_VECTORIZATION_MAX_NUM_CHUNKS:10000}
+        keep-separator: ${APP_AI_RAG_VECTORIZATION_KEEP_SEPARATOR:true}
+        strategy-version: ${APP_AI_RAG_VECTORIZATION_STRATEGY_VERSION:token-v1}
         short-query-length: ${APP_AI_RAG_SHORT_QUERY_LENGTH:4}
         topk-short: ${APP_AI_RAG_TOPK_SHORT:20}
         topk-medium: ${APP_AI_RAG_TOPK_MEDIUM:12}

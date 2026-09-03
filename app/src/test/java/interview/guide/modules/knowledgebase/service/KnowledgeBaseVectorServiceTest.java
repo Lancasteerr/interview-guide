@@ -19,9 +19,14 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -50,10 +55,14 @@ class KnowledgeBaseVectorServiceTest {
     @Mock
     private VectorRepository vectorRepository;
 
+    @Mock
+    private KnowledgeBasePersistenceService persistenceService;
+
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        vectorService = new KnowledgeBaseVectorService(vectorStore, vectorRepository);
+        vectorService = new KnowledgeBaseVectorService(vectorStore, vectorRepository, null,
+            new KnowledgeBaseVectorProperties(), persistenceService);
     }
 
     // ==================== 共享辅助方法 ====================
@@ -599,6 +608,135 @@ class KnowledgeBaseVectorServiceTest {
 
             // Then
             assertEquals(5, results.size(), "应该返回所有可用结果");
+        }
+    }
+
+    @Nested
+    @DisplayName("Chunk 策略配置化（P1-03）")
+    class ChunkStrategyTests {
+
+        private KnowledgeBaseVectorService buildService(KnowledgeBaseVectorProperties properties) {
+            return new KnowledgeBaseVectorService(vectorStore, vectorRepository, null,
+                properties, persistenceService);
+        }
+
+        @Test
+        @DisplayName("chunkSize 越小块数越多、单块更短（400/800/1200 相对关系）")
+        void smallerChunkSizeProducesMoreShorterChunks() {
+            String longText = "Redis 是内存数据库，支持多种数据结构。".repeat(400);
+            Map<Integer, List<Document>> byConfig = new HashMap<>();
+            for (int chunkSize : List.of(400, 800, 1200)) {
+                VectorStore freshStore = org.mockito.Mockito.mock(VectorStore.class);
+                doNothing().when(freshStore).add(anyList());
+                KnowledgeBaseVectorProperties properties = new KnowledgeBaseVectorProperties();
+                properties.setChunkSize(chunkSize);
+                KnowledgeBaseVectorService service = new KnowledgeBaseVectorService(
+                    freshStore, vectorRepository, null, properties, persistenceService);
+                service.vectorizeAndStore(1L, longText);
+                @SuppressWarnings("unchecked")
+                ArgumentCaptor<List<Document>> captor = ArgumentCaptor.forClass(List.class);
+                verify(freshStore, atLeastOnce()).add(captor.capture());
+                List<Document> all = captor.getAllValues().stream()
+                    .flatMap(List::stream).toList();
+                byConfig.put(chunkSize, all);
+            }
+            int count400 = byConfig.get(400).size();
+            int count800 = byConfig.get(800).size();
+            int count1200 = byConfig.get(1200).size();
+            assertThat(count400).isGreaterThan(count800);
+            assertThat(count800).isGreaterThanOrEqualTo(count1200);
+            int maxLen400 = byConfig.get(400).stream().mapToInt(d -> d.getText().length()).max().orElse(0);
+            int maxLen1200 = byConfig.get(1200).stream().mapToInt(d -> d.getText().length()).max().orElse(0);
+            assertThat(maxLen400).isLessThanOrEqualTo(maxLen1200);
+        }
+
+        @Test
+        @DisplayName("每个写入向量的 metadata 携带 chunk_strategy")
+        void writesChunkStrategyMetadata() {
+            KnowledgeBaseVectorProperties properties = new KnowledgeBaseVectorProperties();
+            properties.setStrategyVersion("token-v1");
+            KnowledgeBaseVectorService service = buildService(properties);
+            doNothing().when(vectorStore).add(anyList());
+
+            service.vectorizeAndStore(1L, "一段足够长的文本用于分块。".repeat(60));
+
+            ArgumentCaptor<List<Document>> captor = captureAddedDocuments();
+            assertThat(captor.getValue())
+                .allSatisfy(d -> assertThat(d.getMetadata()).containsEntry("chunk_strategy", "token-v1"));
+        }
+
+        @Test
+        @DisplayName("向量化成功后以实际块数与策略 JSON 更新快照")
+        void updatesSnapshotAfterSuccess() {
+            KnowledgeBaseVectorProperties properties = new KnowledgeBaseVectorProperties();
+            properties.setChunkSize(400);
+            KnowledgeBaseVectorService service = buildService(properties);
+            doNothing().when(vectorStore).add(anyList());
+
+            service.vectorizeAndStore(1L, "一段足够长的文本用于分块。".repeat(60));
+
+            ArgumentCaptor<Integer> countCaptor = ArgumentCaptor.forClass(Integer.class);
+            ArgumentCaptor<String> configCaptor = ArgumentCaptor.forClass(String.class);
+            verify(persistenceService).updateVectorizationSnapshot(eq(1L), countCaptor.capture(),
+                configCaptor.capture());
+            assertThat(countCaptor.getValue()).isGreaterThan(0);
+            assertThat(configCaptor.getValue())
+                .contains("\"chunkSize\":400")
+                .contains("\"strategyVersion\":\"token-v1\"");
+        }
+
+        @Test
+        @DisplayName("向量写入失败时不写成功快照")
+        void noSnapshotOnFailure() {
+            KnowledgeBaseVectorService service = buildService(new KnowledgeBaseVectorProperties());
+            doThrow(new RuntimeException("embedding down")).when(vectorStore).add(anyList());
+
+            assertThatThrownBy(() -> service.vectorizeAndStore(1L, "正常文本。".repeat(50)))
+                .isInstanceOf(interview.guide.common.exception.BusinessException.class);
+
+            verify(persistenceService, never())
+                .updateVectorizationSnapshot(anyLong(), anyInt(), anyString());
+        }
+
+        @Test
+        @DisplayName("空文本：不写向量，快照 chunkCount 为 0（沿用既有空内容语义）")
+        void emptyContentWritesNoVectorsAndZeroSnapshot() {
+            KnowledgeBaseVectorService service = buildService(new KnowledgeBaseVectorProperties());
+
+            service.vectorizeAndStore(1L, "   ");
+
+            verify(vectorStore, never()).add(anyList());
+            verify(persistenceService).updateVectorizationSnapshot(eq(1L), eq(0), anyString());
+        }
+
+        @Test
+        @DisplayName("配置校验：chunkSize 与 minChunkSizeChars 非法值被拒绝")
+        void configValidation() {
+            jakarta.validation.Validator validator = jakarta.validation.Validation
+                .buildDefaultValidatorFactory().getValidator();
+            KnowledgeBaseVectorProperties properties = new KnowledgeBaseVectorProperties();
+            properties.setChunkSize(0);
+            properties.setMinChunkSizeChars(0);
+            properties.setMaxNumChunks(0);
+            var violations = validator.validate(properties);
+            assertThat(violations).hasSize(3);
+        }
+
+        @Test
+        @DisplayName("标点转义：\\n 收敛为换行符而不是字符 n")
+        void punctuationEscaping() {
+            KnowledgeBaseVectorProperties properties = new KnowledgeBaseVectorProperties();
+            List<Character> characters = properties.toPunctuationCharacters();
+            assertThat(characters).contains('\n');
+            assertThat(characters).doesNotContain('n');
+            assertThat(characters).contains('。');
+        }
+
+        @SuppressWarnings("unchecked")
+        private ArgumentCaptor<List<Document>> captureAddedDocuments() {
+            ArgumentCaptor<List<Document>> captor = ArgumentCaptor.forClass(List.class);
+            verify(vectorStore, atLeastOnce()).add(captor.capture());
+            return captor;
         }
     }
 }
