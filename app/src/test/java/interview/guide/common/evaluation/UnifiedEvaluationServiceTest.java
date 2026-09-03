@@ -31,9 +31,12 @@ class UnifiedEvaluationServiceTest {
   private StructuredOutputInvoker structuredOutputInvoker;
   @Mock
   private ChatClient chatClient;
+  private final org.springframework.core.io.DefaultResourceLoader resourceLoader =
+      new org.springframework.core.io.DefaultResourceLoader();
 
   private UnifiedEvaluationService service;
   private final List<String> batchPrompts = new ArrayList<>();
+  private int batchInvokeCount = 0;
 
   @BeforeEach
   void setUp() throws Exception {
@@ -107,6 +110,12 @@ class UnifiedEvaluationServiceTest {
   private static interview.guide.common.evaluation.QaRecord followUp(int index, int parent) {
     return new interview.guide.common.evaluation.QaRecord(index, "追问" + index, "Java 基础",
         "追问回答" + index, true, parent);
+  }
+
+  private static String feedbackOf(EvaluationReport report, int questionIndex) {
+    return report.questionDetails().stream()
+        .filter(q -> q.questionIndex() == questionIndex)
+        .findFirst().orElseThrow().feedback();
   }
 
   private static int scoreOf(EvaluationReport report, int questionIndex) {
@@ -203,6 +212,139 @@ class UnifiedEvaluationServiceTest {
       service.evaluate(chatClient, "s5", records, null);
 
       assertThat(batchSizes()).containsExactly(8, 8, 1);
+    }
+  }
+
+  @Nested
+  @DisplayName("批次失败按组二分恢复（P1-05）")
+  class FallbackRecovery {
+
+    private java.util.function.Predicate<List<Integer>> failPredicate;
+
+    /**
+     * 按批内题目索引决定成败：failPredicate 为 true 时返回 null（模拟结构化输出失败）。
+     * 统计批次级 invoke 次数（含"问答记录开始"的调用），汇总调用不计。
+     */
+    private void stubBatchOutcome(java.util.function.Predicate<List<Integer>> shouldFail) {
+      batchPrompts.clear();
+      when(structuredOutputInvoker.invoke(
+          any(), anyString(), anyString(), any(), any(), anyString(), anyString(), any(Logger.class)))
+      .thenAnswer(invocation -> {
+        String userPrompt = invocation.getArgument(2);
+        if (!userPrompt.contains("问答记录开始")) {
+          return new Object();
+        }
+        List<Integer> indexes = extractQuestionIndexes(userPrompt);
+        batchInvokeCount++;
+        if (shouldFail.test(indexes)) {
+          return null;
+        }
+        batchPrompts.add(extractQaSection(userPrompt));
+        return report(indexes.stream().map(i -> eval(i, 80)).toList());
+      });
+    }
+
+    private int batchCallCount() {
+      return batchInvokeCount;
+    }
+
+    private UnifiedEvaluationService buildService(InterviewEvaluationProperties properties) throws Exception {
+      return new UnifiedEvaluationService(structuredOutputInvoker, resourceLoader, properties);
+    }
+
+    @Test
+    @DisplayName("正常批次只调用一次（不增加模型请求）")
+    void singleCallOnSuccess() throws Exception {
+      stubBatchOutcome(indexes -> false);
+      List<interview.guide.common.evaluation.QaRecord> records = new ArrayList<>();
+      for (int i = 0; i < 8; i++) {
+        records.add(question(i, "Java 基础"));
+      }
+
+      service.evaluate(chatClient, "f1", records, null);
+
+      assertThat(batchCallCount()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("8 组中 index=3 失败：其余组正常，坏组降级且额外调用受预算限制")
+    void badGroupDegradesAlone() throws Exception {
+      stubBatchOutcome(indexes -> indexes.contains(3));
+      List<interview.guide.common.evaluation.QaRecord> records = new ArrayList<>();
+      for (int i = 0; i < 8; i++) {
+        records.add(question(i, "Java 基础"));
+      }
+
+      EvaluationReport report = service.evaluate(chatClient, "f2", records, null);
+
+      // 含 3 的批全部失败；其余 7 题正常 80 分
+      for (int i = 0; i < 8; i++) {
+        if (i == 3) {
+          assertThat(scoreOf(report, 3)).isZero();
+          assertThat(feedbackOf(report, 3)).contains("模型评估失败后的系统降级");
+        } else {
+          assertThat(scoreOf(report, i)).isEqualTo(80);
+        }
+      }
+      // 额外批次调用受预算限制（默认 6）：首轮 1 + 额外 ≤6
+      assertThat(batchCallCount()).isLessThanOrEqualTo(7);
+      assertThat(batchCallCount()).isGreaterThan(1);
+    }
+
+    @Test
+    @DisplayName("主问题+追问构成的单组失败：不逐题拆开，只整体加试一次")
+    void groupWithFollowUpsNotSplitByQuestion() throws Exception {
+      stubBatchOutcome(indexes -> true);
+      List<interview.guide.common.evaluation.QaRecord> records = List.of(
+          question(0, "Redis"), followUp(1, 0), followUp(2, 0));
+
+      EvaluationReport report = service.evaluate(chatClient, "f3", records, null);
+
+      // 首轮 1 次 + 单组加试 1 次，绝不出现单题批次
+      assertThat(batchCallCount()).isEqualTo(2);
+      for (int i = 0; i <= 2; i++) {
+        assertThat(feedbackOf(report, i)).contains("模型评估失败后的系统降级");
+        assertThat(scoreOf(report, i)).isZero();
+      }
+    }
+
+    @Test
+    @DisplayName("17 题三批全部失败：额外调用不超过共享预算，结果完整")
+    void allBatchesFailWithinSharedBudget() throws Exception {
+      stubBatchOutcome(indexes -> true);
+      List<interview.guide.common.evaluation.QaRecord> records = new ArrayList<>();
+      for (int i = 0; i < 17; i++) {
+        records.add(question(i, "Java 基础"));
+      }
+
+      EvaluationReport report = service.evaluate(chatClient, "f4", records, null);
+
+      // 首轮 3 次 + 额外 ≤ 6 = 总批次调用 ≤ 9
+      assertThat(batchCallCount()).isLessThanOrEqualTo(9);
+      assertThat(report.questionDetails()).hasSize(17);
+      for (int i = 0; i < 17; i++) {
+        assertThat(scoreOf(report, i)).isZero();
+      }
+    }
+
+    @Test
+    @DisplayName("开关关闭：首轮失败后无额外调用，保持整批降级行为")
+    void disabledKeepsLegacyDegrade() throws Exception {
+      InterviewEvaluationProperties properties = new InterviewEvaluationProperties();
+      properties.setFallbackSplitEnabled(false);
+      service = buildService(properties);
+      stubBatchOutcome(indexes -> true);
+      List<interview.guide.common.evaluation.QaRecord> records = new ArrayList<>();
+      for (int i = 0; i < 8; i++) {
+        records.add(question(i, "Java 基础"));
+      }
+
+      EvaluationReport report = service.evaluate(chatClient, "f5", records, null);
+
+      assertThat(batchCallCount()).isEqualTo(1);
+      for (int i = 0; i < 8; i++) {
+        assertThat(feedbackOf(report, i)).contains("该题未成功生成评估结果");
+      }
     }
   }
 

@@ -193,6 +193,10 @@ app:
     follow-up-count: ${APP_INTERVIEW_FOLLOW_UP_COUNT:1}
     evaluation:
       batch-size: ${APP_INTERVIEW_EVALUATION_BATCH_SIZE:8}
+      # 批次失败后按问答组二分重试（共享额外调用预算）
+      fallback-split-enabled: ${APP_INTERVIEW_EVALUATION_FALLBACK_SPLIT_ENABLED:true}
+      fallback-max-extra-calls: ${APP_INTERVIEW_EVALUATION_FALLBACK_MAX_EXTRA_CALLS:6}
+      fallback-min-groups: ${APP_INTERVIEW_EVALUATION_FALLBACK_MIN_GROUPS:2}
   resume:
     upload-dir: ${java.io.tmpdir}/ai-interview/resumes
     allowed-types:

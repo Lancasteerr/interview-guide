@@ -42,6 +42,9 @@ public class UnifiedEvaluationService {
     private final BeanOutputConverter<SummaryDTO> summaryOutputConverter;
     private final StructuredOutputInvoker structuredOutputInvoker;
     private final int evaluationBatchSize;
+    private final boolean fallbackSplitEnabled;
+    private final int fallbackMaxExtraCalls;
+    private final int fallbackMinGroups;
     private final ResourceLoader resourceLoader;
 
     // 批次评估结果
@@ -90,6 +93,9 @@ public class UnifiedEvaluationService {
         this.summaryUserPromptTemplate = new PromptTemplate(loadPrompt(evaluationProperties.getSummaryUserPromptPath()));
         this.summaryOutputConverter = new BeanOutputConverter<>(SummaryDTO.class);
         this.evaluationBatchSize = Math.max(1, evaluationProperties.getBatchSize());
+        this.fallbackSplitEnabled = evaluationProperties.isFallbackSplitEnabled();
+        this.fallbackMaxExtraCalls = Math.max(0, evaluationProperties.getFallbackMaxExtraCalls());
+        this.fallbackMinGroups = Math.max(2, evaluationProperties.getFallbackMinGroups());
     }
 
     /**
@@ -156,12 +162,93 @@ public class UnifiedEvaluationService {
                                                  String resumeContext, List<QaRecord> qaRecords,
                                                  String referenceContext) {
         List<BatchResult> results = new ArrayList<>();
-        for (List<QaRecord> batch : packBatches(buildGroups(qaRecords))) {
-            BatchReportDTO report = evaluateBatch(chatClient, sessionId, resumeContext, referenceContext, batch);
+        int[] extraBudget = {fallbackMaxExtraCalls};
+        for (List<QaGroup> batchGroups : packBatches(buildGroups(qaRecords))) {
+            List<QaRecord> flattened = batchGroups.stream()
+                .flatMap(group -> group.records().stream()).toList();
+            BatchReportDTO report = evaluateBatch(chatClient, sessionId, resumeContext,
+                referenceContext, flattened);
+            if (report == null && fallbackSplitEnabled) {
+                report = recoverBatch(chatClient, sessionId, resumeContext, referenceContext,
+                    batchGroups, extraBudget, 0);
+            }
             results.add(new BatchResult(
-                batch.stream().map(QaRecord::questionIndex).toList(), report));
+                flattened.stream().map(QaRecord::questionIndex).toList(), report));
         }
         return results;
+    }
+
+    /**
+     * 批次失败后的按组二分恢复。不会对已失败的组集合重复调用：
+     * 可拆（组数 >= fallbackMinGroups）时立即二分，左右各自先 evaluate（耗预算）再对失败侧递归；
+     * 不可拆时耗 1 次预算整段加试一次，仍失败则整段降级。追问组是不可拆分单元，永不逐题拆开。
+     */
+    private BatchReportDTO recoverBatch(ChatClient chatClient, String sessionId, String resumeContext,
+                                        String referenceContext, List<QaGroup> groups,
+                                        int[] extraBudget, int depth) {
+        List<Integer> indexes = groups.stream()
+            .flatMap(g -> g.records().stream()).map(QaRecord::questionIndex).toList();
+        if (extraBudget[0] <= 0) {
+            log.warn("评估批次恢复预算耗尽，降级: sessionId={}, groups={}, size={}, depth={}, failedIndexes={}",
+                sessionId, groups.size(), indexes.size(), depth, indexes);
+            return degradedReport(indexes);
+        }
+        if (groups.size() >= fallbackMinGroups) {
+            int mid = groups.size() / 2;
+            List<List<QaGroup>> halves = List.of(groups.subList(0, mid), groups.subList(mid, groups.size()));
+            // 先评价兄弟半批（健康侧先拿到预算），再对失败侧递归下钻
+            BatchReportDTO[] halfReports = new BatchReportDTO[halves.size()];
+            boolean[] halfFailed = new boolean[halves.size()];
+            for (int i = 0; i < halves.size(); i++) {
+                List<QaRecord> flattened = halves.get(i).stream()
+                    .flatMap(g -> g.records().stream()).toList();
+                if (extraBudget[0] <= 0) {
+                    halfReports[i] = degradedReport(
+                        flattened.stream().map(QaRecord::questionIndex).toList());
+                    continue;
+                }
+                extraBudget[0] = extraBudget[0] - 1;
+                halfReports[i] = evaluateBatch(chatClient, sessionId, resumeContext,
+                    referenceContext, flattened);
+                halfFailed[i] = halfReports[i] == null;
+            }
+            List<QuestionEvalDTO> merged = new ArrayList<>();
+            for (int i = 0; i < halves.size(); i++) {
+                List<QaRecord> flattened = halves.get(i).stream()
+                    .flatMap(g -> g.records().stream()).toList();
+                if (halfFailed[i]) {
+                    halfReports[i] = recoverBatch(chatClient, sessionId, resumeContext, referenceContext,
+                        halves.get(i), extraBudget, depth + 1);
+                }
+                merged.addAll(halfReports[i].questionEvaluations() != null
+                    ? halfReports[i].questionEvaluations() : degradedReport(
+                        flattened.stream().map(QaRecord::questionIndex).toList()).questionEvaluations());
+            }
+            return new BatchReportDTO(0, "", List.of(), List.of(), merged);
+        }
+        // 不可再拆：整段加试一次（耗预算），仍失败则该段降级
+        List<QaRecord> flattened = groups.stream().flatMap(g -> g.records().stream()).toList();
+        extraBudget[0] = extraBudget[0] - 1;
+        BatchReportDTO retried = evaluateBatch(chatClient, sessionId, resumeContext,
+            referenceContext, flattened);
+        if (retried == null) {
+            log.warn("评估批次恢复最终失败，降级: sessionId={}, groups={}, size={}, depth={}, failedIndexes={}",
+                sessionId, groups.size(), indexes.size(), depth, indexes);
+            return degradedReport(indexes);
+        }
+        return retried;
+    }
+
+    /**
+     * 显式降级结果：0 分 + 「模型评估失败后的系统降级」反馈。
+     * 与 merge 阶段缺索引的默认兜底句区分，不伪装成真实评分。
+     */
+    private BatchReportDTO degradedReport(List<Integer> indexes) {
+        List<QuestionEvalDTO> evaluations = indexes.stream()
+            .map(index -> new QuestionEvalDTO(index, 0,
+                "模型评估失败后的系统降级，该分数不代表真实表现。", "", List.of()))
+            .toList();
+        return new BatchReportDTO(0, "模型评估失败后的系统降级。", List.of(), List.of(), evaluations);
     }
 
     /**
@@ -195,18 +282,22 @@ public class UnifiedEvaluationService {
     }
 
     /**
-     * 以组为不可拆分单元装批；加入下一组会超过批次大小时先提交当前批次；
+     * 以组为不可拆分单元装批（保留组边界供失败恢复二分）；
+     * 加入下一组会超过批次大小时先提交当前批次；
      * 单个组超过批次大小时允许其独占一个超限批次，优先保证上下文完整
      */
-    private List<List<QaRecord>> packBatches(List<QaGroup> groups) {
-        List<List<QaRecord>> batches = new ArrayList<>();
-        List<QaRecord> current = new ArrayList<>();
+    private List<List<QaGroup>> packBatches(List<QaGroup> groups) {
+        List<List<QaGroup>> batches = new ArrayList<>();
+        List<QaGroup> current = new ArrayList<>();
+        int currentSize = 0;
         for (QaGroup group : groups) {
-            if (!current.isEmpty() && current.size() + group.records().size() > evaluationBatchSize) {
+            if (currentSize > 0 && currentSize + group.records().size() > evaluationBatchSize) {
                 batches.add(current);
                 current = new ArrayList<>();
+                currentSize = 0;
             }
-            current.addAll(group.records());
+            current.add(group);
+            currentSize += group.records().size();
         }
         if (!current.isEmpty()) {
             batches.add(current);
