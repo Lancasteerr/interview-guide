@@ -59,7 +59,7 @@ class RagEvaluationTest {
   private static final String REPORT_DIR =
       System.getProperty("ragEval.reportDir", "build/reports/rag-eval");
   private static final String RUN_ID =
-      "rag-eval-" + System.getProperty("ragEval.runTag", "baseline") + "-" + System.currentTimeMillis();
+      "rag-eval-" + System.getenv().getOrDefault("RAG_EVAL_RUN_TAG", "baseline") + "-" + System.currentTimeMillis();
 
   private static String evalDbUrl;
   private static String sourceDbUrl;
@@ -395,6 +395,8 @@ class RagEvaluationTest {
     }
     env.put("rewriteEnabled", System.getenv("APP_AI_RAG_REWRITE_ENABLED") == null
         ? "false(rag-eval Profile 默认)" : System.getenv("APP_AI_RAG_REWRITE_ENABLED"));
+    env.put("mergeOriginalQuery", System.getenv("APP_AI_RAG_MERGE_ORIGINAL_QUERY") == null
+        ? "false(默认)" : System.getenv("APP_AI_RAG_MERGE_ORIGINAL_QUERY"));
     env.put("redisDatabase", System.getenv().getOrDefault("REDIS_DATABASE", "1(rag-eval Profile 默认)"));
     env.put("evalDatabase", EVAL_DB + "（每 run 重建）");
     env.put("tokenUsage", "null（当前链路 .content() 无法取得 usage，补齐属 P1-04）");

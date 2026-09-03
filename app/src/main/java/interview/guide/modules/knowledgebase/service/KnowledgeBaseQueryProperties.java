@@ -23,6 +23,11 @@ public class KnowledgeBaseQueryProperties {
 
     @Data
     public static class Search {
+        /**
+         * 双路召回融合：开启后改写 Query 与原始 Query 各自检索一次并按 Document 去重融合。
+         * 测评证明整体收益成立前默认关闭。
+         */
+        private boolean mergeOriginalQuery = false;
         private int shortQueryLength = 4;
         private int topkShort = 20;
         private int topkMedium = 12;

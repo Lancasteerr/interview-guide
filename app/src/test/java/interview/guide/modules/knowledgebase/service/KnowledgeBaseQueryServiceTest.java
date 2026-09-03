@@ -30,8 +30,10 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -143,6 +145,144 @@ class KnowledgeBaseQueryServiceTest {
     assertThat(execution.rewriteDurationMs()).isGreaterThanOrEqualTo(0);
     assertThat(execution.retrievalDurationMs()).isGreaterThanOrEqualTo(0);
     assertThat(execution.generationDurationMs()).isGreaterThanOrEqualTo(0);
+  }
+
+  @Nested
+  @DisplayName("双路召回融合")
+  class DualPathMerge {
+
+    private org.springframework.ai.document.Document doc(String id, Double score) {
+      return org.springframework.ai.document.Document.builder()
+          .id(id).text("片段-" + id).score(score).build();
+    }
+
+    private KnowledgeBaseQueryService buildMergeService() throws Exception {
+      KnowledgeBaseQueryProperties properties = new KnowledgeBaseQueryProperties();
+      properties.getSearch().setMergeOriginalQuery(true);
+      return new KnowledgeBaseQueryService(llmProviderRegistry, vectorService, listService,
+          countService, properties, resourceLoader);
+    }
+
+    private List<RagQueryExecution> answerCollect(KnowledgeBaseQueryService svc, String question)
+        throws Exception {
+      List<RagQueryExecution> traces = new ArrayList<>();
+      svc.answerQuestionStream(List.of(1L), question, List.of(), traces::add)
+          .collectList().block();
+      return traces;
+    }
+
+    @Test
+    @DisplayName("改写结果等于原问题：只调用一次向量检索")
+    void shouldSearchOnceWhenRewriteEqualsOriginal() throws Exception {
+      service = buildMergeService();
+      mockPlainClient();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenReturn("什么是 HashMap");
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("回答"));
+      when(vectorService.similaritySearch(anyString(), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("d1", 0.9)));
+
+      answerCollect(service, "什么是 HashMap");
+
+      verify(vectorService, times(1)).similaritySearch(anyString(), anyList(), anyInt(), anyDouble());
+    }
+
+    @Test
+    @DisplayName("改写结果与原问题不同：调用两次向量检索")
+    void shouldSearchTwiceWhenRewriteDiffers() throws Exception {
+      service = buildMergeService();
+      mockPlainClient();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenReturn("改写后的 HashMap 原理问题");
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("回答"));
+      when(vectorService.similaritySearch(anyString(), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("d1", 0.9)));
+
+      answerCollect(service, "什么是 HashMap");
+
+      verify(vectorService, times(2)).similaritySearch(anyString(), anyList(), anyInt(), anyDouble());
+    }
+
+    @Test
+    @DisplayName("两路命中相同 Document ID：去重保留一条且分数取更高值")
+    void shouldDedupByDocumentIdKeepHigherScore() throws Exception {
+      service = buildMergeService();
+      mockPlainClient();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenReturn("改写问题");
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("回答"));
+      when(vectorService.similaritySearch(eq("改写问题"), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("shared", 0.6), doc("r1", 0.5)));
+      when(vectorService.similaritySearch(eq("原始问题"), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("shared", 0.8)));
+
+      List<RagQueryExecution> traces = answerCollect(service, "原始问题");
+
+      List<RagQueryExecution.RetrievedDoc> docs = traces.getFirst().retrievedDocs();
+      assertThat(docs).extracting(RagQueryExecution.RetrievedDoc::text)
+          .containsExactly("片段-shared", "片段-r1");
+      assertThat(docs.getFirst().score()).isEqualTo(0.8);
+    }
+
+    @Test
+    @DisplayName("改写路弱结果、原始路正确结果：正确结果进入最终 Top K")
+    void shouldKeepOriginalPathCorrectResult() throws Exception {
+      service = buildMergeService();
+      mockPlainClient();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenReturn("改写跑偏的问题");
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("回答"));
+      when(vectorService.similaritySearch(eq("改写跑偏的问题"), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("weak1", 0.3), doc("weak2", 0.29)));
+      when(vectorService.similaritySearch(eq("正确问题"), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("correct", 0.95)));
+
+      List<RagQueryExecution> traces = answerCollect(service, "正确问题");
+
+      assertThat(traces.getFirst().retrievedDocs().getFirst().text()).isEqualTo("片段-correct");
+    }
+
+    @Test
+    @DisplayName("分数为 null：不抛异常且 null 分数排后有分数结果之后")
+    void shouldSortNullScoresStable() throws Exception {
+      service = buildMergeService();
+      mockPlainClient();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenReturn("改写问题");
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("回答"));
+      when(vectorService.similaritySearch(eq("改写问题"), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("nullA", null)));
+      when(vectorService.similaritySearch(eq("原始问题"), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("scored", 0.7), doc("nullB", null)));
+
+      List<RagQueryExecution> traces = answerCollect(service, "原始问题");
+
+      assertThat(traces.getFirst().retrievedDocs()).extracting(RagQueryExecution.RetrievedDoc::text)
+          .containsExactly("片段-scored", "片段-nullA", "片段-nullB");
+    }
+
+    @Test
+    @DisplayName("功能开关关闭：保持首个有效结果行为（改写命中即返回）")
+    void shouldKeepFirstHitBehaviorWhenDisabled() throws Exception {
+      service = buildService(true);   // 默认配置 mergeOriginalQuery=false
+      mockPlainClient();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenReturn("改写问题");
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("回答"));
+      when(vectorService.similaritySearch(anyString(), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(doc("d1", 0.9)));
+
+      List<RagQueryExecution> traces = answerCollect(service, "原始问题");
+
+      verify(vectorService, times(1)).similaritySearch(anyString(), anyList(), anyInt(), anyDouble());
+      assertThat(traces.getFirst().attemptedQueries()).containsExactly("改写问题");
+    }
   }
 
   @Nested

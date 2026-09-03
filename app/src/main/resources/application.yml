@@ -169,6 +169,8 @@ app:
       rewrite:
         enabled: ${APP_AI_RAG_REWRITE_ENABLED:true}
       search:
+        # 双路召回融合（改写 Query + 原始 Query），测评证明收益前默认关闭
+        merge-original-query: ${APP_AI_RAG_MERGE_ORIGINAL_QUERY:false}
         short-query-length: ${APP_AI_RAG_SHORT_QUERY_LENGTH:4}
         topk-short: ${APP_AI_RAG_TOPK_SHORT:20}
         topk-medium: ${APP_AI_RAG_TOPK_MEDIUM:12}
