@@ -313,11 +313,44 @@ public class VoiceInterviewService {
     }
 
     /**
-     * 持久化上下文摘要行。在会话行悲观锁内原地更新或创建 SUMMARY 行，避免并发重复。
-     * sequenceNum 取 {@code -(coveredTurns + 1)}：负值保证排序最前，且编码已覆盖轮次数。
+     * 持久化上下文摘要行（真实覆盖边界版本，P1-06 起的唯一生产入口）。
+     * 在会话行悲观锁内原地更新或创建 SUMMARY 行；锁内校验边界单调不回退。
+     * LLM 压缩必须在事务外完成，本方法只做边界写入。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void saveSummaryRow(String sessionId, String summary, int coveredTurns) {
+    public void saveSummaryRow(String sessionId, String summary, int coveredSequenceNum) {
+        Long sessionIdLong = parseSessionId(sessionId);
+        sessionRepository.findByIdForUpdate(sessionIdLong)
+            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "会话不存在: " + sessionId));
+        VoiceInterviewMessageEntity row = messageRepository
+            .findFirstBySessionIdAndMessageTypeOrderBySequenceNumAsc(
+                sessionIdLong, VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY)
+            .orElseGet(() -> VoiceInterviewMessageEntity.builder()
+                .sessionId(sessionIdLong)
+                .messageType(VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY)
+                .sequenceNum(-1)
+                .build());
+        Integer existingBoundary = row.getSummaryCoveredSequenceNum();
+        if (existingBoundary != null && coveredSequenceNum < existingBoundary) {
+            log.warn("摘要覆盖边界回退被拒绝: sessionId={}, existing={}, incoming={}",
+                sessionId, existingBoundary, coveredSequenceNum);
+            return;
+        }
+        row.setAiGeneratedText(summary);
+        // 保留负 sequenceNum 排序语义，但不再作为覆盖边界的事实来源
+        row.setSequenceNum(Math.min(row.getSequenceNum() != null ? row.getSequenceNum() : -1, -1));
+        row.setSummaryCoveredSequenceNum(coveredSequenceNum);
+        messageRepository.save(row);
+    }
+
+    /**
+     * 旧版按轮数编码的摘要持久化（负 sequenceNum 编码 coveredTurns）。
+     * 生产路径禁止再调用——会写出新字段为空的行导致迁移反复触发；
+     * 仅供数据修复工具与旧测试兼容使用。
+     */
+    @Deprecated
+    @Transactional(rollbackFor = Exception.class)
+    public void saveSummaryRowLegacy(String sessionId, String summary, int coveredTurns) {
         Long sessionIdLong = parseSessionId(sessionId);
         sessionRepository.findByIdForUpdate(sessionIdLong)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "会话不存在: " + sessionId));

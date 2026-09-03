@@ -63,6 +63,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private final DashscopeLlmService llmService;
     private final VoiceInterviewService interviewService;
     private final VoiceContextCompressor voiceContextCompressor;
+    private final interview.guide.modules.voiceinterview.context.VoiceHistoryLoader voiceHistoryLoader;
     private final VoiceInterviewProperties voiceInterviewProperties;
     private final ObjectProvider<MeterRegistry> meterRegistryProvider;
 
@@ -1231,32 +1232,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
      */
     private List<String> getHistory(String sessionId, String llmProvider) {
         try {
-            List<VoiceInterviewMessageEntity> turns = interviewService.getConversationHistory(sessionId);
-            VoiceInterviewMessageEntity summaryRow = interviewService.loadSummaryRow(sessionId).orElse(null);
-
-            String cachedSummary = summaryRow != null
-                ? VoiceInterviewMessageEntity.trimToNull(summaryRow.getAiGeneratedText()) : null;
-            int coveredTurns = (summaryRow != null && summaryRow.getSequenceNum() != null)
-                ? Math.max(0, -summaryRow.getSequenceNum() - 1) : 0;
-
-            var compressed = voiceContextCompressor.compress(
-                turns, cachedSummary, coveredTurns, llmProvider);
-
-            List<String> history = new ArrayList<>();
-            if (compressed.summary() != null && !compressed.summary().isBlank()) {
-                history.add("【对话摘要】" + compressed.summary());
-            }
-            history.addAll(voiceContextCompressor.formatRecent(compressed.recent()));
-
-            // 摘要发生变化则持久化（UPSERT），保证断线重连后不重复生成
-            if (compressed.changed() && compressed.summary() != null && !compressed.summary().isBlank()) {
-                try {
-                    interviewService.saveSummaryRow(sessionId, compressed.summary(), compressed.coveredTurns());
-                } catch (Exception e) {
-                    log.warn("持久化上下文摘要失败（不影响本次应答），session {}", sessionId, e);
-                }
-            }
-
+            List<String> history = voiceHistoryLoader.loadHistory(sessionId, llmProvider);
             log.debug("Loaded {} compressed history entries for session {}", history.size(), sessionId);
             return history;
         } catch (Exception e) {

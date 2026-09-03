@@ -93,10 +93,13 @@ class VoiceInterviewSummaryPersistenceTest {
         42L, VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY))
         .thenReturn(Optional.of(existing));
 
+    existing.setSummaryCoveredSequenceNum(6);
     service.saveSummaryRow("42", "新摘要", 10);
 
     assertThat(existing.getAiGeneratedText()).isEqualTo("新摘要");
-    assertThat(existing.getSequenceNum()).isEqualTo(-11);
+    // 真实边界写入新字段；负 sequenceNum 仅保留排序语义不再编码轮数
+    assertThat(existing.getSummaryCoveredSequenceNum()).isEqualTo(10);
+    assertThat(existing.getSequenceNum()).isEqualTo(-6);
     verify(messageRepository).save(existing);
     verify(messageRepository, never()).deleteBySessionId(42L);
   }

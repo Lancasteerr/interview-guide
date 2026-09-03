@@ -49,6 +49,13 @@ public class VoiceInterviewMessageEntity {
     @Column(name = "sequence_num")
     private Integer sequenceNum;
 
+    /**
+     * 摘要覆盖边界：SUMMARY 行专用，记录已摘要到的最大原始消息 sequenceNum。
+     * 旧数据为 null（旧版以负 sequenceNum 编码轮数），由一次性迁移写入。
+     */
+    @Column(name = "summary_covered_sequence_num")
+    private Integer summaryCoveredSequenceNum;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
