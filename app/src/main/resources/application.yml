@@ -72,7 +72,7 @@ spring:
       config: |
         singleServerConfig:
           address: "redis://${REDIS_HOST:localhost}:${REDIS_PORT:6379}"
-          database: 0
+          database: ${REDIS_DATABASE:0}
           connectionMinimumIdleSize: 10
           connectionPoolSize: 64
           subscriptionConnectionMinimumIdleSize: 1

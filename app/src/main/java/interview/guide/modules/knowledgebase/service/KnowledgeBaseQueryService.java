@@ -204,6 +204,17 @@ public class KnowledgeBaseQueryService {
      * @return 流式响应
      */
     public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history) {
+        return answerQuestionStream(knowledgeBaseIds, question, history, null);
+    }
+
+    /**
+     * 流式查询知识库（SSE，支持多轮上下文），可选地输出完整执行轨迹。
+     * 轨迹收集器仅供测评与可观测性使用，不影响业务行为。
+     *
+     * @param trace 执行轨迹收集器（可为 null，为 null 时行为与无收集器入口完全一致）
+     */
+    public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history,
+                                             java.util.function.Consumer<RagQueryExecution> trace) {
         String normalized = normalizeQuestion(question);
         log.info("收到知识库流式提问: kbIds={}, questionLength={}, historySize={}", knowledgeBaseIds,
                 normalized.length(), history != null ? history.size() : 0);
@@ -216,11 +227,15 @@ public class KnowledgeBaseQueryService {
             countService.updateQuestionCounts(knowledgeBaseIds);
 
             // 2. Query rewrite + 动态参数检索
+            long rewriteStart = System.nanoTime();
             List<Message> effectiveHistory = sanitizeHistory(history);
             QueryContext queryContext = buildQueryContext(question, effectiveHistory);
             List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
+            long rewriteAndRetrievalMs = (System.nanoTime() - rewriteStart) / 1_000_000;
 
             if (!hasEffectiveHit(relevantDocs)) {
+                emitTrace(trace, question, queryContext, relevantDocs,
+                    rewriteAndRetrievalMs, 0, NO_RESULT_RESPONSE, "NO_RESULT");
                 return Flux.just(NO_RESULT_RESPONSE);
             }
 
@@ -246,28 +261,122 @@ public class KnowledgeBaseQueryService {
                     .content();
 
             log.info("开始流式输出知识库回答(探测窗口): kbIds={}", knowledgeBaseIds);
+            long generationStart = System.nanoTime();
+            StringBuilder collectedAnswer = new StringBuilder();
             return normalizeStreamOutput(responseFlux)
-                .doOnComplete(() -> log.info("流式输出完成: kbIds={}", knowledgeBaseIds))
+                .doOnNext(collectedAnswer::append)
+                .doOnComplete(() -> {
+                    long generationMs = (System.nanoTime() - generationStart) / 1_000_000;
+                    boolean rejected = NO_RESULT_RESPONSE.equals(collectedAnswer.toString());
+                    emitTrace(trace, question, queryContext, relevantDocs,
+                        rewriteAndRetrievalMs, generationMs, collectedAnswer.toString(),
+                        rejected ? "NO_RESULT" : "ANSWERED");
+                    log.info("流式输出完成: kbIds={}", knowledgeBaseIds);
+                })
                 .onErrorResume(e -> {
                     log.error("流式输出失败: kbIds={}, error={}", knowledgeBaseIds, ErrorLogSanitizer.summarize(e), e);
+                    emitTrace(trace, question, queryContext, List.of(),
+                        rewriteAndRetrievalMs, (System.nanoTime() - generationStart) / 1_000_000,
+                        "【错误】知识库查询失败", "ERROR");
                     return Flux.just("【错误】知识库查询失败：AI服务暂时不可用，请稍后重试。");
                 });
 
         } catch (Exception e) {
             log.error("知识库流式问答失败: {}", ErrorLogSanitizer.summarize(e), e);
+            emitTrace(trace, normalizeQuestion(question), null, List.of(),
+                0, 0, "【错误】知识库查询失败", "ERROR");
             return Flux.just("【错误】知识库查询失败：" + e.getMessage());
         }
     }
 
+    /**
+     * 输出执行轨迹（收集器为 null 时直接返回）。
+     */
+    private void emitTrace(java.util.function.Consumer<RagQueryExecution> trace,
+                           String originalQuestion, QueryContext queryContext,
+                           List<Document> chosenDocs,
+                           long rewriteAndRetrievalMs, long generationMs,
+                           String answer, String outcome) {
+        if (trace == null) {
+            return;
+        }
+        List<String> attemptedQueries = queryContext != null
+            ? queryContext.candidateQueries()
+            : List.of(normalizeQuestion(originalQuestion));
+        List<RagQueryExecution.RetrievedDoc> docs = new ArrayList<>();
+        for (int i = 0; i < chosenDocs.size(); i++) {
+            Document doc = chosenDocs.get(i);
+            docs.add(new RagQueryExecution.RetrievedDoc(
+                i + 1, doc.getText(), extractScore(doc), doc.getMetadata()));
+        }
+        SearchParams params = queryContext != null ? queryContext.searchParams()
+            : new SearchParams(topkLong, minScoreDefault);
+        long rewriteMs = queryContext != null ? queryContext.rewriteDurationMs() : 0;
+        trace.accept(new RagQueryExecution(
+            normalizeQuestion(originalQuestion),
+            queryContext != null && !queryContext.candidateQueries().isEmpty()
+                ? queryContext.candidateQueries().getFirst() : normalizeQuestion(originalQuestion),
+            attemptedQueries,
+            params.topK(),
+            params.minScore(),
+            List.copyOf(docs),
+            rewriteMs,
+            Math.max(0, rewriteAndRetrievalMs - rewriteMs),
+            generationMs,
+            answer,
+            outcome));
+    }
+
+    private Double extractScore(Document doc) {
+        Object score = doc.getMetadata().get("distance");
+        return score != null && score instanceof Number number ? number.doubleValue() : null;
+    }
+
+
+    /**
+     * 仅执行检索链路（改写 + 候选检索），不做 LLM 生成。
+     * 供 RAG 测评复用生产检索逻辑，避免在测评代码中复制改写与分档规则。
+     */
+    public RagQueryExecution retrieveOnly(List<Long> knowledgeBaseIds, String question, List<Message> history) {
+        String normalized = normalizeQuestion(question);
+        if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalized.isBlank()) {
+            return new RagQueryExecution(normalized, normalized, List.of(normalized),
+                topkLong, minScoreDefault, List.of(), 0, 0, 0, NO_RESULT_RESPONSE, "NO_RESULT");
+        }
+        long start = System.nanoTime();
+        List<Message> effectiveHistory = sanitizeHistory(history);
+        QueryContext queryContext = buildQueryContext(question, effectiveHistory);
+        List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        boolean hit = hasEffectiveHit(relevantDocs);
+        return new RagQueryExecution(
+            normalized,
+            queryContext.candidateQueries().getFirst(),
+            queryContext.candidateQueries(),
+            queryContext.searchParams().topK(),
+            queryContext.searchParams().minScore(),
+            relevantDocs.stream()
+                .map(doc -> new RagQueryExecution.RetrievedDoc(
+                    relevantDocs.indexOf(doc) + 1, doc.getText(), extractScore(doc), doc.getMetadata()))
+                .toList(),
+            queryContext.rewriteDurationMs(),
+            Math.max(0, elapsedMs - queryContext.rewriteDurationMs()),
+            0,
+            null,
+            hit ? "RETRIEVED" : "NO_RESULT");
+    }
+
     private QueryContext buildQueryContext(String originalQuestion, List<Message> history) {
         String normalizedQuestion = normalizeQuestion(originalQuestion);
+        long rewriteStart = System.nanoTime();
         String rewrittenQuestion = rewriteQuestion(normalizedQuestion, history);
+        long rewriteDurationMs = (System.nanoTime() - rewriteStart) / 1_000_000;
         Set<String> candidates = new LinkedHashSet<>();
         candidates.add(rewrittenQuestion);
         candidates.add(normalizedQuestion);
 
         SearchParams searchParams = resolveSearchParams(normalizedQuestion);
-        return new QueryContext(normalizedQuestion, new ArrayList<>(candidates), searchParams);
+        return new QueryContext(normalizedQuestion, new ArrayList<>(candidates), searchParams, rewriteDurationMs);
     }
 
     private List<Message> sanitizeHistory(List<Message> history) {
@@ -456,6 +565,7 @@ public class KnowledgeBaseQueryService {
     private record SearchParams(int topK, double minScore) {
     }
 
-    private record QueryContext(String originalQuestion, List<String> candidateQueries, SearchParams searchParams) {
+    private record QueryContext(String originalQuestion, List<String> candidateQueries, SearchParams searchParams,
+                                long rewriteDurationMs) {
     }
 }

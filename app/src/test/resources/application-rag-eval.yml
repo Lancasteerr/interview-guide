@@ -1,0 +1,8 @@
+# RAG 测评专用 Profile（P1-01 基线固定配置，入库、不含密钥）
+# 基线口径：Chunk 800（生产默认 TokenTextSplitter）+ 关闭 Query 改写
+# 对照口径（开启改写）通过环境变量 APP_AI_RAG_REWRITE_ENABLED=true 覆盖，作为独立 run
+app:
+  ai:
+    rag:
+      rewrite:
+        enabled: ${APP_AI_RAG_REWRITE_ENABLED:false}

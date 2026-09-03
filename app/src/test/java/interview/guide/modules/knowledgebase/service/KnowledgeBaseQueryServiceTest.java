@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -116,6 +117,32 @@ class KnowledgeBaseQueryServiceTest {
       verify(llmProviderRegistry, atLeastOnce()).getPlainChatClient();
       verify(llmProviderRegistry, never()).getDefaultChatClient();
     }
+  }
+
+  @Test
+  @DisplayName("带轨迹收集器的流式入口输出完整执行轨迹且不影响答案")
+  void shouldEmitExecutionTraceForStream() throws Exception {
+    service = buildService(false);
+    mockPlainClient();
+    stubDocuments();
+    when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+        .thenReturn(Flux.just("流式回答"));
+    List<interview.guide.modules.knowledgebase.service.RagQueryExecution> traces = new ArrayList<>();
+
+    List<String> chunks = service
+        .answerQuestionStream(List.of(1L), "什么是 Java 内存模型", List.of(), traces::add)
+        .collectList().block();
+
+    assertThat(chunks).containsExactly("流式回答");
+    assertThat(traces).hasSize(1);
+    interview.guide.modules.knowledgebase.service.RagQueryExecution execution = traces.getFirst();
+    assertThat(execution.outcome()).isEqualTo("ANSWERED");
+    assertThat(execution.answer()).isEqualTo("流式回答");
+    assertThat(execution.retrievedDocs()).hasSize(1);
+    assertThat(execution.rewrittenQuestion()).isEqualTo("什么是 Java 内存模型");
+    assertThat(execution.rewriteDurationMs()).isGreaterThanOrEqualTo(0);
+    assertThat(execution.retrievalDurationMs()).isGreaterThanOrEqualTo(0);
+    assertThat(execution.generationDurationMs()).isGreaterThanOrEqualTo(0);
   }
 
   @Nested

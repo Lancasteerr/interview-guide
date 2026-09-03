@@ -108,8 +108,28 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'rag-eval'
+    }
     jvmArgs '--enable-native-access=ALL-UNNAMED'
+}
+
+// RAG 测评任务（P1-01）：只运行 rag-eval 标签，需要 RUN_RAG_EVAL=true 防误触付费调用
+// 运行方式：RUN_RAG_EVAL=true REDIS_DATABASE=1 ./gradlew :app:ragEvaluation --no-daemon
+tasks.register('ragEvaluation', Test) {
+    description = '运行 RAG 测评（需要 RUN_RAG_EVAL=true 与本地 PostgreSQL/Redis/LLM Provider）'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform {
+        includeTags 'rag-eval'
+    }
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+    systemProperty 'ragEval.reportDir', layout.buildDirectory.dir('reports/rag-eval').get().asFile.absolutePath
+    outputs.upToDateWhen { false }
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+    }
 }
 
 // 将仓库根目录 .env 注入 bootRun，便于本地加载 AI_BAILIAN_API_KEY 等变量（Gradle 进程默认不读 .env）
