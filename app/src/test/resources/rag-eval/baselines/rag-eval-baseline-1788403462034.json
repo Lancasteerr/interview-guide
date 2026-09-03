@@ -1,0 +1,4033 @@
+{
+  "runId": "rag-eval-baseline-1788403462034",
+  "timestamp": "2026-09-03T02:50:42.925708Z",
+  "environment": {
+    "gitSha": "e247d8e8fc371e49655223620fd006bbbd64fa13",
+    "datasetSha256": "ad3f88c2cb3f5015",
+    "fixtureSha256:java-guide.md": "081a5d118866a258",
+    "fixtureSha256:project-guide.md": "e139cc1db203f1e6",
+    "promptSha256:knowledgebase-query-system.st": "fe8d276e4d7ad6e1",
+    "promptSha256:knowledgebase-query-user.st": "6e309171d460a64c",
+    "promptSha256:knowledgebase-query-rewrite.st": "f4e622ad2784bd87",
+    "rewriteEnabled": "false(rag-eval Profile 默认)",
+    "redisDatabase": "1(rag-eval Profile 默认)",
+    "evalDatabase": "interview_guide_rag_eval（每 run 重建）",
+    "tokenUsage": "null（当前链路 .content() 无法取得 usage，补齐属 P1-04）",
+    "springAiVersion": "2.0.0",
+    "provider:dashscope.model": "qwen3.5-flash",
+    "provider:dashscope.embeddingModel": "text-embedding-v3",
+    "provider:dashscope.temperature": null,
+    "defaultChatProvider": "dashscope",
+    "defaultEmbeddingProvider": "dashscope",
+    "chunkCount:java-guide.md": 25,
+    "chunkCount:project-guide.md": 21
+  },
+  "metrics": {
+    "overall": {
+      "samples": 40,
+      "harnessErrorCount": 0,
+      "inScope": 32,
+      "Hit@K(%)": 96.875,
+      "MRR": 0.6818,
+      "EvidenceRecall@K": 0.9531,
+      "retrievalMsP50": 161,
+      "retrievalMsP95": 207,
+      "rewriteMsP50": 0,
+      "rewriteMsP95": 0,
+      "generationMsP50": 18730,
+      "generationMsP95": 29928,
+      "endToEndMsP50": 18873,
+      "endToEndMsP95": 30137
+    },
+    "dev": {
+      "samples": 30,
+      "harnessErrorCount": 0,
+      "inScope": 23,
+      "Hit@K(%)": 100.0,
+      "MRR": 0.6572,
+      "EvidenceRecall@K": 1.0,
+      "retrievalMsP50": 169,
+      "retrievalMsP95": 228,
+      "rewriteMsP50": 0,
+      "rewriteMsP95": 0,
+      "generationMsP50": 18730,
+      "generationMsP95": 29928,
+      "endToEndMsP50": 18873,
+      "endToEndMsP95": 30137
+    },
+    "holdout": {
+      "samples": 10,
+      "harnessErrorCount": 0,
+      "inScope": 9,
+      "Hit@K(%)": 88.8889,
+      "MRR": 0.7444,
+      "EvidenceRecall@K": 0.8333,
+      "retrievalMsP50": 161,
+      "retrievalMsP95": 181,
+      "rewriteMsP50": 0,
+      "rewriteMsP95": 0,
+      "generationMsP50": 15368,
+      "generationMsP95": 15368,
+      "endToEndMsP50": 15505,
+      "endToEndMsP95": 15505
+    },
+    "tag:同义改写题": {
+      "samples": 8,
+      "harnessErrorCount": 0,
+      "inScope": 8,
+      "Hit@K(%)": 100.0,
+      "MRR": 0.6083,
+      "EvidenceRecall@K": 1.0,
+      "retrievalMsP50": 169,
+      "retrievalMsP95": 207,
+      "rewriteMsP50": 0,
+      "rewriteMsP95": 0,
+      "generationMsP50": 22678,
+      "generationMsP95": 22678,
+      "endToEndMsP50": 22857,
+      "endToEndMsP95": 22857
+    },
+    "tag:多轮上下文题": {
+      "samples": 6,
+      "harnessErrorCount": 0,
+      "inScope": 6,
+      "Hit@K(%)": 100.0,
+      "MRR": 0.6319,
+      "EvidenceRecall@K": 1.0,
+      "retrievalMsP50": 193,
+      "retrievalMsP95": 206,
+      "rewriteMsP50": 0,
+      "rewriteMsP95": 0,
+      "generationMsP50": 17705,
+      "generationMsP95": 17705,
+      "endToEndMsP50": 17911,
+      "endToEndMsP95": 17911
+    },
+    "tag:易误召回": {
+      "samples": 1,
+      "harnessErrorCount": 0,
+      "retrievalMsP50": 125,
+      "retrievalMsP95": 125,
+      "rewriteMsP50": 0,
+      "rewriteMsP95": 0,
+      "generationMsP50": 15368,
+      "generationMsP95": 15368,
+      "endToEndMsP50": 15505,
+      "endToEndMsP95": 15505
+    },
+    "tag:直接事实题": {
+      "samples": 12,
+      "harnessErrorCount": 0,
+      "inScope": 12,
+      "Hit@K(%)": 91.6667,
+      "MRR": 0.6521,
+      "EvidenceRecall@K": 0.9167,
+      "retrievalMsP50": 161,
+      "retrievalMsP95": 182,
+      "rewriteMsP50": 0,
+      "rewriteMsP95": 0,
+      "generationMsP50": 18730,
+      "generationMsP95": 19757,
+      "endToEndMsP50": 18873,
+      "endToEndMsP95": 19976
+    },
+    "tag:知识库外题": {
+      "samples": 8,
+      "harnessErrorCount": 0,
+      "retrievalMsP50": 196,
+      "retrievalMsP95": 331,
+      "rewriteMsP50": 0,
+      "rewriteMsP95": 0,
+      "generationMsP50": 22985,
+      "generationMsP95": 29928,
+      "endToEndMsP50": 23152,
+      "endToEndMsP95": 30137
+    },
+    "tag:跨段题": {
+      "samples": 6,
+      "harnessErrorCount": 0,
+      "inScope": 6,
+      "Hit@K(%)": 100.0,
+      "MRR": 0.8889,
+      "EvidenceRecall@K": 0.9167,
+      "retrievalMsP50": 140,
+      "retrievalMsP95": 177,
+      "rewriteMsP50": 0,
+      "rewriteMsP95": 0,
+      "generationMsP50": 31520,
+      "generationMsP95": 31520,
+      "endToEndMsP50": 31670,
+      "endToEndMsP95": 31670
+    }
+  },
+  "rejection": {
+    "tp": 0,
+    "fn": 8,
+    "fp": 0,
+    "tn": 10,
+    "accuracy": 0.5556,
+    "precision": 0.0,
+    "recall": 0.0,
+    "f1": 0.0
+  },
+  "badCases": [
+    {
+      "id": "fact-07",
+      "question": "Redis 的 RDB 和 AOF 两种持久化方式各自的原理是什么？",
+      "tags": [
+        "直接事实题"
+      ],
+      "reason": "LOW_FIRST_RANK",
+      "detail": "首个命中排名=5",
+      "answerExcerpt": "(空)",
+      "topDocs": [
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 1,
+          "score": 0.6578625738620758,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 2,
+          "score": 0.6312593519687653,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 3,
+          "score": 0.621455729007721,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        }
+      ],
+      "expectedEvidence": [
+        "RDB 是某一时刻的全量二进制快照",
+        "AOF 记录每条写命令"
+      ]
+    },
+    {
+      "id": "fact-08",
+      "question": "AOF 的 appendfsync 有哪几种刷盘策略？默认是哪种？",
+      "tags": [
+        "直接事实题"
+      ],
+      "reason": "LOW_FIRST_RANK",
+      "detail": "首个命中排名=8",
+      "answerExcerpt": "(空)",
+      "topDocs": [
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 1,
+          "score": 0.6040816903114319,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 2,
+          "score": 0.5695450603961945,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 3,
+          "score": 0.5602843463420868,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        }
+      ],
+      "expectedEvidence": [
+        "策略有 always、everysec、no 三种，默认 everysec 表示每秒刷盘一次"
+      ]
+    },
+    {
+      "id": "fact-09",
+      "question": "什么是回表？为什么会发生回表？",
+      "tags": [
+        "直接事实题"
+      ],
+      "reason": "NO_EVIDENCE_HIT",
+      "detail": "Top-K 内未命中任何证据锚点",
+      "answerExcerpt": "(空)",
+      "topDocs": [
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 1,
+          "score": 0.5493788421154022,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 2,
+          "score": 0.5372002422809601,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 3,
+          "score": 0.5259175002574921,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        }
+      ],
+      "expectedEvidence": [
+        "通过二级索引查询完整行需要回表",
+        "二级索引的叶子节点存储主键值而不是行地址"
+      ]
+    },
+    {
+      "id": "para-03",
+      "question": "Redis 机器要是断电了，里面的数据会不会全没了？",
+      "tags": [
+        "同义改写题"
+      ],
+      "reason": "LOW_FIRST_RANK",
+      "detail": "首个命中排名=6",
+      "answerExcerpt": "(空)",
+      "topDocs": [
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 1,
+          "score": 0.5686537623405457,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 2,
+          "score": 0.5582664608955383,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 3,
+          "score": 0.5520961880683899,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        }
+      ],
+      "expectedEvidence": [
+        "RDB 是某一时刻的全量二进制快照",
+        "AOF 记录每条写命令"
+      ]
+    },
+    {
+      "id": "para-08",
+      "question": "Redis 分布式锁眼瞅着要过期了业务还没跑完，有什么续命的办法？",
+      "tags": [
+        "同义改写题"
+      ],
+      "reason": "LOW_FIRST_RANK",
+      "detail": "首个命中排名=5",
+      "answerExcerpt": "(空)",
+      "topDocs": [
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 1,
+          "score": 0.6436983644962311,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 2,
+          "score": 0.6327350437641144,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 3,
+          "score": 0.6150219142436981,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        }
+      ],
+      "expectedEvidence": [
+        "Redis 分布式锁的续期问题可以用看门狗机制解决"
+      ]
+    },
+    {
+      "id": "ctx-04",
+      "question": "默认自带那个直接抛异常的策略叫什么名字？",
+      "tags": [
+        "多轮上下文题"
+      ],
+      "reason": "LOW_FIRST_RANK",
+      "detail": "首个命中排名=8",
+      "answerExcerpt": "(空)",
+      "topDocs": [
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 1,
+          "score": 0.5740686655044556,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 2,
+          "score": 0.536777913570404,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 3,
+          "score": 0.5320665240287781,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        }
+      ],
+      "expectedEvidence": [
+        "AbortPolicy 抛出异常"
+      ]
+    },
+    {
+      "id": "chunk-06",
+      "question": "数据库连接池那次线上事故的根因是什么？后来做了哪些改进？",
+      "tags": [
+        "跨段题"
+      ],
+      "reason": "EVIDENCE_INCOMPLETE",
+      "detail": "证据锚点未全部召回，Recall=0.5",
+      "answerExcerpt": "(空)",
+      "topDocs": [
+        {
+          "contentHash": "0c7ec4f5a30fd814",
+          "rank": 1,
+          "score": 0.6462942361831665,
+          "excerpt": "最严重的一次故障是营销服务批量发放优惠券导致 Redis 主从切换，切换期间缓存请求超时拖垮了订单查询链路。恢复时长 12 分钟。改进措施有三条：优惠券发放增加平滑限速、查询链路增加缓存降级开关、Redis 集群升级为三主三从并把只读请求路由到从节点。\n\n另一次典型故障是慢 SQL 导致数据库连接池耗尽，根因是运营后台一个未走索引的订单导出查询。改进措施是运营后台查询强制走只读从库，并给导出接口加"
+        },
+        {
+          "contentHash": "7f85f8baa50d61b4",
+          "rank": 2,
+          "score": 0.6210103332996368,
+          "excerpt": "数据库规约：所有表有 created_at 与 updated_at；金额用 bigint 存分；状态字段用 tinyint 加枚举映射；索引命名 idx 前缀加字段；禁止外键约束，关系靠应用层与对账保证；大字段拆分到附表。\n\n接口规约：响应统一包裹 code、data、message；分页用游标；错误码分段管理（业务错误、系统错误、第三方错误）；接口文档与代码同步生成，过期文档直接删除。\n\n##"
+        },
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 3,
+          "score": 0.6151512265205383,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        }
+      ],
+      "expectedEvidence": [
+        "慢 SQL 导致数据库连接池耗尽",
+        "导出任务白天限流到 10 QPS"
+      ]
+    },
+    {
+      "id": "oos-01",
+      "question": "Kafka 消费者组的 rebalance 流程是怎么触发的？",
+      "tags": [
+        "知识库外题"
+      ],
+      "reason": "OOS_NOT_REJECTED",
+      "detail": "知识库外问题未被拒答",
+      "answerExcerpt": "## 回答\n\n根据提供的知识库内容，无法回答 Kafka 消费者组 rebalance 流程是如何触发的。文档中的“消息队列选型对比（干扰章节）”明确说明：“本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理”，因此该问题超出当前知识库范围。",
+      "topDocs": [
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 1,
+          "score": 0.4734995365142822,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 2,
+          "score": 0.46820294857025146,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 3,
+          "score": 0.46762174367904663,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        }
+      ],
+      "expectedEvidence": []
+    },
+    {
+      "id": "oos-02",
+      "question": "RabbitMQ 的镜像队列应该怎么配置？",
+      "tags": [
+        "知识库外题"
+      ],
+      "reason": "OOS_NOT_REJECTED",
+      "detail": "知识库外问题未被拒答",
+      "answerExcerpt": "## 信息说明\n\n根据提供的知识库内容，**无法回答 RabbitMQ 镜像队列的配置方法**。文档在《消息队列选型对比》章节中明确说明：“本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理”，仅提供了选型结论，未涉及具体配置细节。",
+      "topDocs": [
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 1,
+          "score": 0.5251792967319489,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "4bd4cf194f768a2e",
+          "rank": 2,
+          "score": 0.5108753442764282,
+          "excerpt": "数据库客户端与建模工具：DataGrip 管多数据源，dbdiagram 画关系图，Flyway 或 Liquibase 管理迁移版本，迁移文件命名 V 版本号 双下划线 描述。接口联调：Swagger 或 SpringDoc 自动生成文档，Postman 集合做回归，Apifox 支持中文与 mock。性能工具：JMeter 图形化压测，Gatling 代码化场景，wrk 轻量快速。终端效率：z"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 3,
+          "score": 0.49911123514175415,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        }
+      ],
+      "expectedEvidence": []
+    },
+    {
+      "id": "oos-03",
+      "question": "公司 2024 年双十一的整体 GMV 是多少？",
+      "tags": [
+        "知识库外题"
+      ],
+      "reason": "OOS_NOT_REJECTED",
+      "detail": "知识库外问题未被拒答",
+      "answerExcerpt": "## 2024 年双十一 GMV 数据说明\n\n根据提供的知识库内容，无法查询到公司 2024 年双十一的整体 GMV 数据。文档在《订单中台项目经验复盘（测评专用）》章节中明确标注：**“GMV 等经营数据由数据团队统一口径统计，不在本文档范围内”**，且该项目为虚构项目复盘文集。",
+      "topDocs": [
+        {
+          "contentHash": "12b53aaf52cb52b0",
+          "rank": 1,
+          "score": 0.42632484436035156,
+          "excerpt": "问：你们的 QPS 峰值多少？答：下单峰值 8000 QPS，网关入口 3 万 QPS，压测单实例 1200 QPS 乘实例数留冗余。\n\n问：如果流量再涨十倍怎么办？答：先垂直拆分热点服务，再水平扩容加缓存，最后按业务域再分库，附容量测算过程。\n\n问：项目里踩过最大的坑？答：一次发布引入同步阻塞导致超时的故障，从根因、改进、制度沉淀三层回答。\n\n## 技术方案文档模板与示例\n\n方案文档四段式：背景"
+        },
+        {
+          "contentHash": "ad64970c670ddaf6",
+          "rank": 2,
+          "score": 0.4223909378051758,
+          "excerpt": "容量水位：日常水位不超过 40%，大促扩容后峰值水位不超过 60%。水位定义是实际 QPS 除以压测容量。水位报表每周发布，超水位服务限期扩容或优化。\n\n## 数据迁移与双写实战\n\n订单库迁移到新集群的完整步骤：存量迁移用 DTS 全量加增量，迁移期间新旧双写（先新后旧，以旧为准校验），读流量按用户维度灰度切换，全量后观察两周，关闭旧写保留反向同步一周，最后下线。全程三个月，数据校验用全量 che"
+        },
+        {
+          "contentHash": "295e9ea14755ba47",
+          "rank": 3,
+          "score": 0.4170141816139221,
+          "excerpt": "# 订单中台项目经验复盘（测评专用）\n\n本文档为 RAG 测评人工编写的虚构项目复盘文集，人物、公司与数据均为虚构。GMV 等经营数据由数据团队统一口径统计，不在本文档范围内。\n\n## 项目背景与架构\n\n订单中台项目服务于虚构的电商业务，日均订单量 300 万，大促峰值日订单量 2000 万。整体架构是 Spring Boot 微服务，按领域拆分为订单服务、库存服务、营销服务、支付服务四个核心服务"
+        }
+      ],
+      "expectedEvidence": []
+    },
+    {
+      "id": "oos-04",
+      "question": "Netty 的 EventLoop 线程模型是怎么工作的？",
+      "tags": [
+        "知识库外题"
+      ],
+      "reason": "OOS_NOT_REJECTED",
+      "detail": "知识库外问题未被拒答",
+      "answerExcerpt": "## 知识检索结果\n\n基于提供的知识库内容，无法提供 Netty 的 EventLoop 线程模型的工作原理。\n\n知识库在“消息队列选型对比（干扰章节）”中明确说明：**Netty 的线程模型**不在本手册范围内，因此没有相关的具体实现细节可供参考。",
+      "topDocs": [
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 1,
+          "score": 0.5496237576007843,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 2,
+          "score": 0.5436641573905945,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 3,
+          "score": 0.5424803197383881,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        }
+      ],
+      "expectedEvidence": []
+    },
+    {
+      "id": "oos-05",
+      "question": "项目组里张三的手机号和邮箱是多少？",
+      "tags": [
+        "知识库外题"
+      ],
+      "reason": "OOS_NOT_REJECTED",
+      "detail": "知识库外问题未被拒答",
+      "answerExcerpt": "## 关于张三联系方式的查询结果\n\n根据提供的知识库内容，无法找到项目组中“张三”的手机号和邮箱信息。文档末尾明确说明该复盘文集的人物均为虚构，且文中并未记录任何具体人员的个人联系方式。",
+      "topDocs": [
+        {
+          "contentHash": "985f19bfd5dba6eb",
+          "rank": 1,
+          "score": 0.47706013917922974,
+          "excerpt": "周一需求澄清与方案设计，周二方案评审与技术评审，周三到周四编码与联调，周四晚提测，周五测试与修复，周五晚或周一早发布。节奏里最容易被压缩的是方案评审，而线上事故的根因大半能追到方案评审的缺失，宁砍需求不砍评审。\n\n## 附：大促保障总结\n\n三次大促保障的核心数据沉淀：缓存预热的实际压测结果显示缓存命中率达到 96.4%，数据库 QPS 峰值被控制在 8000 以内；下单成功率 99.97%；P99"
+        },
+        {
+          "contentHash": "d1d528c9d945931d",
+          "rank": 2,
+          "score": 0.46537506580352783,
+          "excerpt": "价格计算引擎：营销价、会员价、拼单价的多规则叠加用责任链计算，规则优先级配置化。价格计算的单元测试覆盖三百多个用例，任何规则变更必须先过用例库再发布。\n\n## 支付与对账\n\n支付网关对接了三个支付渠道，渠道适配层统一抽象为下单、查询、退款、回调四个动作。回调验签失败与金额不一致直接拒绝并告警。渠道接口都有独立的超时与重试配置，重试只对查询类接口开放。\n\n对账体系：每日 T 加一拉取渠道对账单与本地"
+        },
+        {
+          "contentHash": "e7f8254aed3de6be",
+          "rank": 3,
+          "score": 0.4641920328140259,
+          "excerpt": "需求前置时间从十五天压到七天的三个手段：需求小批量拆分、自动化测试替代部分人工回归、环境按需拉起。部署频率从每周一次到每天多次：CI 流水线提速到十分钟内、发布自动化、灰度自动化。\n\n技术效率的度量要小心古德哈特定律：度量是手段不是目标，只对比自己团队的纵向趋势，不搞团队间横向排名。\n\n## 反模式与教训（项目向）\n\n教训一：为了简历好看引入不熟悉的技术，故障时没人能修。选型原则回到团队能力与业务"
+        }
+      ],
+      "expectedEvidence": []
+    },
+    {
+      "id": "oos-06",
+      "question": "Elasticsearch 倒排索引的写入流程讲一下",
+      "tags": [
+        "知识库外题"
+      ],
+      "reason": "OOS_NOT_REJECTED",
+      "detail": "知识库外问题未被拒答",
+      "answerExcerpt": "## 知识库信息说明\n\n根据提供的知识库内容，其中**没有包含**关于 Elasticsearch 倒排索引写入流程的具体信息。知识库主要涵盖了 MySQL、Redis、Java 并发编程及常见系统设计等主题，未涉及 Elasticsearch 的索引机制细节。",
+      "topDocs": [
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 1,
+          "score": 0.5647300779819489,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 2,
+          "score": 0.5461970567703247,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "15d939a70f941475",
+          "rank": 3,
+          "score": 0.5384290814399719,
+          "excerpt": "设计 IM 系统：连接层网关集群、消息投递的可靠性与顺序性、离线消息拉取、已读回执扇出控制。设计评论系统：数据模型两级评论、热评论缓存、审核链路异步化。设计 点赞系统：计数与用户关系分开存、批量聚合落库、防刷限频。设计搜索建议：前缀树加热门候选、拼音与纠错扩展。设计文件存储：分片上传断点续传、秒传靠内容哈希、CDN 分发与防盗链。设计开放平台：应用鉴权签名、配额限流、回调重试与幂等、审计日志。\n\n"
+        }
+      ],
+      "expectedEvidence": []
+    },
+    {
+      "id": "oos-07",
+      "question": "Go 语言 GMP 调度模型的抢占是怎么实现的？",
+      "tags": [
+        "知识库外题"
+      ],
+      "reason": "OOS_NOT_REJECTED",
+      "detail": "知识库外问题未被拒答",
+      "answerExcerpt": "## 知识缺失说明\n\n\n基于提供的知识库内容，无法回答关于 Go 语言 GMP 调度模型抢占实现的问题。因为在“消息队列选型对比”章节中已明确说明“Go 语言的调度模型均不在本手册范围内”，所以知识库中缺乏相关详细信息。",
+      "topDocs": [
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 1,
+          "score": 0.5391272604465485,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "59cc90f9dd2746bb",
+          "rank": 2,
+          "score": 0.5345496833324432,
+          "excerpt": "虚拟内存通过页表把虚拟地址映射到物理地址，多级页表节省页表内存，TLB 缓存页表项加速翻译。缺页中断把数据从交换分区调入。页面置换算法有 FIFO、LRU、Clock 时钟算法，内核实际多用近似 LRU 的双链表活跃与非活跃队列。\n\n内存分配：brk 处理小堆块，mmap 处理大块与文件映射。内存泄漏在用户态表现为 RSS 持续增长不回落，容器环境要区分 cgroup OOM 与 JVM 堆 OO"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 3,
+          "score": 0.5268541872501373,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        }
+      ],
+      "expectedEvidence": []
+    },
+    {
+      "id": "oos-08",
+      "question": "CMS 回收器是在 JDK 哪个版本被正式移除的？",
+      "tags": [
+        "知识库外题",
+        "易误召回"
+      ],
+      "reason": "OOS_NOT_REJECTED",
+      "detail": "知识库外问题未被拒答",
+      "answerExcerpt": "## 回答\n\n根据提供的知识库内容，文档中虽然提到了 JVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代，以及 G1 与 CMS 的区别，但**并未包含**关于 CMS 回收器在 JDK 哪个版本被正式移除的具体信息。\n\n因此，基于当前检索到的资料无法回答该问题。",
+      "topDocs": [
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 1,
+          "score": 0.6093010008335114,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 2,
+          "score": 0.5136309564113617,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 3,
+          "score": 0.48768115043640137,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        }
+      ],
+      "expectedEvidence": []
+    }
+  ],
+  "faithfulnessReview": [
+    {
+      "id": "fact-01",
+      "question": "G1 回收器的堆内存划分方式和默认停顿目标是什么？",
+      "expectedEvidence": [
+        "G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒"
+      ],
+      "answer": "## G1 回收器的堆内存划分方式与默认停顿目标\n\n基于检索到的知识库内容，关于 G1 回收器的堆内存划分和停顿目标信息如下：\n\n- **堆内存划分方式**：G1 回收器把堆划分为多个**等大的 Region**。\n- **默认停顿目标**：默认期望停顿目标是**200 毫秒**。\n\n另外，知识库在 JVM 生产实践部分补充说明，选择 G1 时 Region 大小可按大对象体积进行评估。",
+      "evidenceIds": [
+        "jg-g1-region"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    },
+    {
+      "id": "fact-02",
+      "question": "ZGC 回收器的停顿时间和支持的堆规模是多少？",
+      "expectedEvidence": [
+        "停顿时间不超过 1 毫秒，支持 TB 级堆"
+      ],
+      "answer": "## ZGC 回收器的停顿时间与堆规模\n\n根据知识库中“JVM 垃圾回收”章节的内容，ZGC 回收器的相关指标如下：\n\n- **停顿时间**：不超过 1 毫秒\n- **支持的堆规模**：支持 TB 级堆\n\n该信息明确记载于文档关于 JVM 垃圾回收器发展的描述部分，原文指出：\"ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。”",
+      "evidenceIds": [
+        "jg-zgc"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    },
+    {
+      "id": "fact-03",
+      "question": "HashMap 链表什么时候会转换成红黑树？",
+      "expectedEvidence": [
+        "当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树"
+      ],
+      "answer": "## HashMap 链表转红黑树的转换条件\n\n根据知识库内容，HashMap 链表转换为红黑树必须同时满足两个阈值条件。\n\n- 链表长度超过 8\n- 数组容量达到 64\n\n如果只满足链表长度条件而数组容量不足 64 时，系统会优先选择扩容而不是树化。\n\n树化后退化的条件是红黑树节点数收缩到 6 时，退化回链表。这两个阈值差的设计用于抑制在边界附近反复转换的抖动。",
+      "evidenceIds": [
+        "jg-hm-tree"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    },
+    {
+      "id": "fact-04",
+      "question": "HashMap 的默认初始容量和负载因子是多少？扩容规则是什么？",
+      "expectedEvidence": [
+        "默认初始容量是 16，负载因子是 0.75"
+      ],
+      "answer": "## HashMap 默认参数与扩容规则\n\n根据知识库中《Java 后端核心知识手册》关于 HashMap 的描述，其默认参数及扩容机制如下：\n\n1. **默认初始容量**：默认为 16。\n2. **负载因子**：默认为 0.75。\n\n3. **扩容规则**：\n   - **触发条件**：当元素数量超过容量乘以负载因子时触发扩容。\n   - **扩容方式**：扩容为原来的两倍。\n   - **容量特性**：HashMap 的容量总是 2 的整数次幂，以便将 hash 值对容量取模转化为位运算 `(n - 1) & hash`。",
+      "evidenceIds": [
+        "jg-hm-capacity"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    },
+    {
+      "id": "fact-05",
+      "question": "线程池的构造函数有哪七个核心参数？",
+      "expectedEvidence": [
+        "corePoolSize、maximumPoolSize、keepAliveTime、unit、workQueue、threadFactory、handler"
+      ],
+      "answer": "## 线程池核心参数\n\n根据知识库内容，线程池的核心参数一共有七个，具体包括以下项：\n\n1. **corePoolSize**\n2. **maximumPoolSize**\n3. **keepAliveTime**\n4. **unit**\n5. **workQueue**\n6. **threadFactory**\n7. **handler**\n\n这些参数共同决定了线程池的任务处理逻辑。任务提交后，若线程数小于 corePoolSize 会直接创建核心线程；核心线程满后任务进入工作队列；队列满后创建非核心线程直至 maximumPoolSize；若仍满则触发拒绝策略。",
+      "evidenceIds": [
+        "jg-tp-params"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    },
+    {
+      "id": "para-05",
+      "question": "消息队列那边消费一直失败，你们最多让它重试几次？超时了咋处理？",
+      "expectedEvidence": [
+        "消费失败最多重试 3 次",
+        "进入死信流 dead-letter-stream 人工介入"
+      ],
+      "answer": "## 消息消费失败重试策略\n\n根据知识库中的“消息失败处理细则”与“重试的节奏与兜底”章节，消息队列消费失败的处理规则如下：\n\n- **最大重试次数**：消费失败最多重试 **3 次**，以避免无限重试拖垮下游系统。\n- **重试间隔节奏**：重试间隔按 **1 秒、5 秒、30 秒** 阶梯递增。\n\n## 超时与失败后的处理流程\n\n当消息超过重试次数或出现超时情况时，采取以下处理措施：\n\n- **进入死信流**：3 次仍失败的消息不再原地重试，而是进入 **死信流（dead-letter-stream）** 进行人工介入。\n- **死信管理平台**：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。\n- **后续优化机制**：每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于数据问题的写修复脚本。\n- **状态机补偿**：针对超时未完成的订单状态机节点，补偿任务每小时扫描一次，对卡住的节点按状态机定义重放。",
+      "evidenceIds": [
+        "pg-retry-3-para",
+        "pg-dead-letter-para"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    },
+    {
+      "id": "ctx-01",
+      "question": "它的默认停顿目标是多少？",
+      "expectedEvidence": [
+        "默认期望停顿目标是 200 毫秒"
+      ],
+      "answer": "## G1 回收器默认停顿目标\n\n根据知识库中 **JVM 垃圾回收** 章节的内容，G1 回收器的默认期望停顿目标是 **200 毫秒**。\n\n具体信息如下：\n- G1 回收器把堆划分为多个等大的 Region。\n- 默认期望停顿目标是 200 毫秒。\n- 它是面向服务端的回收器，适合大堆低停顿场景。",
+      "evidenceIds": [
+        "jg-g1-pause"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    },
+    {
+      "id": "ctx-02",
+      "question": "消费失败最多让它重试几次？",
+      "expectedEvidence": [
+        "消费失败最多重试 3 次"
+      ],
+      "answer": "## 消费失败重试次数说明\n\n根据知识库中的“消息失败处理细则”及相关文档描述，消费失败的重试策略如下：\n\n- **最大重试次数**：消费失败最多重试 **3 次**，避免无限重试拖垮下游。\n- **重试间隔节奏**：重试间隔按 **1 秒、5 秒、30 秒** 阶梯递增。\n- **兜底处理机制**：3 次仍失败的消息进入 **死信流（dead-letter-stream）**，转为人工介入处理，不再原地重试。\n\n该规则主要应用于订单履约链路等使用 Redis Stream 的场景，以确保消息处理的可靠性与系统稳定性。",
+      "evidenceIds": [
+        "pg-retry-3-ctx"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    },
+    {
+      "id": "chunk-01",
+      "question": "订单中台用了哪几条 Redis Stream？消费失败后的完整处理规则是什么？",
+      "expectedEvidence": [
+        "order-stream、inventory-stream、delivery-stream",
+        "消费失败最多重试 3 次",
+        "重试间隔按 1 秒、5 秒、30 秒阶梯递增"
+      ],
+      "answer": "## Redis Stream 使用情况\n\n根据知识库内容，订单履约链路使用 Redis Stream 作为消息通道，Stream 按业务领域拆分，具体包含以下三条：\n\n1. `order-stream`\n2. `inventory-stream`\n3. `delivery-stream`\n\n## 消费失败处理规则\n\n消费失败后的完整处理流程遵循以下规则：\n\n1. **重试机制**：消费失败最多重试 3 次，避免无限重试拖垮下游。重试间隔按 1 秒、5 秒、30 秒阶梯递增。\n2. **死信流转**：超过 3 次重试仍失败的消息不再原地重试，进入死信流 `dead-letter-stream` 进行人工介入。\n3. **人工处理**：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。属于代码缺陷的进迭代修复，属于数据问题的写修复脚本。\n4. **异常监控**：消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n5. **幂等保障**：消费者处理前先查幂等表（依靠订单号加业务类型的唯一索引），处理成功后写入处理记录，防止重复消费。",
+      "evidenceIds": [
+        "pg-streams",
+        "pg-retry-3",
+        "pg-retry-interval"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    },
+    {
+      "id": "chunk-02",
+      "question": "线程池拒绝时 JDK 有哪些内置策略？生产环境更推荐怎么落地？",
+      "expectedEvidence": [
+        "AbortPolicy 抛出异常、CallerRunsPolicy 由提交线程执行、DiscardPolicy 静默丢弃、DiscardOldestPolicy 丢弃队首最老任务",
+        "生产环境建议使用自定义拒绝策略配合监控告警"
+      ],
+      "answer": "## JDK 内置拒绝策略\n\n根据知识库内容，线程池任务提交后若触发拒绝策略，JDK 内置的四种策略如下：\n\n- **AbortPolicy**：抛出异常\n- **CallerRunsPolicy**：由提交线程执行\n- **DiscardPolicy**：静默丢弃\n- **DiscardOldestPolicy**：丢弃队首最老任务\n\n## 生产环境落地推荐\n\n在生产环境中，关于拒绝策略的落地与配置有以下具体建议：\n\n- **策略选择**：不建议直接使用默认的 AbortPolicy，生产环境建议使用自定义拒绝策略配合监控告警。\n- **自定义实现要求**：在自定义策略里至少要做三件事，包括记录被拒绝任务上下文、递增监控计数器、按业务决定是降级执行还是快速失败返回。\n- **配置检查项**：线程池上线前的检查项中强调队列必须有界防止 OOM，拒绝策略必须可观测，核心参数必须可配置而不是硬编码。\n- **运行观测**：运行时需关注拒绝次数等指标，队列长度持续超过容量八成就要评估扩容或异步化，避免等到拒绝发生再处理。",
+      "evidenceIds": [
+        "jg-tp-reject-chunk",
+        "jg-tp-custom"
+      ],
+      "faithfulnessStatus": "PASS",
+      "unsupportedClaims": null,
+      "reason": null,
+      "reviewer": "用户确认（会话中复核）",
+      "reviewedAt": "2026-09-03"
+    }
+  ],
+  "samples": [
+    {
+      "id": "fact-01",
+      "split": "dev",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "G1 回收器的堆内存划分方式和默认停顿目标是什么？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "G1 回收器的堆内存划分方式和默认停顿目标是什么？",
+      "attemptedQueries": [
+        "G1 回收器的堆内存划分方式和默认停顿目标是什么？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## G1 回收器的堆内存划分方式与默认停顿目标\n\n基于检索到的知识库内容，关于 G1 回收器的堆内存划分和停顿目标信息如下：\n\n- **堆内存划分方式**：G1 回收器把堆划分为多个**等大的 Region**。\n- **默认停顿目标**：默认期望停顿目标是**200 毫秒**。\n\n另外，知识库在 JVM 生产实践部分补充说明，选择 G1 时 Region 大小可按大对象体积进行评估。",
+      "retrievedDocs": [
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 1,
+          "score": 0.6611578166484833,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 2,
+          "score": 0.5502596795558929,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 3,
+          "score": 0.5332003533840179,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 4,
+          "score": 0.5238117575645447,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "59cc90f9dd2746bb",
+          "rank": 5,
+          "score": 0.523580402135849,
+          "excerpt": "虚拟内存通过页表把虚拟地址映射到物理地址，多级页表节省页表内存，TLB 缓存页表项加速翻译。缺页中断把数据从交换分区调入。页面置换算法有 FIFO、LRU、Clock 时钟算法，内核实际多用近似 LRU 的双链表活跃与非活跃队列。\n\n内存分配：brk 处理小堆块，mmap 处理大块与文件映射。内存泄漏在用户态表现为 RSS 持续增长不回落，容器环境要区分 cgroup OOM 与 JVM 堆 OO"
+        },
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 6,
+          "score": 0.5129406154155731,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "65819b7e026f5e42",
+          "rank": 7,
+          "score": 0.5020491480827332,
+          "excerpt": "CPU 100%：定位进程、定位线程、抓栈找热点。内存泄漏：对比多次堆快照的支配树增长。OOM 杀进程：区分堆内与堆外，检查容器内存限制与 JVM 参数配比。接口突然变慢：先看监控是全量还是局部，检查依赖服务、数据库慢查询、GC 停顿与线程池饱和度。消息堆积：先扩容消费、再查慢消费、必要时跳过可重放消息。缓存命中率暴跌：排查热 key 失效、批量过期与发布变更导致的 key 结构变化。\n\n## 场"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 8,
+          "score": 0.5014366805553436,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-g1-region"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 156,
+      "generationMs": 19757,
+      "totalMs": 19976
+    },
+    {
+      "id": "fact-02",
+      "split": "dev",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "ZGC 回收器的停顿时间和支持的堆规模是多少？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "ZGC 回收器的停顿时间和支持的堆规模是多少？",
+      "attemptedQueries": [
+        "ZGC 回收器的停顿时间和支持的堆规模是多少？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## ZGC 回收器的停顿时间与堆规模\n\n根据知识库中“JVM 垃圾回收”章节的内容，ZGC 回收器的相关指标如下：\n\n- **停顿时间**：不超过 1 毫秒\n- **支持的堆规模**：支持 TB 级堆\n\n该信息明确记载于文档关于 JVM 垃圾回收器发展的描述部分，原文指出：\"ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。”",
+      "retrievedDocs": [
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 1,
+          "score": 0.6664225161075592,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 2,
+          "score": 0.5169501006603241,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "65819b7e026f5e42",
+          "rank": 3,
+          "score": 0.5168485641479492,
+          "excerpt": "CPU 100%：定位进程、定位线程、抓栈找热点。内存泄漏：对比多次堆快照的支配树增长。OOM 杀进程：区分堆内与堆外，检查容器内存限制与 JVM 参数配比。接口突然变慢：先看监控是全量还是局部，检查依赖服务、数据库慢查询、GC 停顿与线程池饱和度。消息堆积：先扩容消费、再查慢消费、必要时跳过可重放消息。缓存命中率暴跌：排查热 key 失效、批量过期与发布变更导致的 key 结构变化。\n\n## 场"
+        },
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 4,
+          "score": 0.49390989542007446,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "59cc90f9dd2746bb",
+          "rank": 5,
+          "score": 0.49216294288635254,
+          "excerpt": "虚拟内存通过页表把虚拟地址映射到物理地址，多级页表节省页表内存，TLB 缓存页表项加速翻译。缺页中断把数据从交换分区调入。页面置换算法有 FIFO、LRU、Clock 时钟算法，内核实际多用近似 LRU 的双链表活跃与非活跃队列。\n\n内存分配：brk 处理小堆块，mmap 处理大块与文件映射。内存泄漏在用户态表现为 RSS 持续增长不回落，容器环境要区分 cgroup OOM 与 JVM 堆 OO"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 6,
+          "score": 0.49055230617523193,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "f194bc52f51e9691",
+          "rank": 7,
+          "score": 0.4846755266189575,
+          "excerpt": "问：懒加载的实现？答：代理对象在访问属性时触发附加查询，fetchType 按需配置，注意 N 加一问题用 resultMap 嵌套查询或 join 一次性取。\n\n## 运维部署问答\n\n问：JVM 容器参数怎么配？答：用 -XX:MaxRAMPercentage 按容器内存百分比配置，堆外内存与线程栈预留三成，Java 10 加上 UseContainerSupport 自动感知 cgroup 限"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 8,
+          "score": 0.4812479019165039,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-zgc"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 161,
+      "generationMs": 18315,
+      "totalMs": 18492
+    },
+    {
+      "id": "fact-03",
+      "split": "dev",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "HashMap 链表什么时候会转换成红黑树？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "HashMap 链表什么时候会转换成红黑树？",
+      "attemptedQueries": [
+        "HashMap 链表什么时候会转换成红黑树？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## HashMap 链表转红黑树的转换条件\n\n根据知识库内容，HashMap 链表转换为红黑树必须同时满足两个阈值条件。\n\n- 链表长度超过 8\n- 数组容量达到 64\n\n如果只满足链表长度条件而数组容量不足 64 时，系统会优先选择扩容而不是树化。\n\n树化后退化的条件是红黑树节点数收缩到 6 时，退化回链表。这两个阈值差的设计用于抑制在边界附近反复转换的抖动。",
+      "retrievedDocs": [
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 1,
+          "score": 0.6947195827960968,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 2,
+          "score": 0.5287922024726868,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 3,
+          "score": 0.5271401405334473,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 4,
+          "score": 0.5165886282920837,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 5,
+          "score": 0.5006439983844757,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 6,
+          "score": 0.4826873540878296,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "c12d77baa33fcdd1",
+          "rank": 7,
+          "score": 0.48252081871032715,
+          "excerpt": "线上 CPU 飙高的排查路径：top 找到进程，top -Hp 找到线程，printf 转十六进制，jstack 抓栈定位热点方法。磁盘满用 du -sh 逐层定位大目录，df -h 确认挂载。网络连通用 telnet 或 nc 验证端口，tcpdump 抓包分析握手细节，ss -s 查看连接概况。\n\n## 编码与安全基础\n\n密码必须用 BCrypt 这类带盐慢哈希存储，不能用 MD5 或 SHA"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 8,
+          "score": 0.4819568991661072,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-hm-tree"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 130,
+      "generationMs": 19116,
+      "totalMs": 19258
+    },
+    {
+      "id": "fact-04",
+      "split": "dev",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "HashMap 的默认初始容量和负载因子是多少？扩容规则是什么？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "HashMap 的默认初始容量和负载因子是多少？扩容规则是什么？",
+      "attemptedQueries": [
+        "HashMap 的默认初始容量和负载因子是多少？扩容规则是什么？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## HashMap 默认参数与扩容规则\n\n根据知识库中《Java 后端核心知识手册》关于 HashMap 的描述，其默认参数及扩容机制如下：\n\n1. **默认初始容量**：默认为 16。\n2. **负载因子**：默认为 0.75。\n\n3. **扩容规则**：\n   - **触发条件**：当元素数量超过容量乘以负载因子时触发扩容。\n   - **扩容方式**：扩容为原来的两倍。\n   - **容量特性**：HashMap 的容量总是 2 的整数次幂，以便将 hash 值对容量取模转化为位运算 `(n - 1) & hash`。",
+      "retrievedDocs": [
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 1,
+          "score": 0.6731414496898651,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 2,
+          "score": 0.5806780457496643,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 3,
+          "score": 0.5342392921447754,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "f194bc52f51e9691",
+          "rank": 4,
+          "score": 0.5246058702468872,
+          "excerpt": "问：懒加载的实现？答：代理对象在访问属性时触发附加查询，fetchType 按需配置，注意 N 加一问题用 resultMap 嵌套查询或 join 一次性取。\n\n## 运维部署问答\n\n问：JVM 容器参数怎么配？答：用 -XX:MaxRAMPercentage 按容器内存百分比配置，堆外内存与线程栈预留三成，Java 10 加上 UseContainerSupport 自动感知 cgroup 限"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 5,
+          "score": 0.5222777128219604,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 6,
+          "score": 0.5180041193962097,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 7,
+          "score": 0.5014171600341797,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        },
+        {
+          "contentHash": "65819b7e026f5e42",
+          "rank": 8,
+          "score": 0.49735027551651,
+          "excerpt": "CPU 100%：定位进程、定位线程、抓栈找热点。内存泄漏：对比多次堆快照的支配树增长。OOM 杀进程：区分堆内与堆外，检查容器内存限制与 JVM 参数配比。接口突然变慢：先看监控是全量还是局部，检查依赖服务、数据库慢查询、GC 停顿与线程池饱和度。消息堆积：先扩容消费、再查慢消费、必要时跳过可重放消息。缓存命中率暴跌：排查热 key 失效、批量过期与发布变更导致的 key 结构变化。\n\n## 场"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-hm-capacity"
+      ],
+      "firstHitRank": 2,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 128,
+      "generationMs": 18730,
+      "totalMs": 18873
+    },
+    {
+      "id": "fact-05",
+      "split": "dev",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "线程池的构造函数有哪七个核心参数？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "线程池的构造函数有哪七个核心参数？",
+      "attemptedQueries": [
+        "线程池的构造函数有哪七个核心参数？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 线程池核心参数\n\n根据知识库内容，线程池的核心参数一共有七个，具体包括以下项：\n\n1. **corePoolSize**\n2. **maximumPoolSize**\n3. **keepAliveTime**\n4. **unit**\n5. **workQueue**\n6. **threadFactory**\n7. **handler**\n\n这些参数共同决定了线程池的任务处理逻辑。任务提交后，若线程数小于 corePoolSize 会直接创建核心线程；核心线程满后任务进入工作队列；队列满后创建非核心线程直至 maximumPoolSize；若仍满则触发拒绝策略。",
+      "retrievedDocs": [
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 1,
+          "score": 0.6747739613056183,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 2,
+          "score": 0.6069155633449554,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 3,
+          "score": 0.6007201969623566,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "4bd4cf194f768a2e",
+          "rank": 4,
+          "score": 0.5927799642086029,
+          "excerpt": "数据库客户端与建模工具：DataGrip 管多数据源，dbdiagram 画关系图，Flyway 或 Liquibase 管理迁移版本，迁移文件命名 V 版本号 双下划线 描述。接口联调：Swagger 或 SpringDoc 自动生成文档，Postman 集合做回归，Apifox 支持中文与 mock。性能工具：JMeter 图形化压测，Gatling 代码化场景，wrk 轻量快速。终端效率：z"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 5,
+          "score": 0.5744730532169342,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "4d5f7c0ed531be04",
+          "rank": 6,
+          "score": 0.5734917223453522,
+          "excerpt": "配置中心的选择要点：环境隔离、灰度发布、变更审计与回滚速度。敏感配置要加密存储且密钥与密文分离保管。数据库变更走工单平台评审，大表加字段用 pt-osc 或 gh-ost 在线改表。代码回滚优先于修复，配置回滚优先于代码回滚。\n\n## 测试与质量\n\n单元测试的 FIRST 原则：快速、独立、可重复、自校验、及时。测试金字塔建议单元测试占比七成，接口集成测试两成，端到端一成。Mock 边界依赖而不是"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 7,
+          "score": 0.5580072700977325,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 8,
+          "score": 0.557019978761673,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-tp-params"
+      ],
+      "firstHitRank": 2,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 117,
+      "generationMs": 16151,
+      "totalMs": 16281
+    },
+    {
+      "id": "fact-06",
+      "split": "dev",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "JDK 内置的四种线程池拒绝策略分别是什么？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "JDK 内置的四种线程池拒绝策略分别是什么？",
+      "attemptedQueries": [
+        "JDK 内置的四种线程池拒绝策略分别是什么？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 1,
+          "score": 0.6908396184444427,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 2,
+          "score": 0.635102242231369,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "4bd4cf194f768a2e",
+          "rank": 3,
+          "score": 0.6127045154571533,
+          "excerpt": "数据库客户端与建模工具：DataGrip 管多数据源，dbdiagram 画关系图，Flyway 或 Liquibase 管理迁移版本，迁移文件命名 V 版本号 双下划线 描述。接口联调：Swagger 或 SpringDoc 自动生成文档，Postman 集合做回归，Apifox 支持中文与 mock。性能工具：JMeter 图形化压测，Gatling 代码化场景，wrk 轻量快速。终端效率：z"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 4,
+          "score": 0.6020671725273132,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 5,
+          "score": 0.5889914631843567,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 6,
+          "score": 0.5840779542922974,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 7,
+          "score": 0.5836091339588165,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 8,
+          "score": 0.5757815837860107,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-tp-reject"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 131,
+      "generationMs": 0,
+      "totalMs": 131
+    },
+    {
+      "id": "fact-07",
+      "split": "dev",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "Redis 的 RDB 和 AOF 两种持久化方式各自的原理是什么？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "Redis 的 RDB 和 AOF 两种持久化方式各自的原理是什么？",
+      "attemptedQueries": [
+        "Redis 的 RDB 和 AOF 两种持久化方式各自的原理是什么？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 1,
+          "score": 0.6578625738620758,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 2,
+          "score": 0.6312593519687653,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 3,
+          "score": 0.621455729007721,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 4,
+          "score": 0.61220782995224,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 5,
+          "score": 0.6078115701675415,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 6,
+          "score": 0.5817360877990723,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 7,
+          "score": 0.5624538958072662,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 8,
+          "score": 0.5611805021762848,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-rdb",
+        "jg-aof"
+      ],
+      "firstHitRank": 5,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 182,
+      "generationMs": 0,
+      "totalMs": 183
+    },
+    {
+      "id": "fact-08",
+      "split": "dev",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "AOF 的 appendfsync 有哪几种刷盘策略？默认是哪种？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "AOF 的 appendfsync 有哪几种刷盘策略？默认是哪种？",
+      "attemptedQueries": [
+        "AOF 的 appendfsync 有哪几种刷盘策略？默认是哪种？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 1,
+          "score": 0.6040816903114319,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 2,
+          "score": 0.5695450603961945,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 3,
+          "score": 0.5602843463420868,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 4,
+          "score": 0.5578929781913757,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 5,
+          "score": 0.5511426627635956,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 6,
+          "score": 0.5280320048332214,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 7,
+          "score": 0.5226649045944214,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 8,
+          "score": 0.5202296078205109,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-appendfsync"
+      ],
+      "firstHitRank": 8,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 228,
+      "generationMs": 0,
+      "totalMs": 229
+    },
+    {
+      "id": "fact-09",
+      "split": "holdout",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "什么是回表？为什么会发生回表？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "什么是回表？为什么会发生回表？",
+      "attemptedQueries": [
+        "什么是回表？为什么会发生回表？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 1,
+          "score": 0.5493788421154022,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 2,
+          "score": 0.5372002422809601,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 3,
+          "score": 0.5259175002574921,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 4,
+          "score": 0.5029253661632538,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 5,
+          "score": 0.500117838382721,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 6,
+          "score": 0.4960322380065918,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 7,
+          "score": 0.4924119710922241,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "f194bc52f51e9691",
+          "rank": 8,
+          "score": 0.49043911695480347,
+          "excerpt": "问：懒加载的实现？答：代理对象在访问属性时触发附加查询，fetchType 按需配置，注意 N 加一问题用 resultMap 嵌套查询或 join 一次性取。\n\n## 运维部署问答\n\n问：JVM 容器参数怎么配？答：用 -XX:MaxRAMPercentage 按容器内存百分比配置，堆外内存与线程栈预留三成，Java 10 加上 UseContainerSupport 自动感知 cgroup 限"
+        }
+      ],
+      "hit": false,
+      "hitEvidenceIds": [],
+      "firstHitRank": null,
+      "evidenceRecall": 0.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 149,
+      "generationMs": 0,
+      "totalMs": 152
+    },
+    {
+      "id": "fact-10",
+      "split": "holdout",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "Spring Bean 的生命周期主要阶段有哪些？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "Spring Bean 的生命周期主要阶段有哪些？",
+      "attemptedQueries": [
+        "Spring Bean 的生命周期主要阶段有哪些？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 1,
+          "score": 0.5303488373756409,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 2,
+          "score": 0.5244836211204529,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 3,
+          "score": 0.4877336621284485,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 4,
+          "score": 0.434415340423584,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 5,
+          "score": 0.43239647150039673,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 6,
+          "score": 0.4210315942764282,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 7,
+          "score": 0.4080822467803955,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 8,
+          "score": 0.3996691107749939,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-bean-lifecycle"
+      ],
+      "firstHitRank": 2,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 169,
+      "generationMs": 0,
+      "totalMs": 169
+    },
+    {
+      "id": "fact-11",
+      "split": "holdout",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "订单中台项目的数据库分库分表方案是怎么设计的？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "订单中台项目的数据库分库分表方案是怎么设计的？",
+      "attemptedQueries": [
+        "订单中台项目的数据库分库分表方案是怎么设计的？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "295e9ea14755ba47",
+          "rank": 1,
+          "score": 0.7806121855974197,
+          "excerpt": "# 订单中台项目经验复盘（测评专用）\n\n本文档为 RAG 测评人工编写的虚构项目复盘文集，人物、公司与数据均为虚构。GMV 等经营数据由数据团队统一口径统计，不在本文档范围内。\n\n## 项目背景与架构\n\n订单中台项目服务于虚构的电商业务，日均订单量 300 万，大促峰值日订单量 2000 万。整体架构是 Spring Boot 微服务，按领域拆分为订单服务、库存服务、营销服务、支付服务四个核心服务"
+        },
+        {
+          "contentHash": "0f9a98249acae022",
+          "rank": 2,
+          "score": 0.656451553106308,
+          "excerpt": "ADR-001 分库分表选型：候选 ShardingSphere 与自研路由层，选前者因为社区活跃且功能覆盖需求，代价是引入中间件的运维成本。ADR-002 消息中间件选型：候选 Kafka 与 Redis Stream，选后者，理由是运维成本与团队熟悉度，风险是吞吐上限，缓解是预留迁移方案。ADR-003 读写分离策略：从库读的延迟不可接受场景用强制主读注解。ADR-004 前后端分离部署：CD"
+        },
+        {
+          "contentHash": "43f57a0c1ebdb134",
+          "rank": 3,
+          "score": 0.5970755219459534,
+          "excerpt": "风控的误杀治理：误杀申诉通道与自动解赔流程，每周复盘误杀 top 规则，规则阈值调整走评审。风控指标的平衡是拦截率与误杀率的联合优化，单看任何一个都会翻车。\n\n## 客服与工单子系统\n\n客服工单系统对接在线客服、电话与 APP 反馈三渠道，工单按类型与优先级分派。知识库辅助回复覆盖 40% 的常见问题。工单 SLA：普通工单 24 小时响应，加急 2 小时，超时自动升级主管。\n\n客服的权限最小化："
+        },
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 4,
+          "score": 0.5957737565040588,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "7f85f8baa50d61b4",
+          "rank": 5,
+          "score": 0.5935144424438477,
+          "excerpt": "数据库规约：所有表有 created_at 与 updated_at；金额用 bigint 存分；状态字段用 tinyint 加枚举映射；索引命名 idx 前缀加字段；禁止外键约束，关系靠应用层与对账保证；大字段拆分到附表。\n\n接口规约：响应统一包裹 code、data、message；分页用游标；错误码分段管理（业务错误、系统错误、第三方错误）；接口文档与代码同步生成，过期文档直接删除。\n\n##"
+        },
+        {
+          "contentHash": "12b53aaf52cb52b0",
+          "rank": 6,
+          "score": 0.5740464329719543,
+          "excerpt": "问：你们的 QPS 峰值多少？答：下单峰值 8000 QPS，网关入口 3 万 QPS，压测单实例 1200 QPS 乘实例数留冗余。\n\n问：如果流量再涨十倍怎么办？答：先垂直拆分热点服务，再水平扩容加缓存，最后按业务域再分库，附容量测算过程。\n\n问：项目里踩过最大的坑？答：一次发布引入同步阻塞导致超时的故障，从根因、改进、制度沉淀三层回答。\n\n## 技术方案文档模板与示例\n\n方案文档四段式：背景"
+        },
+        {
+          "contentHash": "ad64970c670ddaf6",
+          "rank": 7,
+          "score": 0.5727211236953735,
+          "excerpt": "容量水位：日常水位不超过 40%，大促扩容后峰值水位不超过 60%。水位定义是实际 QPS 除以压测容量。水位报表每周发布，超水位服务限期扩容或优化。\n\n## 数据迁移与双写实战\n\n订单库迁移到新集群的完整步骤：存量迁移用 DTS 全量加增量，迁移期间新旧双写（先新后旧，以旧为准校验），读流量按用户维度灰度切换，全量后观察两周，关闭旧写保留反向同步一周，最后下线。全程三个月，数据校验用全量 che"
+        },
+        {
+          "contentHash": "d1d528c9d945931d",
+          "rank": 8,
+          "score": 0.5724360346794128,
+          "excerpt": "价格计算引擎：营销价、会员价、拼单价的多规则叠加用责任链计算，规则优先级配置化。价格计算的单元测试覆盖三百多个用例，任何规则变更必须先过用例库再发布。\n\n## 支付与对账\n\n支付网关对接了三个支付渠道，渠道适配层统一抽象为下单、查询、退款、回调四个动作。回调验签失败与金额不一致直接拒绝并告警。渠道接口都有独立的超时与重试配置，重试只对查询类接口开放。\n\n对账体系：每日 T 加一拉取渠道对账单与本地"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-sharding"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 161,
+      "generationMs": 0,
+      "totalMs": 161
+    },
+    {
+      "id": "fact-12",
+      "split": "holdout",
+      "tags": [
+        "直接事实题"
+      ],
+      "question": "第三轮全链路压测的下单接口延迟数据是多少？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "第三轮全链路压测的下单接口延迟数据是多少？",
+      "attemptedQueries": [
+        "第三轮全链路压测的下单接口延迟数据是多少？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 1,
+          "score": 0.689614325761795,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "d1d528c9d945931d",
+          "rank": 2,
+          "score": 0.6276367604732513,
+          "excerpt": "价格计算引擎：营销价、会员价、拼单价的多规则叠加用责任链计算，规则优先级配置化。价格计算的单元测试覆盖三百多个用例，任何规则变更必须先过用例库再发布。\n\n## 支付与对账\n\n支付网关对接了三个支付渠道，渠道适配层统一抽象为下单、查询、退款、回调四个动作。回调验签失败与金额不一致直接拒绝并告警。渠道接口都有独立的超时与重试配置，重试只对查询类接口开放。\n\n对账体系：每日 T 加一拉取渠道对账单与本地"
+        },
+        {
+          "contentHash": "0c7ec4f5a30fd814",
+          "rank": 3,
+          "score": 0.5777899920940399,
+          "excerpt": "最严重的一次故障是营销服务批量发放优惠券导致 Redis 主从切换，切换期间缓存请求超时拖垮了订单查询链路。恢复时长 12 分钟。改进措施有三条：优惠券发放增加平滑限速、查询链路增加缓存降级开关、Redis 集群升级为三主三从并把只读请求路由到从节点。\n\n另一次典型故障是慢 SQL 导致数据库连接池耗尽，根因是运营后台一个未走索引的订单导出查询。改进措施是运营后台查询强制走只读从库，并给导出接口加"
+        },
+        {
+          "contentHash": "95a03321360903d8",
+          "rank": 4,
+          "score": 0.5773350596427917,
+          "excerpt": "订单查询的热点数据放入 Redis 缓存，缓存 key 按用户 ID 分桶，过期时间设置为 30 分钟加 0 到 5 分钟随机偏移，避免同一时刻批量过期造成缓存雪崩。缓存更新策略采用先更新数据库再删除缓存的旁路缓存模式，删除失败时投递到重试队列补偿。\n\n缓存一致性对账：每晚抽样对比缓存与数据库的订单状态，不一致率告警阈值百万分之一，发现后强制失效并复盘根因。上线变更期的 key 结构变化通过版本号"
+        },
+        {
+          "contentHash": "b3a3313663255391",
+          "rank": 5,
+          "score": 0.5743679404258728,
+          "excerpt": "逆向对正向的影响：库存回补策略按验货结果决定，验货通过回补可售库存，验货不通过回补残次品库存。售后高峰期的回补积压用独立的低优先级队列处理，不挤占正向下单链路。\n\n## 履约与物流子系统\n\n履约链路：订单拆单按仓与品拆分，仓库接单、拣货、复核、打包、发货五步。电子面单对接五家快递公司，路由推荐按时效与成本加权。物流轨迹靠快递回调加主动轮询双通道，轨迹更新延迟容忍十分钟。\n\n发货超时预警：支付后 4"
+        },
+        {
+          "contentHash": "295e9ea14755ba47",
+          "rank": 6,
+          "score": 0.5671891272068024,
+          "excerpt": "# 订单中台项目经验复盘（测评专用）\n\n本文档为 RAG 测评人工编写的虚构项目复盘文集，人物、公司与数据均为虚构。GMV 等经营数据由数据团队统一口径统计，不在本文档范围内。\n\n## 项目背景与架构\n\n订单中台项目服务于虚构的电商业务，日均订单量 300 万，大促峰值日订单量 2000 万。整体架构是 Spring Boot 微服务，按领域拆分为订单服务、库存服务、营销服务、支付服务四个核心服务"
+        },
+        {
+          "contentHash": "2feeef1a43d5b249",
+          "rank": 7,
+          "score": 0.5614177286624908,
+          "excerpt": "案例三：导出接口从超时到稳定。同步导出改异步任务、分片生成、流式写对象存储、进度可查询。大结果集永远不要在请求线程里组装。\n\n案例四：JVM 长停顿治理。大对象直接进老年代触发混合回收失败，调整 Region 大小与大对象阈值，停顿从 800 毫秒降到 80 毫秒。GC 调优必须基于 GC 日志而不是猜。\n\n## 重构案例集\n\n重构一：订单状态机从 if else 到规则引擎。两千行状态流转代码重"
+        },
+        {
+          "contentHash": "e7f8254aed3de6be",
+          "rank": 8,
+          "score": 0.5570791363716125,
+          "excerpt": "需求前置时间从十五天压到七天的三个手段：需求小批量拆分、自动化测试替代部分人工回归、环境按需拉起。部署频率从每周一次到每天多次：CI 流水线提速到十分钟内、发布自动化、灰度自动化。\n\n技术效率的度量要小心古德哈特定律：度量是手段不是目标，只对比自己团队的纵向趋势，不搞团队间横向排名。\n\n## 反模式与教训（项目向）\n\n教训一：为了简历好看引入不熟悉的技术，故障时没人能修。选型原则回到团队能力与业务"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-pressure"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 181,
+      "generationMs": 0,
+      "totalMs": 182
+    },
+    {
+      "id": "para-01",
+      "split": "dev",
+      "tags": [
+        "同义改写题"
+      ],
+      "question": "线程池满了塞不下新任务的时候，JDK 自带的兜底手段有哪几种？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "线程池满了塞不下新任务的时候，JDK 自带的兜底手段有哪几种？",
+      "attemptedQueries": [
+        "线程池满了塞不下新任务的时候，JDK 自带的兜底手段有哪几种？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 1,
+          "score": 0.6650308072566986,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 2,
+          "score": 0.6198959350585938,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 3,
+          "score": 0.616626501083374,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 4,
+          "score": 0.6137135922908783,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 5,
+          "score": 0.607862651348114,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "65819b7e026f5e42",
+          "rank": 6,
+          "score": 0.6016019582748413,
+          "excerpt": "CPU 100%：定位进程、定位线程、抓栈找热点。内存泄漏：对比多次堆快照的支配树增长。OOM 杀进程：区分堆内与堆外，检查容器内存限制与 JVM 参数配比。接口突然变慢：先看监控是全量还是局部，检查依赖服务、数据库慢查询、GC 停顿与线程池饱和度。消息堆积：先扩容消费、再查慢消费、必要时跳过可重放消息。缓存命中率暴跌：排查热 key 失效、批量过期与发布变更导致的 key 结构变化。\n\n## 场"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 7,
+          "score": 0.592071920633316,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "4ca8ab3bdd50d1f0",
+          "rank": 8,
+          "score": 0.5874798595905304,
+          "excerpt": "问：网关 499 日志说明什么？答：客户端主动断连，常见是上游处理超过客户端超时，排查方向是应用耗时与客户端超时配置的差值。\n\n问：502 与 504 的区别？答：502 是上游返回无效响应或连接被拒，504 是上游超时未响应，一个看进程存活一个看处理耗时。\n\n问：如何给服务做容量画像？答：压测得到单实例容量上限，结合峰值 QPS 与冗余系数算实例数，按大促日历提前扩容，常态用弹性伸缩跟随曲线。\n"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-tp-reject-para"
+      ],
+      "firstHitRank": 2,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 116,
+      "generationMs": 0,
+      "totalMs": 116
+    },
+    {
+      "id": "para-02",
+      "split": "dev",
+      "tags": [
+        "同义改写题"
+      ],
+      "question": "HashMap 里链子拖得太长性能差，啥条件下会变成树结构？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "HashMap 里链子拖得太长性能差，啥条件下会变成树结构？",
+      "attemptedQueries": [
+        "HashMap 里链子拖得太长性能差，啥条件下会变成树结构？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 1,
+          "score": 0.7051443159580231,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 2,
+          "score": 0.5947103798389435,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 3,
+          "score": 0.5825956165790558,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 4,
+          "score": 0.5405322015285492,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "c12d77baa33fcdd1",
+          "rank": 5,
+          "score": 0.536387711763382,
+          "excerpt": "线上 CPU 飙高的排查路径：top 找到进程，top -Hp 找到线程，printf 转十六进制，jstack 抓栈定位热点方法。磁盘满用 du -sh 逐层定位大目录，df -h 确认挂载。网络连通用 telnet 或 nc 验证端口，tcpdump 抓包分析握手细节，ss -s 查看连接概况。\n\n## 编码与安全基础\n\n密码必须用 BCrypt 这类带盐慢哈希存储，不能用 MD5 或 SHA"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 6,
+          "score": 0.5307593047618866,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 7,
+          "score": 0.5206708014011383,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 8,
+          "score": 0.5198061764240265,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-hm-tree-para"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 131,
+      "generationMs": 0,
+      "totalMs": 131
+    },
+    {
+      "id": "para-03",
+      "split": "dev",
+      "tags": [
+        "同义改写题"
+      ],
+      "question": "Redis 机器要是断电了，里面的数据会不会全没了？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "Redis 机器要是断电了，里面的数据会不会全没了？",
+      "attemptedQueries": [
+        "Redis 机器要是断电了，里面的数据会不会全没了？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 1,
+          "score": 0.5686537623405457,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 2,
+          "score": 0.5582664608955383,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 3,
+          "score": 0.5520961880683899,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 4,
+          "score": 0.5441569983959198,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 5,
+          "score": 0.5429488718509674,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 6,
+          "score": 0.5339351296424866,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "c12d77baa33fcdd1",
+          "rank": 7,
+          "score": 0.5266220271587372,
+          "excerpt": "线上 CPU 飙高的排查路径：top 找到进程，top -Hp 找到线程，printf 转十六进制，jstack 抓栈定位热点方法。磁盘满用 du -sh 逐层定位大目录，df -h 确认挂载。网络连通用 telnet 或 nc 验证端口，tcpdump 抓包分析握手细节，ss -s 查看连接概况。\n\n## 编码与安全基础\n\n密码必须用 BCrypt 这类带盐慢哈希存储，不能用 MD5 或 SHA"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 8,
+          "score": 0.5106891989707947,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-rdb-para",
+        "jg-aof-para"
+      ],
+      "firstHitRank": 6,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 182,
+      "generationMs": 0,
+      "totalMs": 183
+    },
+    {
+      "id": "para-04",
+      "split": "dev",
+      "tags": [
+        "同义改写题"
+      ],
+      "question": "新生的对象在内存里熬过几轮回收才能搬到老年代去？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "新生的对象在内存里熬过几轮回收才能搬到老年代去？",
+      "attemptedQueries": [
+        "新生的对象在内存里熬过几轮回收才能搬到老年代去？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 1,
+          "score": 0.5320894718170166,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 2,
+          "score": 0.5253479778766632,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 3,
+          "score": 0.5039129257202148,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "59cc90f9dd2746bb",
+          "rank": 4,
+          "score": 0.4876782298088074,
+          "excerpt": "虚拟内存通过页表把虚拟地址映射到物理地址，多级页表节省页表内存，TLB 缓存页表项加速翻译。缺页中断把数据从交换分区调入。页面置换算法有 FIFO、LRU、Clock 时钟算法，内核实际多用近似 LRU 的双链表活跃与非活跃队列。\n\n内存分配：brk 处理小堆块，mmap 处理大块与文件映射。内存泄漏在用户态表现为 RSS 持续增长不回落，容器环境要区分 cgroup OOM 与 JVM 堆 OO"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 5,
+          "score": 0.4876060485839844,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 6,
+          "score": 0.48108935356140137,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 7,
+          "score": 0.47590386867523193,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 8,
+          "score": 0.47440510988235474,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-promotion"
+      ],
+      "firstHitRank": 2,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 179,
+      "generationMs": 0,
+      "totalMs": 179
+    },
+    {
+      "id": "para-05",
+      "split": "dev",
+      "tags": [
+        "同义改写题"
+      ],
+      "question": "消息队列那边消费一直失败，你们最多让它重试几次？超时了咋处理？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "消息队列那边消费一直失败，你们最多让它重试几次？超时了咋处理？",
+      "attemptedQueries": [
+        "消息队列那边消费一直失败，你们最多让它重试几次？超时了咋处理？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 消息消费失败重试策略\n\n根据知识库中的“消息失败处理细则”与“重试的节奏与兜底”章节，消息队列消费失败的处理规则如下：\n\n- **最大重试次数**：消费失败最多重试 **3 次**，以避免无限重试拖垮下游系统。\n- **重试间隔节奏**：重试间隔按 **1 秒、5 秒、30 秒** 阶梯递增。\n\n## 超时与失败后的处理流程\n\n当消息超过重试次数或出现超时情况时，采取以下处理措施：\n\n- **进入死信流**：3 次仍失败的消息不再原地重试，而是进入 **死信流（dead-letter-stream）** 进行人工介入。\n- **死信管理平台**：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。\n- **后续优化机制**：每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于数据问题的写修复脚本。\n- **状态机补偿**：针对超时未完成的订单状态机节点，补偿任务每小时扫描一次，对卡住的节点按状态机定义重放。",
+      "retrievedDocs": [
+        {
+          "contentHash": "95a03321360903d8",
+          "rank": 1,
+          "score": 0.6425149142742157,
+          "excerpt": "订单查询的热点数据放入 Redis 缓存，缓存 key 按用户 ID 分桶，过期时间设置为 30 分钟加 0 到 5 分钟随机偏移，避免同一时刻批量过期造成缓存雪崩。缓存更新策略采用先更新数据库再删除缓存的旁路缓存模式，删除失败时投递到重试队列补偿。\n\n缓存一致性对账：每晚抽样对比缓存与数据库的订单状态，不一致率告警阈值百万分之一，发现后强制失效并复盘根因。上线变更期的 key 结构变化通过版本号"
+        },
+        {
+          "contentHash": "0c7ec4f5a30fd814",
+          "rank": 2,
+          "score": 0.6259365081787109,
+          "excerpt": "最严重的一次故障是营销服务批量发放优惠券导致 Redis 主从切换，切换期间缓存请求超时拖垮了订单查询链路。恢复时长 12 分钟。改进措施有三条：优惠券发放增加平滑限速、查询链路增加缓存降级开关、Redis 集群升级为三主三从并把只读请求路由到从节点。\n\n另一次典型故障是慢 SQL 导致数据库连接池耗尽，根因是运营后台一个未走索引的订单导出查询。改进措施是运营后台查询强制走只读从库，并给导出接口加"
+        },
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 3,
+          "score": 0.6209833025932312,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "2feeef1a43d5b249",
+          "rank": 4,
+          "score": 0.5690472722053528,
+          "excerpt": "案例三：导出接口从超时到稳定。同步导出改异步任务、分片生成、流式写对象存储、进度可查询。大结果集永远不要在请求线程里组装。\n\n案例四：JVM 长停顿治理。大对象直接进老年代触发混合回收失败，调整 Region 大小与大对象阈值，停顿从 800 毫秒降到 80 毫秒。GC 调优必须基于 GC 日志而不是猜。\n\n## 重构案例集\n\n重构一：订单状态机从 if else 到规则引擎。两千行状态流转代码重"
+        },
+        {
+          "contentHash": "12b53aaf52cb52b0",
+          "rank": 5,
+          "score": 0.5676138997077942,
+          "excerpt": "问：你们的 QPS 峰值多少？答：下单峰值 8000 QPS，网关入口 3 万 QPS，压测单实例 1200 QPS 乘实例数留冗余。\n\n问：如果流量再涨十倍怎么办？答：先垂直拆分热点服务，再水平扩容加缓存，最后按业务域再分库，附容量测算过程。\n\n问：项目里踩过最大的坑？答：一次发布引入同步阻塞导致超时的故障，从根因、改进、制度沉淀三层回答。\n\n## 技术方案文档模板与示例\n\n方案文档四段式：背景"
+        },
+        {
+          "contentHash": "d1d528c9d945931d",
+          "rank": 6,
+          "score": 0.5625893473625183,
+          "excerpt": "价格计算引擎：营销价、会员价、拼单价的多规则叠加用责任链计算，规则优先级配置化。价格计算的单元测试覆盖三百多个用例，任何规则变更必须先过用例库再发布。\n\n## 支付与对账\n\n支付网关对接了三个支付渠道，渠道适配层统一抽象为下单、查询、退款、回调四个动作。回调验签失败与金额不一致直接拒绝并告警。渠道接口都有独立的超时与重试配置，重试只对查询类接口开放。\n\n对账体系：每日 T 加一拉取渠道对账单与本地"
+        },
+        {
+          "contentHash": "e7f8254aed3de6be",
+          "rank": 7,
+          "score": 0.5499282777309418,
+          "excerpt": "需求前置时间从十五天压到七天的三个手段：需求小批量拆分、自动化测试替代部分人工回归、环境按需拉起。部署频率从每周一次到每天多次：CI 流水线提速到十分钟内、发布自动化、灰度自动化。\n\n技术效率的度量要小心古德哈特定律：度量是手段不是目标，只对比自己团队的纵向趋势，不搞团队间横向排名。\n\n## 反模式与教训（项目向）\n\n教训一：为了简历好看引入不熟悉的技术，故障时没人能修。选型原则回到团队能力与业务"
+        },
+        {
+          "contentHash": "ad64970c670ddaf6",
+          "rank": 8,
+          "score": 0.5424980521202087,
+          "excerpt": "容量水位：日常水位不超过 40%，大促扩容后峰值水位不超过 60%。水位定义是实际 QPS 除以压测容量。水位报表每周发布，超水位服务限期扩容或优化。\n\n## 数据迁移与双写实战\n\n订单库迁移到新集群的完整步骤：存量迁移用 DTS 全量加增量，迁移期间新旧双写（先新后旧，以旧为准校验），读流量按用户维度灰度切换，全量后观察两周，关闭旧写保留反向同步一周，最后下线。全程三个月，数据校验用全量 che"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-retry-3-para",
+        "pg-dead-letter-para"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 169,
+      "generationMs": 22678,
+      "totalMs": 22857
+    },
+    {
+      "id": "para-06",
+      "split": "dev",
+      "tags": [
+        "同义改写题"
+      ],
+      "question": "像双十一那种量级的单子，你们后端的库是怎么撑住的？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "像双十一那种量级的单子，你们后端的库是怎么撑住的？",
+      "attemptedQueries": [
+        "像双十一那种量级的单子，你们后端的库是怎么撑住的？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 1,
+          "score": 0.6097979545593262,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "295e9ea14755ba47",
+          "rank": 2,
+          "score": 0.6060426831245422,
+          "excerpt": "# 订单中台项目经验复盘（测评专用）\n\n本文档为 RAG 测评人工编写的虚构项目复盘文集，人物、公司与数据均为虚构。GMV 等经营数据由数据团队统一口径统计，不在本文档范围内。\n\n## 项目背景与架构\n\n订单中台项目服务于虚构的电商业务，日均订单量 300 万，大促峰值日订单量 2000 万。整体架构是 Spring Boot 微服务，按领域拆分为订单服务、库存服务、营销服务、支付服务四个核心服务"
+        },
+        {
+          "contentHash": "95a03321360903d8",
+          "rank": 3,
+          "score": 0.6025663316249847,
+          "excerpt": "订单查询的热点数据放入 Redis 缓存，缓存 key 按用户 ID 分桶，过期时间设置为 30 分钟加 0 到 5 分钟随机偏移，避免同一时刻批量过期造成缓存雪崩。缓存更新策略采用先更新数据库再删除缓存的旁路缓存模式，删除失败时投递到重试队列补偿。\n\n缓存一致性对账：每晚抽样对比缓存与数据库的订单状态，不一致率告警阈值百万分之一，发现后强制失效并复盘根因。上线变更期的 key 结构变化通过版本号"
+        },
+        {
+          "contentHash": "b3a3313663255391",
+          "rank": 4,
+          "score": 0.6002877056598663,
+          "excerpt": "逆向对正向的影响：库存回补策略按验货结果决定，验货通过回补可售库存，验货不通过回补残次品库存。售后高峰期的回补积压用独立的低优先级队列处理，不挤占正向下单链路。\n\n## 履约与物流子系统\n\n履约链路：订单拆单按仓与品拆分，仓库接单、拣货、复核、打包、发货五步。电子面单对接五家快递公司，路由推荐按时效与成本加权。物流轨迹靠快递回调加主动轮询双通道，轨迹更新延迟容忍十分钟。\n\n发货超时预警：支付后 4"
+        },
+        {
+          "contentHash": "ad64970c670ddaf6",
+          "rank": 5,
+          "score": 0.5992865562438965,
+          "excerpt": "容量水位：日常水位不超过 40%，大促扩容后峰值水位不超过 60%。水位定义是实际 QPS 除以压测容量。水位报表每周发布，超水位服务限期扩容或优化。\n\n## 数据迁移与双写实战\n\n订单库迁移到新集群的完整步骤：存量迁移用 DTS 全量加增量，迁移期间新旧双写（先新后旧，以旧为准校验），读流量按用户维度灰度切换，全量后观察两周，关闭旧写保留反向同步一周，最后下线。全程三个月，数据校验用全量 che"
+        },
+        {
+          "contentHash": "43f57a0c1ebdb134",
+          "rank": 6,
+          "score": 0.581236869096756,
+          "excerpt": "风控的误杀治理：误杀申诉通道与自动解赔流程，每周复盘误杀 top 规则，规则阈值调整走评审。风控指标的平衡是拦截率与误杀率的联合优化，单看任何一个都会翻车。\n\n## 客服与工单子系统\n\n客服工单系统对接在线客服、电话与 APP 反馈三渠道，工单按类型与优先级分派。知识库辅助回复覆盖 40% 的常见问题。工单 SLA：普通工单 24 小时响应，加急 2 小时，超时自动升级主管。\n\n客服的权限最小化："
+        },
+        {
+          "contentHash": "985f19bfd5dba6eb",
+          "rank": 7,
+          "score": 0.5796433985233307,
+          "excerpt": "周一需求澄清与方案设计，周二方案评审与技术评审，周三到周四编码与联调，周四晚提测，周五测试与修复，周五晚或周一早发布。节奏里最容易被压缩的是方案评审，而线上事故的根因大半能追到方案评审的缺失，宁砍需求不砍评审。\n\n## 附：大促保障总结\n\n三次大促保障的核心数据沉淀：缓存预热的实际压测结果显示缓存命中率达到 96.4%，数据库 QPS 峰值被控制在 8000 以内；下单成功率 99.97%；P99"
+        },
+        {
+          "contentHash": "12b53aaf52cb52b0",
+          "rank": 8,
+          "score": 0.5784416794776917,
+          "excerpt": "问：你们的 QPS 峰值多少？答：下单峰值 8000 QPS，网关入口 3 万 QPS，压测单实例 1200 QPS 乘实例数留冗余。\n\n问：如果流量再涨十倍怎么办？答：先垂直拆分热点服务，再水平扩容加缓存，最后按业务域再分库，附容量测算过程。\n\n问：项目里踩过最大的坑？答：一次发布引入同步阻塞导致超时的故障，从根因、改进、制度沉淀三层回答。\n\n## 技术方案文档模板与示例\n\n方案文档四段式：背景"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-sharding-para"
+      ],
+      "firstHitRank": 2,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 207,
+      "generationMs": 0,
+      "totalMs": 207
+    },
+    {
+      "id": "para-07",
+      "split": "holdout",
+      "tags": [
+        "同义改写题"
+      ],
+      "question": "Spring 事务经常听说不生效，一般都踩在哪些坑上？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "Spring 事务经常听说不生效，一般都踩在哪些坑上？",
+      "attemptedQueries": [
+        "Spring 事务经常听说不生效，一般都踩在哪些坑上？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 1,
+          "score": 0.6339974403381348,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 2,
+          "score": 0.63150754570961,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 3,
+          "score": 0.6076083481311798,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 4,
+          "score": 0.5539165735244751,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 5,
+          "score": 0.5506424307823181,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 6,
+          "score": 0.5382810533046722,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 7,
+          "score": 0.536314070224762,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 8,
+          "score": 0.5358108282089233,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-tx-fail"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 114,
+      "generationMs": 0,
+      "totalMs": 114
+    },
+    {
+      "id": "para-08",
+      "split": "holdout",
+      "tags": [
+        "同义改写题"
+      ],
+      "question": "Redis 分布式锁眼瞅着要过期了业务还没跑完，有什么续命的办法？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "Redis 分布式锁眼瞅着要过期了业务还没跑完，有什么续命的办法？",
+      "attemptedQueries": [
+        "Redis 分布式锁眼瞅着要过期了业务还没跑完，有什么续命的办法？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 1,
+          "score": 0.6436983644962311,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 2,
+          "score": 0.6327350437641144,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 3,
+          "score": 0.6150219142436981,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 4,
+          "score": 0.6063715815544128,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 5,
+          "score": 0.6019481718540192,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 6,
+          "score": 0.5853586792945862,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 7,
+          "score": 0.5486409664154053,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 8,
+          "score": 0.5390224754810333,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-watchdog"
+      ],
+      "firstHitRank": 5,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 162,
+      "generationMs": 0,
+      "totalMs": 163
+    },
+    {
+      "id": "ctx-01",
+      "split": "dev",
+      "tags": [
+        "多轮上下文题"
+      ],
+      "question": "它的默认停顿目标是多少？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "它的默认停顿目标是多少？",
+      "attemptedQueries": [
+        "它的默认停顿目标是多少？"
+      ],
+      "resolvedTopK": 12,
+      "resolvedMinScore": 0.28,
+      "answer": "## G1 回收器默认停顿目标\n\n根据知识库中 **JVM 垃圾回收** 章节的内容，G1 回收器的默认期望停顿目标是 **200 毫秒**。\n\n具体信息如下：\n- G1 回收器把堆划分为多个等大的 Region。\n- 默认期望停顿目标是 200 毫秒。\n- 它是面向服务端的回收器，适合大堆低停顿场景。",
+      "retrievedDocs": [
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 1,
+          "score": 0.5390046238899231,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 2,
+          "score": 0.5305779874324799,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 3,
+          "score": 0.5213716924190521,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "65819b7e026f5e42",
+          "rank": 4,
+          "score": 0.5150075554847717,
+          "excerpt": "CPU 100%：定位进程、定位线程、抓栈找热点。内存泄漏：对比多次堆快照的支配树增长。OOM 杀进程：区分堆内与堆外，检查容器内存限制与 JVM 参数配比。接口突然变慢：先看监控是全量还是局部，检查依赖服务、数据库慢查询、GC 停顿与线程池饱和度。消息堆积：先扩容消费、再查慢消费、必要时跳过可重放消息。缓存命中率暴跌：排查热 key 失效、批量过期与发布变更导致的 key 结构变化。\n\n## 场"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 5,
+          "score": 0.5136321783065796,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 6,
+          "score": 0.5127518177032471,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 7,
+          "score": 0.5094593167304993,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 8,
+          "score": 0.49801403284072876,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 9,
+          "score": 0.4919699430465698,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 10,
+          "score": 0.49034321308135986,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 11,
+          "score": 0.48951804637908936,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 12,
+          "score": 0.4887939691543579,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-g1-pause"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 154,
+      "generationMs": 14113,
+      "totalMs": 14281
+    },
+    {
+      "id": "ctx-02",
+      "split": "dev",
+      "tags": [
+        "多轮上下文题"
+      ],
+      "question": "消费失败最多让它重试几次？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "消费失败最多让它重试几次？",
+      "attemptedQueries": [
+        "消费失败最多让它重试几次？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 消费失败重试次数说明\n\n根据知识库中的“消息失败处理细则”及相关文档描述，消费失败的重试策略如下：\n\n- **最大重试次数**：消费失败最多重试 **3 次**，避免无限重试拖垮下游。\n- **重试间隔节奏**：重试间隔按 **1 秒、5 秒、30 秒** 阶梯递增。\n- **兜底处理机制**：3 次仍失败的消息进入 **死信流（dead-letter-stream）**，转为人工介入处理，不再原地重试。\n\n该规则主要应用于订单履约链路等使用 Redis Stream 的场景，以确保消息处理的可靠性与系统稳定性。",
+      "retrievedDocs": [
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 1,
+          "score": 0.6052489578723907,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "0c7ec4f5a30fd814",
+          "rank": 2,
+          "score": 0.5884374976158142,
+          "excerpt": "最严重的一次故障是营销服务批量发放优惠券导致 Redis 主从切换，切换期间缓存请求超时拖垮了订单查询链路。恢复时长 12 分钟。改进措施有三条：优惠券发放增加平滑限速、查询链路增加缓存降级开关、Redis 集群升级为三主三从并把只读请求路由到从节点。\n\n另一次典型故障是慢 SQL 导致数据库连接池耗尽，根因是运营后台一个未走索引的订单导出查询。改进措施是运营后台查询强制走只读从库，并给导出接口加"
+        },
+        {
+          "contentHash": "95a03321360903d8",
+          "rank": 3,
+          "score": 0.5680122971534729,
+          "excerpt": "订单查询的热点数据放入 Redis 缓存，缓存 key 按用户 ID 分桶，过期时间设置为 30 分钟加 0 到 5 分钟随机偏移，避免同一时刻批量过期造成缓存雪崩。缓存更新策略采用先更新数据库再删除缓存的旁路缓存模式，删除失败时投递到重试队列补偿。\n\n缓存一致性对账：每晚抽样对比缓存与数据库的订单状态，不一致率告警阈值百万分之一，发现后强制失效并复盘根因。上线变更期的 key 结构变化通过版本号"
+        },
+        {
+          "contentHash": "d1d528c9d945931d",
+          "rank": 4,
+          "score": 0.5327883362770081,
+          "excerpt": "价格计算引擎：营销价、会员价、拼单价的多规则叠加用责任链计算，规则优先级配置化。价格计算的单元测试覆盖三百多个用例，任何规则变更必须先过用例库再发布。\n\n## 支付与对账\n\n支付网关对接了三个支付渠道，渠道适配层统一抽象为下单、查询、退款、回调四个动作。回调验签失败与金额不一致直接拒绝并告警。渠道接口都有独立的超时与重试配置，重试只对查询类接口开放。\n\n对账体系：每日 T 加一拉取渠道对账单与本地"
+        },
+        {
+          "contentHash": "2feeef1a43d5b249",
+          "rank": 5,
+          "score": 0.5212205946445465,
+          "excerpt": "案例三：导出接口从超时到稳定。同步导出改异步任务、分片生成、流式写对象存储、进度可查询。大结果集永远不要在请求线程里组装。\n\n案例四：JVM 长停顿治理。大对象直接进老年代触发混合回收失败，调整 Region 大小与大对象阈值，停顿从 800 毫秒降到 80 毫秒。GC 调优必须基于 GC 日志而不是猜。\n\n## 重构案例集\n\n重构一：订单状态机从 if else 到规则引擎。两千行状态流转代码重"
+        },
+        {
+          "contentHash": "12b53aaf52cb52b0",
+          "rank": 6,
+          "score": 0.5054128766059875,
+          "excerpt": "问：你们的 QPS 峰值多少？答：下单峰值 8000 QPS，网关入口 3 万 QPS，压测单实例 1200 QPS 乘实例数留冗余。\n\n问：如果流量再涨十倍怎么办？答：先垂直拆分热点服务，再水平扩容加缓存，最后按业务域再分库，附容量测算过程。\n\n问：项目里踩过最大的坑？答：一次发布引入同步阻塞导致超时的故障，从根因、改进、制度沉淀三层回答。\n\n## 技术方案文档模板与示例\n\n方案文档四段式：背景"
+        },
+        {
+          "contentHash": "b3a3313663255391",
+          "rank": 7,
+          "score": 0.5053296685218811,
+          "excerpt": "逆向对正向的影响：库存回补策略按验货结果决定，验货通过回补可售库存，验货不通过回补残次品库存。售后高峰期的回补积压用独立的低优先级队列处理，不挤占正向下单链路。\n\n## 履约与物流子系统\n\n履约链路：订单拆单按仓与品拆分，仓库接单、拣货、复核、打包、发货五步。电子面单对接五家快递公司，路由推荐按时效与成本加权。物流轨迹靠快递回调加主动轮询双通道，轨迹更新延迟容忍十分钟。\n\n发货超时预警：支付后 4"
+        },
+        {
+          "contentHash": "2d16fdd432458035",
+          "rank": 8,
+          "score": 0.4994111657142639,
+          "excerpt": "推送平台的教训：初期用一张大表存发送明细，写入高峰把从库拖垮，改造为分表加归档后才稳定。所有大表设计必须先想清楚写入峰值、保留周期与归档路径。\n\n## 实时数据看板复盘（虚构项目三）\n\n实时看板项目为大促作战室提供秒级指标：下单量、支付成功率、履约积压、接口错误率。链路是业务埋点进 Kafka，Flink 消费做窗口聚合，结果写 Redis 与 ClickHouse，看板前端长轮询刷新。\n\n技术要"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-retry-3-ctx"
+      ],
+      "firstHitRank": 3,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 193,
+      "generationMs": 17705,
+      "totalMs": 17911
+    },
+    {
+      "id": "ctx-03",
+      "split": "dev",
+      "tags": [
+        "多轮上下文题"
+      ],
+      "question": "那节点变少之后还会退化回去吗？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "那节点变少之后还会退化回去吗？",
+      "attemptedQueries": [
+        "那节点变少之后还会退化回去吗？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 1,
+          "score": 0.5110420882701874,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 2,
+          "score": 0.47059565782546997,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 3,
+          "score": 0.47044849395751953,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 4,
+          "score": 0.4649854302406311,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 5,
+          "score": 0.46458280086517334,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 6,
+          "score": 0.45320969820022583,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 7,
+          "score": 0.4530028700828552,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 8,
+          "score": 0.4497709274291992,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-hm-untree"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 206,
+      "generationMs": 0,
+      "totalMs": 207
+    },
+    {
+      "id": "ctx-04",
+      "split": "dev",
+      "tags": [
+        "多轮上下文题"
+      ],
+      "question": "默认自带那个直接抛异常的策略叫什么名字？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "默认自带那个直接抛异常的策略叫什么名字？",
+      "attemptedQueries": [
+        "默认自带那个直接抛异常的策略叫什么名字？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 1,
+          "score": 0.5740686655044556,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 2,
+          "score": 0.536777913570404,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 3,
+          "score": 0.5320665240287781,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 4,
+          "score": 0.5307808518409729,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 5,
+          "score": 0.5283573567867279,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 6,
+          "score": 0.5123379230499268,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        },
+        {
+          "contentHash": "65819b7e026f5e42",
+          "rank": 7,
+          "score": 0.5109859704971313,
+          "excerpt": "CPU 100%：定位进程、定位线程、抓栈找热点。内存泄漏：对比多次堆快照的支配树增长。OOM 杀进程：区分堆内与堆外，检查容器内存限制与 JVM 参数配比。接口突然变慢：先看监控是全量还是局部，检查依赖服务、数据库慢查询、GC 停顿与线程池饱和度。消息堆积：先扩容消费、再查慢消费、必要时跳过可重放消息。缓存命中率暴跌：排查热 key 失效、批量过期与发布变更导致的 key 结构变化。\n\n## 场"
+        },
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 8,
+          "score": 0.5100188851356506,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-tp-reject-abort"
+      ],
+      "firstHitRank": 8,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 128,
+      "generationMs": 0,
+      "totalMs": 128
+    },
+    {
+      "id": "ctx-05",
+      "split": "dev",
+      "tags": [
+        "多轮上下文题"
+      ],
+      "question": "分片键当时为什么这么选？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "分片键当时为什么这么选？",
+      "attemptedQueries": [
+        "分片键当时为什么这么选？"
+      ],
+      "resolvedTopK": 12,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "0f9a98249acae022",
+          "rank": 1,
+          "score": 0.5649382770061493,
+          "excerpt": "ADR-001 分库分表选型：候选 ShardingSphere 与自研路由层，选前者因为社区活跃且功能覆盖需求，代价是引入中间件的运维成本。ADR-002 消息中间件选型：候选 Kafka 与 Redis Stream，选后者，理由是运维成本与团队熟悉度，风险是吞吐上限，缓解是预留迁移方案。ADR-003 读写分离策略：从库读的延迟不可接受场景用强制主读注解。ADR-004 前后端分离部署：CD"
+        },
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 2,
+          "score": 0.4449313282966614,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "295e9ea14755ba47",
+          "rank": 3,
+          "score": 0.4365572929382324,
+          "excerpt": "# 订单中台项目经验复盘（测评专用）\n\n本文档为 RAG 测评人工编写的虚构项目复盘文集，人物、公司与数据均为虚构。GMV 等经营数据由数据团队统一口径统计，不在本文档范围内。\n\n## 项目背景与架构\n\n订单中台项目服务于虚构的电商业务，日均订单量 300 万，大促峰值日订单量 2000 万。整体架构是 Spring Boot 微服务，按领域拆分为订单服务、库存服务、营销服务、支付服务四个核心服务"
+        },
+        {
+          "contentHash": "0c7ec4f5a30fd814",
+          "rank": 4,
+          "score": 0.43614888191223145,
+          "excerpt": "最严重的一次故障是营销服务批量发放优惠券导致 Redis 主从切换，切换期间缓存请求超时拖垮了订单查询链路。恢复时长 12 分钟。改进措施有三条：优惠券发放增加平滑限速、查询链路增加缓存降级开关、Redis 集群升级为三主三从并把只读请求路由到从节点。\n\n另一次典型故障是慢 SQL 导致数据库连接池耗尽，根因是运营后台一个未走索引的订单导出查询。改进措施是运营后台查询强制走只读从库，并给导出接口加"
+        },
+        {
+          "contentHash": "2d16fdd432458035",
+          "rank": 5,
+          "score": 0.43600398302078247,
+          "excerpt": "推送平台的教训：初期用一张大表存发送明细，写入高峰把从库拖垮，改造为分表加归档后才稳定。所有大表设计必须先想清楚写入峰值、保留周期与归档路径。\n\n## 实时数据看板复盘（虚构项目三）\n\n实时看板项目为大促作战室提供秒级指标：下单量、支付成功率、履约积压、接口错误率。链路是业务埋点进 Kafka，Flink 消费做窗口聚合，结果写 Redis 与 ClickHouse，看板前端长轮询刷新。\n\n技术要"
+        },
+        {
+          "contentHash": "e7f8254aed3de6be",
+          "rank": 6,
+          "score": 0.4343617558479309,
+          "excerpt": "需求前置时间从十五天压到七天的三个手段：需求小批量拆分、自动化测试替代部分人工回归、环境按需拉起。部署频率从每周一次到每天多次：CI 流水线提速到十分钟内、发布自动化、灰度自动化。\n\n技术效率的度量要小心古德哈特定律：度量是手段不是目标，只对比自己团队的纵向趋势，不搞团队间横向排名。\n\n## 反模式与教训（项目向）\n\n教训一：为了简历好看引入不熟悉的技术，故障时没人能修。选型原则回到团队能力与业务"
+        },
+        {
+          "contentHash": "df8bd6d09803e03c",
+          "rank": 7,
+          "score": 0.4332970976829529,
+          "excerpt": "导出治理的最终配置：运营后台的导出任务白天限流到 10 QPS，夜间放宽到 30 QPS；单任务最多十万行，超过十万行的需求走数据平台自助取数；导出文件统一走对象存储加过期清理；导出任务有额度与频次限制防止被当成数据外带通道。\n\n## 附：技术雷达与选型原则\n\n团队技术雷达每季度更新一次，分采用、评估、暂缓、弃用四环。当前采用环：Spring Boot、MyBatis、Redis、Kafka 预研"
+        },
+        {
+          "contentHash": "95a03321360903d8",
+          "rank": 8,
+          "score": 0.4299951195716858,
+          "excerpt": "订单查询的热点数据放入 Redis 缓存，缓存 key 按用户 ID 分桶，过期时间设置为 30 分钟加 0 到 5 分钟随机偏移，避免同一时刻批量过期造成缓存雪崩。缓存更新策略采用先更新数据库再删除缓存的旁路缓存模式，删除失败时投递到重试队列补偿。\n\n缓存一致性对账：每晚抽样对比缓存与数据库的订单状态，不一致率告警阈值百万分之一，发现后强制失效并复盘根因。上线变更期的 key 结构变化通过版本号"
+        },
+        {
+          "contentHash": "43f57a0c1ebdb134",
+          "rank": 9,
+          "score": 0.42994260787963867,
+          "excerpt": "风控的误杀治理：误杀申诉通道与自动解赔流程，每周复盘误杀 top 规则，规则阈值调整走评审。风控指标的平衡是拦截率与误杀率的联合优化，单看任何一个都会翻车。\n\n## 客服与工单子系统\n\n客服工单系统对接在线客服、电话与 APP 反馈三渠道，工单按类型与优先级分派。知识库辅助回复覆盖 40% 的常见问题。工单 SLA：普通工单 24 小时响应，加急 2 小时，超时自动升级主管。\n\n客服的权限最小化："
+        },
+        {
+          "contentHash": "b1307d6f8a19256e",
+          "rank": 10,
+          "score": 0.4289841651916504,
+          "excerpt": "测试分层：单元测试覆盖领域逻辑，集成测试覆盖仓库与服务边界，契约测试锁定跨服务接口，端到端测试只覆盖下单支付主链路的十几个场景。测试环境的数据库用 docker compose 起独立实例，集成测试之间按业务域隔离数据，互不污染。\n\n回归防线：CI 流水线跑单元与集成测试，合入主干前必须有增量覆盖率报告；每日 nightly 跑端到端与性能冒烟；发布前在预发跑冒烟集合。测试失败优先修，不允许跳过测"
+        },
+        {
+          "contentHash": "985f19bfd5dba6eb",
+          "rank": 11,
+          "score": 0.42500096559524536,
+          "excerpt": "周一需求澄清与方案设计，周二方案评审与技术评审，周三到周四编码与联调，周四晚提测，周五测试与修复，周五晚或周一早发布。节奏里最容易被压缩的是方案评审，而线上事故的根因大半能追到方案评审的缺失，宁砍需求不砍评审。\n\n## 附：大促保障总结\n\n三次大促保障的核心数据沉淀：缓存预热的实际压测结果显示缓存命中率达到 96.4%，数据库 QPS 峰值被控制在 8000 以内；下单成功率 99.97%；P99"
+        },
+        {
+          "contentHash": "d1d528c9d945931d",
+          "rank": 12,
+          "score": 0.42288893461227417,
+          "excerpt": "价格计算引擎：营销价、会员价、拼单价的多规则叠加用责任链计算，规则优先级配置化。价格计算的单元测试覆盖三百多个用例，任何规则变更必须先过用例库再发布。\n\n## 支付与对账\n\n支付网关对接了三个支付渠道，渠道适配层统一抽象为下单、查询、退款、回调四个动作。回调验签失败与金额不一致直接拒绝并告警。渠道接口都有独立的超时与重试配置，重试只对查询类接口开放。\n\n对账体系：每日 T 加一拉取渠道对账单与本地"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-shard-key"
+      ],
+      "firstHitRank": 3,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 198,
+      "generationMs": 0,
+      "totalMs": 198
+    },
+    {
+      "id": "ctx-06",
+      "split": "holdout",
+      "tags": [
+        "多轮上下文题"
+      ],
+      "question": "最后压测 P99 到底压到了多少？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "最后压测 P99 到底压到了多少？",
+      "attemptedQueries": [
+        "最后压测 P99 到底压到了多少？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 1,
+          "score": 0.5927566885948181,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "ad64970c670ddaf6",
+          "rank": 2,
+          "score": 0.5219070911407471,
+          "excerpt": "容量水位：日常水位不超过 40%，大促扩容后峰值水位不超过 60%。水位定义是实际 QPS 除以压测容量。水位报表每周发布，超水位服务限期扩容或优化。\n\n## 数据迁移与双写实战\n\n订单库迁移到新集群的完整步骤：存量迁移用 DTS 全量加增量，迁移期间新旧双写（先新后旧，以旧为准校验），读流量按用户维度灰度切换，全量后观察两周，关闭旧写保留反向同步一周，最后下线。全程三个月，数据校验用全量 che"
+        },
+        {
+          "contentHash": "12b53aaf52cb52b0",
+          "rank": 3,
+          "score": 0.4585673213005066,
+          "excerpt": "问：你们的 QPS 峰值多少？答：下单峰值 8000 QPS，网关入口 3 万 QPS，压测单实例 1200 QPS 乘实例数留冗余。\n\n问：如果流量再涨十倍怎么办？答：先垂直拆分热点服务，再水平扩容加缓存，最后按业务域再分库，附容量测算过程。\n\n问：项目里踩过最大的坑？答：一次发布引入同步阻塞导致超时的故障，从根因、改进、制度沉淀三层回答。\n\n## 技术方案文档模板与示例\n\n方案文档四段式：背景"
+        },
+        {
+          "contentHash": "985f19bfd5dba6eb",
+          "rank": 4,
+          "score": 0.44856536388397217,
+          "excerpt": "周一需求澄清与方案设计，周二方案评审与技术评审，周三到周四编码与联调，周四晚提测，周五测试与修复，周五晚或周一早发布。节奏里最容易被压缩的是方案评审，而线上事故的根因大半能追到方案评审的缺失，宁砍需求不砍评审。\n\n## 附：大促保障总结\n\n三次大促保障的核心数据沉淀：缓存预热的实际压测结果显示缓存命中率达到 96.4%，数据库 QPS 峰值被控制在 8000 以内；下单成功率 99.97%；P99"
+        },
+        {
+          "contentHash": "bd4eabbf4e805a00",
+          "rank": 5,
+          "score": 0.4430537223815918,
+          "excerpt": "问：半夜被告警叫醒的第一件事？答：看告警的影响面与分级，P0 先执行预案止损再排查根因，止损优先于定位。问：怎么判断该回滚还是该重启？答：先看最近是否有变更，有变更优先回滚，无变更重启观察并同步排查。问：下游服务挂了怎么办？答：确认熔断器状态，打开降级开关，通知下游值班，评估影响面决定是否公告。问：数据库挂了怎么办？答：确认主从切换是否自动完成，应用层连接池刷新，校验切换后数据一致性，复盘切换耗时"
+        },
+        {
+          "contentHash": "d1d528c9d945931d",
+          "rank": 6,
+          "score": 0.4382782578468323,
+          "excerpt": "价格计算引擎：营销价、会员价、拼单价的多规则叠加用责任链计算，规则优先级配置化。价格计算的单元测试覆盖三百多个用例，任何规则变更必须先过用例库再发布。\n\n## 支付与对账\n\n支付网关对接了三个支付渠道，渠道适配层统一抽象为下单、查询、退款、回调四个动作。回调验签失败与金额不一致直接拒绝并告警。渠道接口都有独立的超时与重试配置，重试只对查询类接口开放。\n\n对账体系：每日 T 加一拉取渠道对账单与本地"
+        },
+        {
+          "contentHash": "2d16fdd432458035",
+          "rank": 7,
+          "score": 0.4331144094467163,
+          "excerpt": "推送平台的教训：初期用一张大表存发送明细，写入高峰把从库拖垮，改造为分表加归档后才稳定。所有大表设计必须先想清楚写入峰值、保留周期与归档路径。\n\n## 实时数据看板复盘（虚构项目三）\n\n实时看板项目为大促作战室提供秒级指标：下单量、支付成功率、履约积压、接口错误率。链路是业务埋点进 Kafka，Flink 消费做窗口聚合，结果写 Redis 与 ClickHouse，看板前端长轮询刷新。\n\n技术要"
+        },
+        {
+          "contentHash": "e7f8254aed3de6be",
+          "rank": 8,
+          "score": 0.42666417360305786,
+          "excerpt": "需求前置时间从十五天压到七天的三个手段：需求小批量拆分、自动化测试替代部分人工回归、环境按需拉起。部署频率从每周一次到每天多次：CI 流水线提速到十分钟内、发布自动化、灰度自动化。\n\n技术效率的度量要小心古德哈特定律：度量是手段不是目标，只对比自己团队的纵向趋势，不搞团队间横向排名。\n\n## 反模式与教训（项目向）\n\n教训一：为了简历好看引入不熟悉的技术，故障时没人能修。选型原则回到团队能力与业务"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-pressure-ctx"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 177,
+      "generationMs": 0,
+      "totalMs": 177
+    },
+    {
+      "id": "chunk-01",
+      "split": "dev",
+      "tags": [
+        "跨段题"
+      ],
+      "question": "订单中台用了哪几条 Redis Stream？消费失败后的完整处理规则是什么？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "订单中台用了哪几条 Redis Stream？消费失败后的完整处理规则是什么？",
+      "attemptedQueries": [
+        "订单中台用了哪几条 Redis Stream？消费失败后的完整处理规则是什么？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## Redis Stream 使用情况\n\n根据知识库内容，订单履约链路使用 Redis Stream 作为消息通道，Stream 按业务领域拆分，具体包含以下三条：\n\n1. `order-stream`\n2. `inventory-stream`\n3. `delivery-stream`\n\n## 消费失败处理规则\n\n消费失败后的完整处理流程遵循以下规则：\n\n1. **重试机制**：消费失败最多重试 3 次，避免无限重试拖垮下游。重试间隔按 1 秒、5 秒、30 秒阶梯递增。\n2. **死信流转**：超过 3 次重试仍失败的消息不再原地重试，进入死信流 `dead-letter-stream` 进行人工介入。\n3. **人工处理**：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。属于代码缺陷的进迭代修复，属于数据问题的写修复脚本。\n4. **异常监控**：消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n5. **幂等保障**：消费者处理前先查幂等表（依靠订单号加业务类型的唯一索引），处理成功后写入处理记录，防止重复消费。",
+      "retrievedDocs": [
+        {
+          "contentHash": "95a03321360903d8",
+          "rank": 1,
+          "score": 0.7394716441631317,
+          "excerpt": "订单查询的热点数据放入 Redis 缓存，缓存 key 按用户 ID 分桶，过期时间设置为 30 分钟加 0 到 5 分钟随机偏移，避免同一时刻批量过期造成缓存雪崩。缓存更新策略采用先更新数据库再删除缓存的旁路缓存模式，删除失败时投递到重试队列补偿。\n\n缓存一致性对账：每晚抽样对比缓存与数据库的订单状态，不一致率告警阈值百万分之一，发现后强制失效并复盘根因。上线变更期的 key 结构变化通过版本号"
+        },
+        {
+          "contentHash": "0c7ec4f5a30fd814",
+          "rank": 2,
+          "score": 0.6866438388824463,
+          "excerpt": "最严重的一次故障是营销服务批量发放优惠券导致 Redis 主从切换，切换期间缓存请求超时拖垮了订单查询链路。恢复时长 12 分钟。改进措施有三条：优惠券发放增加平滑限速、查询链路增加缓存降级开关、Redis 集群升级为三主三从并把只读请求路由到从节点。\n\n另一次典型故障是慢 SQL 导致数据库连接池耗尽，根因是运营后台一个未走索引的订单导出查询。改进措施是运营后台查询强制走只读从库，并给导出接口加"
+        },
+        {
+          "contentHash": "b3a3313663255391",
+          "rank": 3,
+          "score": 0.6384385526180267,
+          "excerpt": "逆向对正向的影响：库存回补策略按验货结果决定，验货通过回补可售库存，验货不通过回补残次品库存。售后高峰期的回补积压用独立的低优先级队列处理，不挤占正向下单链路。\n\n## 履约与物流子系统\n\n履约链路：订单拆单按仓与品拆分，仓库接单、拣货、复核、打包、发货五步。电子面单对接五家快递公司，路由推荐按时效与成本加权。物流轨迹靠快递回调加主动轮询双通道，轨迹更新延迟容忍十分钟。\n\n发货超时预警：支付后 4"
+        },
+        {
+          "contentHash": "43f57a0c1ebdb134",
+          "rank": 4,
+          "score": 0.6327179372310638,
+          "excerpt": "风控的误杀治理：误杀申诉通道与自动解赔流程，每周复盘误杀 top 规则，规则阈值调整走评审。风控指标的平衡是拦截率与误杀率的联合优化，单看任何一个都会翻车。\n\n## 客服与工单子系统\n\n客服工单系统对接在线客服、电话与 APP 反馈三渠道，工单按类型与优先级分派。知识库辅助回复覆盖 40% 的常见问题。工单 SLA：普通工单 24 小时响应，加急 2 小时，超时自动升级主管。\n\n客服的权限最小化："
+        },
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 5,
+          "score": 0.6311525702476501,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "295e9ea14755ba47",
+          "rank": 6,
+          "score": 0.6275260746479034,
+          "excerpt": "# 订单中台项目经验复盘（测评专用）\n\n本文档为 RAG 测评人工编写的虚构项目复盘文集，人物、公司与数据均为虚构。GMV 等经营数据由数据团队统一口径统计，不在本文档范围内。\n\n## 项目背景与架构\n\n订单中台项目服务于虚构的电商业务，日均订单量 300 万，大促峰值日订单量 2000 万。整体架构是 Spring Boot 微服务，按领域拆分为订单服务、库存服务、营销服务、支付服务四个核心服务"
+        },
+        {
+          "contentHash": "d1d528c9d945931d",
+          "rank": 7,
+          "score": 0.5849696695804596,
+          "excerpt": "价格计算引擎：营销价、会员价、拼单价的多规则叠加用责任链计算，规则优先级配置化。价格计算的单元测试覆盖三百多个用例，任何规则变更必须先过用例库再发布。\n\n## 支付与对账\n\n支付网关对接了三个支付渠道，渠道适配层统一抽象为下单、查询、退款、回调四个动作。回调验签失败与金额不一致直接拒绝并告警。渠道接口都有独立的超时与重试配置，重试只对查询类接口开放。\n\n对账体系：每日 T 加一拉取渠道对账单与本地"
+        },
+        {
+          "contentHash": "ad64970c670ddaf6",
+          "rank": 8,
+          "score": 0.5722039341926575,
+          "excerpt": "容量水位：日常水位不超过 40%，大促扩容后峰值水位不超过 60%。水位定义是实际 QPS 除以压测容量。水位报表每周发布，超水位服务限期扩容或优化。\n\n## 数据迁移与双写实战\n\n订单库迁移到新集群的完整步骤：存量迁移用 DTS 全量加增量，迁移期间新旧双写（先新后旧，以旧为准校验），读流量按用户维度灰度切换，全量后观察两周，关闭旧写保留反向同步一周，最后下线。全程三个月，数据校验用全量 che"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-streams",
+        "pg-retry-3",
+        "pg-retry-interval"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 136,
+      "generationMs": 31520,
+      "totalMs": 31670
+    },
+    {
+      "id": "chunk-02",
+      "split": "dev",
+      "tags": [
+        "跨段题"
+      ],
+      "question": "线程池拒绝时 JDK 有哪些内置策略？生产环境更推荐怎么落地？",
+      "shouldReject": false,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "线程池拒绝时 JDK 有哪些内置策略？生产环境更推荐怎么落地？",
+      "attemptedQueries": [
+        "线程池拒绝时 JDK 有哪些内置策略？生产环境更推荐怎么落地？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## JDK 内置拒绝策略\n\n根据知识库内容，线程池任务提交后若触发拒绝策略，JDK 内置的四种策略如下：\n\n- **AbortPolicy**：抛出异常\n- **CallerRunsPolicy**：由提交线程执行\n- **DiscardPolicy**：静默丢弃\n- **DiscardOldestPolicy**：丢弃队首最老任务\n\n## 生产环境落地推荐\n\n在生产环境中，关于拒绝策略的落地与配置有以下具体建议：\n\n- **策略选择**：不建议直接使用默认的 AbortPolicy，生产环境建议使用自定义拒绝策略配合监控告警。\n- **自定义实现要求**：在自定义策略里至少要做三件事，包括记录被拒绝任务上下文、递增监控计数器、按业务决定是降级执行还是快速失败返回。\n- **配置检查项**：线程池上线前的检查项中强调队列必须有界防止 OOM，拒绝策略必须可观测，核心参数必须可配置而不是硬编码。\n- **运行观测**：运行时需关注拒绝次数等指标，队列长度持续超过容量八成就要评估扩容或异步化，避免等到拒绝发生再处理。",
+      "retrievedDocs": [
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 1,
+          "score": 0.6696648299694061,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 2,
+          "score": 0.6655906736850739,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "4bd4cf194f768a2e",
+          "rank": 3,
+          "score": 0.657961905002594,
+          "excerpt": "数据库客户端与建模工具：DataGrip 管多数据源，dbdiagram 画关系图，Flyway 或 Liquibase 管理迁移版本，迁移文件命名 V 版本号 双下划线 描述。接口联调：Swagger 或 SpringDoc 自动生成文档，Postman 集合做回归，Apifox 支持中文与 mock。性能工具：JMeter 图形化压测，Gatling 代码化场景，wrk 轻量快速。终端效率：z"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 4,
+          "score": 0.602791965007782,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 5,
+          "score": 0.6000363826751709,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 6,
+          "score": 0.5922865271568298,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 7,
+          "score": 0.5851105451583862,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 8,
+          "score": 0.5750753581523895,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-tp-reject-chunk",
+        "jg-tp-custom"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 122,
+      "generationMs": 18642,
+      "totalMs": 18775
+    },
+    {
+      "id": "chunk-03",
+      "split": "dev",
+      "tags": [
+        "跨段题"
+      ],
+      "question": "HashMap 的扩容触发条件和树化触发条件分别是什么？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "HashMap 的扩容触发条件和树化触发条件分别是什么？",
+      "attemptedQueries": [
+        "HashMap 的扩容触发条件和树化触发条件分别是什么？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 1,
+          "score": 0.7596258819103241,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 2,
+          "score": 0.5396009385585785,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 3,
+          "score": 0.5235749185085297,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 4,
+          "score": 0.5197362303733826,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "f194bc52f51e9691",
+          "rank": 5,
+          "score": 0.5177022516727448,
+          "excerpt": "问：懒加载的实现？答：代理对象在访问属性时触发附加查询，fetchType 按需配置，注意 N 加一问题用 resultMap 嵌套查询或 join 一次性取。\n\n## 运维部署问答\n\n问：JVM 容器参数怎么配？答：用 -XX:MaxRAMPercentage 按容器内存百分比配置，堆外内存与线程栈预留三成，Java 10 加上 UseContainerSupport 自动感知 cgroup 限"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 6,
+          "score": 0.5149435997009277,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 7,
+          "score": 0.5091771185398102,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 8,
+          "score": 0.5073966681957245,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-hm-capacity-chunk",
+        "jg-hm-tree-chunk"
+      ],
+      "firstHitRank": 3,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 177,
+      "generationMs": 0,
+      "totalMs": 178
+    },
+    {
+      "id": "chunk-04",
+      "split": "dev",
+      "tags": [
+        "跨段题"
+      ],
+      "question": "订单缓存是怎么防止雪崩的？大促预热的实际效果如何？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "订单缓存是怎么防止雪崩的？大促预热的实际效果如何？",
+      "attemptedQueries": [
+        "订单缓存是怎么防止雪崩的？大促预热的实际效果如何？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "95a03321360903d8",
+          "rank": 1,
+          "score": 0.7204076945781708,
+          "excerpt": "订单查询的热点数据放入 Redis 缓存，缓存 key 按用户 ID 分桶，过期时间设置为 30 分钟加 0 到 5 分钟随机偏移，避免同一时刻批量过期造成缓存雪崩。缓存更新策略采用先更新数据库再删除缓存的旁路缓存模式，删除失败时投递到重试队列补偿。\n\n缓存一致性对账：每晚抽样对比缓存与数据库的订单状态，不一致率告警阈值百万分之一，发现后强制失效并复盘根因。上线变更期的 key 结构变化通过版本号"
+        },
+        {
+          "contentHash": "ad64970c670ddaf6",
+          "rank": 2,
+          "score": 0.6321384906768799,
+          "excerpt": "容量水位：日常水位不超过 40%，大促扩容后峰值水位不超过 60%。水位定义是实际 QPS 除以压测容量。水位报表每周发布，超水位服务限期扩容或优化。\n\n## 数据迁移与双写实战\n\n订单库迁移到新集群的完整步骤：存量迁移用 DTS 全量加增量，迁移期间新旧双写（先新后旧，以旧为准校验），读流量按用户维度灰度切换，全量后观察两周，关闭旧写保留反向同步一周，最后下线。全程三个月，数据校验用全量 che"
+        },
+        {
+          "contentHash": "b3a3313663255391",
+          "rank": 3,
+          "score": 0.6277380883693695,
+          "excerpt": "逆向对正向的影响：库存回补策略按验货结果决定，验货通过回补可售库存，验货不通过回补残次品库存。售后高峰期的回补积压用独立的低优先级队列处理，不挤占正向下单链路。\n\n## 履约与物流子系统\n\n履约链路：订单拆单按仓与品拆分，仓库接单、拣货、复核、打包、发货五步。电子面单对接五家快递公司，路由推荐按时效与成本加权。物流轨迹靠快递回调加主动轮询双通道，轨迹更新延迟容忍十分钟。\n\n发货超时预警：支付后 4"
+        },
+        {
+          "contentHash": "0c7ec4f5a30fd814",
+          "rank": 4,
+          "score": 0.6199631094932556,
+          "excerpt": "最严重的一次故障是营销服务批量发放优惠券导致 Redis 主从切换，切换期间缓存请求超时拖垮了订单查询链路。恢复时长 12 分钟。改进措施有三条：优惠券发放增加平滑限速、查询链路增加缓存降级开关、Redis 集群升级为三主三从并把只读请求路由到从节点。\n\n另一次典型故障是慢 SQL 导致数据库连接池耗尽，根因是运营后台一个未走索引的订单导出查询。改进措施是运营后台查询强制走只读从库，并给导出接口加"
+        },
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 5,
+          "score": 0.6198503971099854,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "985f19bfd5dba6eb",
+          "rank": 6,
+          "score": 0.6149930357933044,
+          "excerpt": "周一需求澄清与方案设计，周二方案评审与技术评审，周三到周四编码与联调，周四晚提测，周五测试与修复，周五晚或周一早发布。节奏里最容易被压缩的是方案评审，而线上事故的根因大半能追到方案评审的缺失，宁砍需求不砍评审。\n\n## 附：大促保障总结\n\n三次大促保障的核心数据沉淀：缓存预热的实际压测结果显示缓存命中率达到 96.4%，数据库 QPS 峰值被控制在 8000 以内；下单成功率 99.97%；P99"
+        },
+        {
+          "contentHash": "2d16fdd432458035",
+          "rank": 7,
+          "score": 0.587390273809433,
+          "excerpt": "推送平台的教训：初期用一张大表存发送明细，写入高峰把从库拖垮，改造为分表加归档后才稳定。所有大表设计必须先想清楚写入峰值、保留周期与归档路径。\n\n## 实时数据看板复盘（虚构项目三）\n\n实时看板项目为大促作战室提供秒级指标：下单量、支付成功率、履约积压、接口错误率。链路是业务埋点进 Kafka，Flink 消费做窗口聚合，结果写 Redis 与 ClickHouse，看板前端长轮询刷新。\n\n技术要"
+        },
+        {
+          "contentHash": "295e9ea14755ba47",
+          "rank": 8,
+          "score": 0.579350084066391,
+          "excerpt": "# 订单中台项目经验复盘（测评专用）\n\n本文档为 RAG 测评人工编写的虚构项目复盘文集，人物、公司与数据均为虚构。GMV 等经营数据由数据团队统一口径统计，不在本文档范围内。\n\n## 项目背景与架构\n\n订单中台项目服务于虚构的电商业务，日均订单量 300 万，大促峰值日订单量 2000 万。整体架构是 Spring Boot 微服务，按领域拆分为订单服务、库存服务、营销服务、支付服务四个核心服务"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-cache-expire",
+        "pg-cache-hit"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 155,
+      "generationMs": 0,
+      "totalMs": 156
+    },
+    {
+      "id": "chunk-05",
+      "split": "holdout",
+      "tags": [
+        "跨段题"
+      ],
+      "question": "GC 怎么判断一个对象能被回收？大对象又走哪条分配路径？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "GC 怎么判断一个对象能被回收？大对象又走哪条分配路径？",
+      "attemptedQueries": [
+        "GC 怎么判断一个对象能被回收？大对象又走哪条分配路径？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 1,
+          "score": 0.6342138946056366,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 2,
+          "score": 0.5788441002368927,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 3,
+          "score": 0.5546195805072784,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "59cc90f9dd2746bb",
+          "rank": 4,
+          "score": 0.5168505609035492,
+          "excerpt": "虚拟内存通过页表把虚拟地址映射到物理地址，多级页表节省页表内存，TLB 缓存页表项加速翻译。缺页中断把数据从交换分区调入。页面置换算法有 FIFO、LRU、Clock 时钟算法，内核实际多用近似 LRU 的双链表活跃与非活跃队列。\n\n内存分配：brk 处理小堆块，mmap 处理大块与文件映射。内存泄漏在用户态表现为 RSS 持续增长不回落，容器环境要区分 cgroup OOM 与 JVM 堆 OO"
+        },
+        {
+          "contentHash": "c12d77baa33fcdd1",
+          "rank": 5,
+          "score": 0.5124596357345581,
+          "excerpt": "线上 CPU 飙高的排查路径：top 找到进程，top -Hp 找到线程，printf 转十六进制，jstack 抓栈定位热点方法。磁盘满用 du -sh 逐层定位大目录，df -h 确认挂载。网络连通用 telnet 或 nc 验证端口，tcpdump 抓包分析握手细节，ss -s 查看连接概况。\n\n## 编码与安全基础\n\n密码必须用 BCrypt 这类带盐慢哈希存储，不能用 MD5 或 SHA"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 6,
+          "score": 0.5074195861816406,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        },
+        {
+          "contentHash": "65819b7e026f5e42",
+          "rank": 7,
+          "score": 0.5064988136291504,
+          "excerpt": "CPU 100%：定位进程、定位线程、抓栈找热点。内存泄漏：对比多次堆快照的支配树增长。OOM 杀进程：区分堆内与堆外，检查容器内存限制与 JVM 参数配比。接口突然变慢：先看监控是全量还是局部，检查依赖服务、数据库慢查询、GC 停顿与线程池饱和度。消息堆积：先扩容消费、再查慢消费、必要时跳过可重放消息。缓存命中率暴跌：排查热 key 失效、批量过期与发布变更导致的 key 结构变化。\n\n## 场"
+        },
+        {
+          "contentHash": "23888b39c6fbcf21",
+          "rank": 8,
+          "score": 0.5028317868709564,
+          "excerpt": "对基本类型用双轴快排，对象用 TimSort。TopK 问题用容量为 K 的小顶堆或快速选择算法，海量数据 TopK 用分治加归并。\n\n二分查找的关键是循环不变量与边界：左闭右开写法中 while left < right，mid 比较后收缩。旋转数组、山脉数组、第一个大于等于目标的下标都是二分的变形，时间复杂度都是 O(log n)。\n\n## 算法基础：海量数据题套路\n\n海量数据题的五板斧：哈希"
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "jg-reachability",
+        "jg-big-obj"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 140,
+      "generationMs": 0,
+      "totalMs": 140
+    },
+    {
+      "id": "chunk-06",
+      "split": "holdout",
+      "tags": [
+        "跨段题"
+      ],
+      "question": "数据库连接池那次线上事故的根因是什么？后来做了哪些改进？",
+      "shouldReject": false,
+      "evaluateGeneration": false,
+      "outcome": "RETRIEVED",
+      "rewrittenQuestion": "数据库连接池那次线上事故的根因是什么？后来做了哪些改进？",
+      "attemptedQueries": [
+        "数据库连接池那次线上事故的根因是什么？后来做了哪些改进？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": null,
+      "retrievedDocs": [
+        {
+          "contentHash": "0c7ec4f5a30fd814",
+          "rank": 1,
+          "score": 0.6462942361831665,
+          "excerpt": "最严重的一次故障是营销服务批量发放优惠券导致 Redis 主从切换，切换期间缓存请求超时拖垮了订单查询链路。恢复时长 12 分钟。改进措施有三条：优惠券发放增加平滑限速、查询链路增加缓存降级开关、Redis 集群升级为三主三从并把只读请求路由到从节点。\n\n另一次典型故障是慢 SQL 导致数据库连接池耗尽，根因是运营后台一个未走索引的订单导出查询。改进措施是运营后台查询强制走只读从库，并给导出接口加"
+        },
+        {
+          "contentHash": "7f85f8baa50d61b4",
+          "rank": 2,
+          "score": 0.6210103332996368,
+          "excerpt": "数据库规约：所有表有 created_at 与 updated_at；金额用 bigint 存分；状态字段用 tinyint 加枚举映射；索引命名 idx 前缀加字段；禁止外键约束，关系靠应用层与对账保证；大字段拆分到附表。\n\n接口规约：响应统一包裹 code、data、message；分页用游标；错误码分段管理（业务错误、系统错误、第三方错误）；接口文档与代码同步生成，过期文档直接删除。\n\n##"
+        },
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 3,
+          "score": 0.6151512265205383,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "45cf0f1cfba4e32b",
+          "rank": 4,
+          "score": 0.6081885397434235,
+          "excerpt": "变更是故障的最大来源，团队的变更管理规则：任何生产变更必须有工单，工单包含变更内容、影响面、验证方法、回滚方案四要素。数据库变更与代码变更分开提交，先库后码。配置变更走配置中心灰度，按实例分批生效。\n\n回滚原则：优先回滚而不是在线修复，回滚决策时间超过五分钟视为失败。回滚演练每季度一次，包含数据库回滚脚本验证。发布窗口避开业务高峰与大促冻结期。\n\n## 供应商与开源治理\n\n开源组件引入评审：看社区"
+        },
+        {
+          "contentHash": "2feeef1a43d5b249",
+          "rank": 5,
+          "score": 0.5919605493545532,
+          "excerpt": "案例三：导出接口从超时到稳定。同步导出改异步任务、分片生成、流式写对象存储、进度可查询。大结果集永远不要在请求线程里组装。\n\n案例四：JVM 长停顿治理。大对象直接进老年代触发混合回收失败，调整 Region 大小与大对象阈值，停顿从 800 毫秒降到 80 毫秒。GC 调优必须基于 GC 日志而不是猜。\n\n## 重构案例集\n\n重构一：订单状态机从 if else 到规则引擎。两千行状态流转代码重"
+        },
+        {
+          "contentHash": "95a03321360903d8",
+          "rank": 6,
+          "score": 0.5662424266338348,
+          "excerpt": "订单查询的热点数据放入 Redis 缓存，缓存 key 按用户 ID 分桶，过期时间设置为 30 分钟加 0 到 5 分钟随机偏移，避免同一时刻批量过期造成缓存雪崩。缓存更新策略采用先更新数据库再删除缓存的旁路缓存模式，删除失败时投递到重试队列补偿。\n\n缓存一致性对账：每晚抽样对比缓存与数据库的订单状态，不一致率告警阈值百万分之一，发现后强制失效并复盘根因。上线变更期的 key 结构变化通过版本号"
+        },
+        {
+          "contentHash": "985f19bfd5dba6eb",
+          "rank": 7,
+          "score": 0.5624471306800842,
+          "excerpt": "周一需求澄清与方案设计，周二方案评审与技术评审，周三到周四编码与联调，周四晚提测，周五测试与修复，周五晚或周一早发布。节奏里最容易被压缩的是方案评审，而线上事故的根因大半能追到方案评审的缺失，宁砍需求不砍评审。\n\n## 附：大促保障总结\n\n三次大促保障的核心数据沉淀：缓存预热的实际压测结果显示缓存命中率达到 96.4%，数据库 QPS 峰值被控制在 8000 以内；下单成功率 99.97%；P99"
+        },
+        {
+          "contentHash": "43f57a0c1ebdb134",
+          "rank": 8,
+          "score": 0.5604419410228729,
+          "excerpt": "风控的误杀治理：误杀申诉通道与自动解赔流程，每周复盘误杀 top 规则，规则阈值调整走评审。风控指标的平衡是拦截率与误杀率的联合优化，单看任何一个都会翻车。\n\n## 客服与工单子系统\n\n客服工单系统对接在线客服、电话与 APP 反馈三渠道，工单按类型与优先级分派。知识库辅助回复覆盖 40% 的常见问题。工单 SLA：普通工单 24 小时响应，加急 2 小时，超时自动升级主管。\n\n客服的权限最小化："
+        }
+      ],
+      "hit": true,
+      "hitEvidenceIds": [
+        "pg-slowsql"
+      ],
+      "firstHitRank": 1,
+      "evidenceRecall": 0.5,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 126,
+      "generationMs": 0,
+      "totalMs": 126
+    },
+    {
+      "id": "oos-01",
+      "split": "dev",
+      "tags": [
+        "知识库外题"
+      ],
+      "question": "Kafka 消费者组的 rebalance 流程是怎么触发的？",
+      "shouldReject": true,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "Kafka 消费者组的 rebalance 流程是怎么触发的？",
+      "attemptedQueries": [
+        "Kafka 消费者组的 rebalance 流程是怎么触发的？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 回答\n\n根据提供的知识库内容，无法回答 Kafka 消费者组 rebalance 流程是如何触发的。文档中的“消息队列选型对比（干扰章节）”明确说明：“本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理”，因此该问题超出当前知识库范围。",
+      "retrievedDocs": [
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 1,
+          "score": 0.4734995365142822,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 2,
+          "score": 0.46820294857025146,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 3,
+          "score": 0.46762174367904663,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "f194bc52f51e9691",
+          "rank": 4,
+          "score": 0.45400065183639526,
+          "excerpt": "问：懒加载的实现？答：代理对象在访问属性时触发附加查询，fetchType 按需配置，注意 N 加一问题用 resultMap 嵌套查询或 join 一次性取。\n\n## 运维部署问答\n\n问：JVM 容器参数怎么配？答：用 -XX:MaxRAMPercentage 按容器内存百分比配置，堆外内存与线程栈预留三成，Java 10 加上 UseContainerSupport 自动感知 cgroup 限"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 5,
+          "score": 0.45350635051727295,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 6,
+          "score": 0.4490547776222229,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "65819b7e026f5e42",
+          "rank": 7,
+          "score": 0.4471116065979004,
+          "excerpt": "CPU 100%：定位进程、定位线程、抓栈找热点。内存泄漏：对比多次堆快照的支配树增长。OOM 杀进程：区分堆内与堆外，检查容器内存限制与 JVM 参数配比。接口突然变慢：先看监控是全量还是局部，检查依赖服务、数据库慢查询、GC 停顿与线程池饱和度。消息堆积：先扩容消费、再查慢消费、必要时跳过可重放消息。缓存命中率暴跌：排查热 key 失效、批量过期与发布变更导致的 key 结构变化。\n\n## 场"
+        },
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 8,
+          "score": 0.4370266795158386,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        }
+      ],
+      "hit": false,
+      "hitEvidenceIds": [],
+      "firstHitRank": null,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 331,
+      "generationMs": 25523,
+      "totalMs": 25864
+    },
+    {
+      "id": "oos-02",
+      "split": "dev",
+      "tags": [
+        "知识库外题"
+      ],
+      "question": "RabbitMQ 的镜像队列应该怎么配置？",
+      "shouldReject": true,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "RabbitMQ 的镜像队列应该怎么配置？",
+      "attemptedQueries": [
+        "RabbitMQ 的镜像队列应该怎么配置？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 信息说明\n\n根据提供的知识库内容，**无法回答 RabbitMQ 镜像队列的配置方法**。文档在《消息队列选型对比》章节中明确说明：“本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理”，仅提供了选型结论，未涉及具体配置细节。",
+      "retrievedDocs": [
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 1,
+          "score": 0.5251792967319489,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "4bd4cf194f768a2e",
+          "rank": 2,
+          "score": 0.5108753442764282,
+          "excerpt": "数据库客户端与建模工具：DataGrip 管多数据源，dbdiagram 画关系图，Flyway 或 Liquibase 管理迁移版本，迁移文件命名 V 版本号 双下划线 描述。接口联调：Swagger 或 SpringDoc 自动生成文档，Postman 集合做回归，Apifox 支持中文与 mock。性能工具：JMeter 图形化压测，Gatling 代码化场景，wrk 轻量快速。终端效率：z"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 3,
+          "score": 0.49911123514175415,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 4,
+          "score": 0.4985429048538208,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 5,
+          "score": 0.4855053424835205,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "65819b7e026f5e42",
+          "rank": 6,
+          "score": 0.4836174249649048,
+          "excerpt": "CPU 100%：定位进程、定位线程、抓栈找热点。内存泄漏：对比多次堆快照的支配树增长。OOM 杀进程：区分堆内与堆外，检查容器内存限制与 JVM 参数配比。接口突然变慢：先看监控是全量还是局部，检查依赖服务、数据库慢查询、GC 停顿与线程池饱和度。消息堆积：先扩容消费、再查慢消费、必要时跳过可重放消息。缓存命中率暴跌：排查热 key 失效、批量过期与发布变更导致的 key 结构变化。\n\n## 场"
+        },
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 7,
+          "score": 0.4806499481201172,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 8,
+          "score": 0.4803597927093506,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        }
+      ],
+      "hit": false,
+      "hitEvidenceIds": [],
+      "firstHitRank": null,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 202,
+      "generationMs": 13584,
+      "totalMs": 13799
+    },
+    {
+      "id": "oos-03",
+      "split": "dev",
+      "tags": [
+        "知识库外题"
+      ],
+      "question": "公司 2024 年双十一的整体 GMV 是多少？",
+      "shouldReject": true,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "公司 2024 年双十一的整体 GMV 是多少？",
+      "attemptedQueries": [
+        "公司 2024 年双十一的整体 GMV 是多少？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 2024 年双十一 GMV 数据说明\n\n根据提供的知识库内容，无法查询到公司 2024 年双十一的整体 GMV 数据。文档在《订单中台项目经验复盘（测评专用）》章节中明确标注：**“GMV 等经营数据由数据团队统一口径统计，不在本文档范围内”**，且该项目为虚构项目复盘文集。",
+      "retrievedDocs": [
+        {
+          "contentHash": "12b53aaf52cb52b0",
+          "rank": 1,
+          "score": 0.42632484436035156,
+          "excerpt": "问：你们的 QPS 峰值多少？答：下单峰值 8000 QPS，网关入口 3 万 QPS，压测单实例 1200 QPS 乘实例数留冗余。\n\n问：如果流量再涨十倍怎么办？答：先垂直拆分热点服务，再水平扩容加缓存，最后按业务域再分库，附容量测算过程。\n\n问：项目里踩过最大的坑？答：一次发布引入同步阻塞导致超时的故障，从根因、改进、制度沉淀三层回答。\n\n## 技术方案文档模板与示例\n\n方案文档四段式：背景"
+        },
+        {
+          "contentHash": "ad64970c670ddaf6",
+          "rank": 2,
+          "score": 0.4223909378051758,
+          "excerpt": "容量水位：日常水位不超过 40%，大促扩容后峰值水位不超过 60%。水位定义是实际 QPS 除以压测容量。水位报表每周发布，超水位服务限期扩容或优化。\n\n## 数据迁移与双写实战\n\n订单库迁移到新集群的完整步骤：存量迁移用 DTS 全量加增量，迁移期间新旧双写（先新后旧，以旧为准校验），读流量按用户维度灰度切换，全量后观察两周，关闭旧写保留反向同步一周，最后下线。全程三个月，数据校验用全量 che"
+        },
+        {
+          "contentHash": "295e9ea14755ba47",
+          "rank": 3,
+          "score": 0.4170141816139221,
+          "excerpt": "# 订单中台项目经验复盘（测评专用）\n\n本文档为 RAG 测评人工编写的虚构项目复盘文集，人物、公司与数据均为虚构。GMV 等经营数据由数据团队统一口径统计，不在本文档范围内。\n\n## 项目背景与架构\n\n订单中台项目服务于虚构的电商业务，日均订单量 300 万，大促峰值日订单量 2000 万。整体架构是 Spring Boot 微服务，按领域拆分为订单服务、库存服务、营销服务、支付服务四个核心服务"
+        },
+        {
+          "contentHash": "9d9352cedeec5372",
+          "rank": 4,
+          "score": 0.41193974018096924,
+          "excerpt": "重试的节奏与兜底在故障演练中反复调优：重试间隔按 1 秒、5 秒、30 秒阶梯递增，3 次仍失败的消息进入死信流 dead-letter-stream 人工介入。消息堆积告警阈值设置为 1 万条，触发告警后值班同学先扩容消费者再排查慢消费根因。\n\n死信处理平台：死信流的消息进入管理后台，支持按错误类型分组、批量重放、单条诊断与错误备注。每周复盘死信 top 错误类型，属于代码缺陷的进迭代修复，属于"
+        },
+        {
+          "contentHash": "2feeef1a43d5b249",
+          "rank": 5,
+          "score": 0.4119364023208618,
+          "excerpt": "案例三：导出接口从超时到稳定。同步导出改异步任务、分片生成、流式写对象存储、进度可查询。大结果集永远不要在请求线程里组装。\n\n案例四：JVM 长停顿治理。大对象直接进老年代触发混合回收失败，调整 Region 大小与大对象阈值，停顿从 800 毫秒降到 80 毫秒。GC 调优必须基于 GC 日志而不是猜。\n\n## 重构案例集\n\n重构一：订单状态机从 if else 到规则引擎。两千行状态流转代码重"
+        },
+        {
+          "contentHash": "985f19bfd5dba6eb",
+          "rank": 6,
+          "score": 0.4035976529121399,
+          "excerpt": "周一需求澄清与方案设计，周二方案评审与技术评审，周三到周四编码与联调，周四晚提测，周五测试与修复，周五晚或周一早发布。节奏里最容易被压缩的是方案评审，而线上事故的根因大半能追到方案评审的缺失，宁砍需求不砍评审。\n\n## 附：大促保障总结\n\n三次大促保障的核心数据沉淀：缓存预热的实际压测结果显示缓存命中率达到 96.4%，数据库 QPS 峰值被控制在 8000 以内；下单成功率 99.97%；P99"
+        },
+        {
+          "contentHash": "95a03321360903d8",
+          "rank": 7,
+          "score": 0.40214335918426514,
+          "excerpt": "订单查询的热点数据放入 Redis 缓存，缓存 key 按用户 ID 分桶，过期时间设置为 30 分钟加 0 到 5 分钟随机偏移，避免同一时刻批量过期造成缓存雪崩。缓存更新策略采用先更新数据库再删除缓存的旁路缓存模式，删除失败时投递到重试队列补偿。\n\n缓存一致性对账：每晚抽样对比缓存与数据库的订单状态，不一致率告警阈值百万分之一，发现后强制失效并复盘根因。上线变更期的 key 结构变化通过版本号"
+        },
+        {
+          "contentHash": "df8bd6d09803e03c",
+          "rank": 8,
+          "score": 0.4010509252548218,
+          "excerpt": "导出治理的最终配置：运营后台的导出任务白天限流到 10 QPS，夜间放宽到 30 QPS；单任务最多十万行，超过十万行的需求走数据平台自助取数；导出文件统一走对象存储加过期清理；导出任务有额度与频次限制防止被当成数据外带通道。\n\n## 附：技术雷达与选型原则\n\n团队技术雷达每季度更新一次，分采用、评估、暂缓、弃用四环。当前采用环：Spring Boot、MyBatis、Redis、Kafka 预研"
+        }
+      ],
+      "hit": false,
+      "hitEvidenceIds": [],
+      "firstHitRank": null,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 195,
+      "generationMs": 29928,
+      "totalMs": 30137
+    },
+    {
+      "id": "oos-04",
+      "split": "dev",
+      "tags": [
+        "知识库外题"
+      ],
+      "question": "Netty 的 EventLoop 线程模型是怎么工作的？",
+      "shouldReject": true,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "Netty 的 EventLoop 线程模型是怎么工作的？",
+      "attemptedQueries": [
+        "Netty 的 EventLoop 线程模型是怎么工作的？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 知识检索结果\n\n基于提供的知识库内容，无法提供 Netty 的 EventLoop 线程模型的工作原理。\n\n知识库在“消息队列选型对比（干扰章节）”中明确说明：**Netty 的线程模型**不在本手册范围内，因此没有相关的具体实现细节可供参考。",
+      "retrievedDocs": [
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 1,
+          "score": 0.5496237576007843,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 2,
+          "score": 0.5436641573905945,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        },
+        {
+          "contentHash": "4349b15239d44704",
+          "rank": 3,
+          "score": 0.5424803197383881,
+          "excerpt": "Redis 的 zset 底层是 listpack 加 skiplist 的组合，元素较少时用 listpack，增多后转换为跳表。跳表插入删除只需要修改前后指针，比平衡树实现简单且范围查询友好。\n\n大 key 指单个 key 的 value 过大或集合元素过多，删除大 key 会阻塞主线程，应该用 unlink 异步删除或 scan 分批处理。热 key 指单个 key 访问集中，可以用本地缓存"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 4,
+          "score": 0.5375850200653076,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 5,
+          "score": 0.5339702069759369,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 6,
+          "score": 0.533348798751831,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 7,
+          "score": 0.5332009494304657,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 8,
+          "score": 0.5310114622116089,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        }
+      ],
+      "hit": false,
+      "hitEvidenceIds": [],
+      "firstHitRank": null,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 196,
+      "generationMs": 17393,
+      "totalMs": 17601
+    },
+    {
+      "id": "oos-05",
+      "split": "dev",
+      "tags": [
+        "知识库外题"
+      ],
+      "question": "项目组里张三的手机号和邮箱是多少？",
+      "shouldReject": true,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "项目组里张三的手机号和邮箱是多少？",
+      "attemptedQueries": [
+        "项目组里张三的手机号和邮箱是多少？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 关于张三联系方式的查询结果\n\n根据提供的知识库内容，无法找到项目组中“张三”的手机号和邮箱信息。文档末尾明确说明该复盘文集的人物均为虚构，且文中并未记录任何具体人员的个人联系方式。",
+      "retrievedDocs": [
+        {
+          "contentHash": "985f19bfd5dba6eb",
+          "rank": 1,
+          "score": 0.47706013917922974,
+          "excerpt": "周一需求澄清与方案设计，周二方案评审与技术评审，周三到周四编码与联调，周四晚提测，周五测试与修复，周五晚或周一早发布。节奏里最容易被压缩的是方案评审，而线上事故的根因大半能追到方案评审的缺失，宁砍需求不砍评审。\n\n## 附：大促保障总结\n\n三次大促保障的核心数据沉淀：缓存预热的实际压测结果显示缓存命中率达到 96.4%，数据库 QPS 峰值被控制在 8000 以内；下单成功率 99.97%；P99"
+        },
+        {
+          "contentHash": "d1d528c9d945931d",
+          "rank": 2,
+          "score": 0.46537506580352783,
+          "excerpt": "价格计算引擎：营销价、会员价、拼单价的多规则叠加用责任链计算，规则优先级配置化。价格计算的单元测试覆盖三百多个用例，任何规则变更必须先过用例库再发布。\n\n## 支付与对账\n\n支付网关对接了三个支付渠道，渠道适配层统一抽象为下单、查询、退款、回调四个动作。回调验签失败与金额不一致直接拒绝并告警。渠道接口都有独立的超时与重试配置，重试只对查询类接口开放。\n\n对账体系：每日 T 加一拉取渠道对账单与本地"
+        },
+        {
+          "contentHash": "e7f8254aed3de6be",
+          "rank": 3,
+          "score": 0.4641920328140259,
+          "excerpt": "需求前置时间从十五天压到七天的三个手段：需求小批量拆分、自动化测试替代部分人工回归、环境按需拉起。部署频率从每周一次到每天多次：CI 流水线提速到十分钟内、发布自动化、灰度自动化。\n\n技术效率的度量要小心古德哈特定律：度量是手段不是目标，只对比自己团队的纵向趋势，不搞团队间横向排名。\n\n## 反模式与教训（项目向）\n\n教训一：为了简历好看引入不熟悉的技术，故障时没人能修。选型原则回到团队能力与业务"
+        },
+        {
+          "contentHash": "bd4eabbf4e805a00",
+          "rank": 4,
+          "score": 0.4536503553390503,
+          "excerpt": "问：半夜被告警叫醒的第一件事？答：看告警的影响面与分级，P0 先执行预案止损再排查根因，止损优先于定位。问：怎么判断该回滚还是该重启？答：先看最近是否有变更，有变更优先回滚，无变更重启观察并同步排查。问：下游服务挂了怎么办？答：确认熔断器状态，打开降级开关，通知下游值班，评估影响面决定是否公告。问：数据库挂了怎么办？答：确认主从切换是否自动完成，应用层连接池刷新，校验切换后数据一致性，复盘切换耗时"
+        },
+        {
+          "contentHash": "df8bd6d09803e03c",
+          "rank": 5,
+          "score": 0.453102707862854,
+          "excerpt": "导出治理的最终配置：运营后台的导出任务白天限流到 10 QPS，夜间放宽到 30 QPS；单任务最多十万行，超过十万行的需求走数据平台自助取数；导出文件统一走对象存储加过期清理；导出任务有额度与频次限制防止被当成数据外带通道。\n\n## 附：技术雷达与选型原则\n\n团队技术雷达每季度更新一次，分采用、评估、暂缓、弃用四环。当前采用环：Spring Boot、MyBatis、Redis、Kafka 预研"
+        },
+        {
+          "contentHash": "12b53aaf52cb52b0",
+          "rank": 6,
+          "score": 0.4475345015525818,
+          "excerpt": "问：你们的 QPS 峰值多少？答：下单峰值 8000 QPS，网关入口 3 万 QPS，压测单实例 1200 QPS 乘实例数留冗余。\n\n问：如果流量再涨十倍怎么办？答：先垂直拆分热点服务，再水平扩容加缓存，最后按业务域再分库，附容量测算过程。\n\n问：项目里踩过最大的坑？答：一次发布引入同步阻塞导致超时的故障，从根因、改进、制度沉淀三层回答。\n\n## 技术方案文档模板与示例\n\n方案文档四段式：背景"
+        },
+        {
+          "contentHash": "43f57a0c1ebdb134",
+          "rank": 7,
+          "score": 0.4472915530204773,
+          "excerpt": "风控的误杀治理：误杀申诉通道与自动解赔流程，每周复盘误杀 top 规则，规则阈值调整走评审。风控指标的平衡是拦截率与误杀率的联合优化，单看任何一个都会翻车。\n\n## 客服与工单子系统\n\n客服工单系统对接在线客服、电话与 APP 反馈三渠道，工单按类型与优先级分派。知识库辅助回复覆盖 40% 的常见问题。工单 SLA：普通工单 24 小时响应，加急 2 小时，超时自动升级主管。\n\n客服的权限最小化："
+        },
+        {
+          "contentHash": "295e9ea14755ba47",
+          "rank": 8,
+          "score": 0.4417126774787903,
+          "excerpt": "# 订单中台项目经验复盘（测评专用）\n\n本文档为 RAG 测评人工编写的虚构项目复盘文集，人物、公司与数据均为虚构。GMV 等经营数据由数据团队统一口径统计，不在本文档范围内。\n\n## 项目背景与架构\n\n订单中台项目服务于虚构的电商业务，日均订单量 300 万，大促峰值日订单量 2000 万。整体架构是 Spring Boot 微服务，按领域拆分为订单服务、库存服务、营销服务、支付服务四个核心服务"
+        }
+      ],
+      "hit": false,
+      "hitEvidenceIds": [],
+      "firstHitRank": null,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 205,
+      "generationMs": 16669,
+      "totalMs": 16889
+    },
+    {
+      "id": "oos-06",
+      "split": "dev",
+      "tags": [
+        "知识库外题"
+      ],
+      "question": "Elasticsearch 倒排索引的写入流程讲一下",
+      "shouldReject": true,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "Elasticsearch 倒排索引的写入流程讲一下",
+      "attemptedQueries": [
+        "Elasticsearch 倒排索引的写入流程讲一下"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 知识库信息说明\n\n根据提供的知识库内容，其中**没有包含**关于 Elasticsearch 倒排索引写入流程的具体信息。知识库主要涵盖了 MySQL、Redis、Java 并发编程及常见系统设计等主题，未涉及 Elasticsearch 的索引机制细节。",
+      "retrievedDocs": [
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 1,
+          "score": 0.5647300779819489,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        },
+        {
+          "contentHash": "10c790ee8d90514f",
+          "rank": 2,
+          "score": 0.5461970567703247,
+          "excerpt": "问：读写锁适用什么场景？答：读多写少且读操作耗时，用 ReentrantReadWriteLock 让读并发写互斥；写冲突激烈时用 StampedLock 的乐观读进一步减少开销。\n\n问：线程池提交任务的方法区别？答：execute 无返回值，submit 返回 Future，invokeAll 批量等待，CompletableFuture.supplyAsync 支持回调编排不阻塞调用线程。\n\n"
+        },
+        {
+          "contentHash": "15d939a70f941475",
+          "rank": 3,
+          "score": 0.5384290814399719,
+          "excerpt": "设计 IM 系统：连接层网关集群、消息投递的可靠性与顺序性、离线消息拉取、已读回执扇出控制。设计评论系统：数据模型两级评论、热评论缓存、审核链路异步化。设计 点赞系统：计数与用户关系分开存、批量聚合落库、防刷限频。设计搜索建议：前缀树加热门候选、拼音与纠错扩展。设计文件存储：分片上传断点续传、秒传靠内容哈希、CDN 分发与防盗链。设计开放平台：应用鉴权签名、配额限流、回调重试与幂等、审计日志。\n\n"
+        },
+        {
+          "contentHash": "c12d77baa33fcdd1",
+          "rank": 4,
+          "score": 0.5262022316455841,
+          "excerpt": "线上 CPU 飙高的排查路径：top 找到进程，top -Hp 找到线程，printf 转十六进制，jstack 抓栈定位热点方法。磁盘满用 du -sh 逐层定位大目录，df -h 确认挂载。网络连通用 telnet 或 nc 验证端口，tcpdump 抓包分析握手细节，ss -s 查看连接概况。\n\n## 编码与安全基础\n\n密码必须用 BCrypt 这类带盐慢哈希存储，不能用 MD5 或 SHA"
+        },
+        {
+          "contentHash": "8b22fe81b6330ec7",
+          "rank": 5,
+          "score": 0.5248165428638458,
+          "excerpt": "线程池的线程数配置没有万能公式。CPU 密集型任务建议线程数等于 CPU 核数加一；IO 密集型任务建议线程数为 CPU 核数乘以二，或按 IO 等待比例用公式核数乘以（一加 IO 时间除以 CPU 时间）估算。\n\n## MySQL 索引\n\nInnoDB 的索引组织结构是 B+ 树，数据行本身存储在主键索引的叶子节点上，这种表称为索引组织表。二级索引的叶子节点存储主键值而不是行地址，因此通过二级索"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 6,
+          "score": 0.5206393301486969,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 7,
+          "score": 0.514050155878067,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "23888b39c6fbcf21",
+          "rank": 8,
+          "score": 0.5119721591472626,
+          "excerpt": "对基本类型用双轴快排，对象用 TimSort。TopK 问题用容量为 K 的小顶堆或快速选择算法，海量数据 TopK 用分治加归并。\n\n二分查找的关键是循环不变量与边界：左闭右开写法中 while left < right，mid 比较后收缩。旋转数组、山脉数组、第一个大于等于目标的下标都是二分的变形，时间复杂度都是 O(log n)。\n\n## 算法基础：海量数据题套路\n\n海量数据题的五板斧：哈希"
+        }
+      ],
+      "hit": false,
+      "hitEvidenceIds": [],
+      "firstHitRank": null,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 151,
+      "generationMs": 22985,
+      "totalMs": 23152
+    },
+    {
+      "id": "oos-07",
+      "split": "dev",
+      "tags": [
+        "知识库外题"
+      ],
+      "question": "Go 语言 GMP 调度模型的抢占是怎么实现的？",
+      "shouldReject": true,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "Go 语言 GMP 调度模型的抢占是怎么实现的？",
+      "attemptedQueries": [
+        "Go 语言 GMP 调度模型的抢占是怎么实现的？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 知识缺失说明\n\n\n基于提供的知识库内容，无法回答关于 Go 语言 GMP 调度模型抢占实现的问题。因为在“消息队列选型对比”章节中已明确说明“Go 语言的调度模型均不在本手册范围内”，所以知识库中缺乏相关详细信息。",
+      "retrievedDocs": [
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 1,
+          "score": 0.5391272604465485,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "59cc90f9dd2746bb",
+          "rank": 2,
+          "score": 0.5345496833324432,
+          "excerpt": "虚拟内存通过页表把虚拟地址映射到物理地址，多级页表节省页表内存，TLB 缓存页表项加速翻译。缺页中断把数据从交换分区调入。页面置换算法有 FIFO、LRU、Clock 时钟算法，内核实际多用近似 LRU 的双链表活跃与非活跃队列。\n\n内存分配：brk 处理小堆块，mmap 处理大块与文件映射。内存泄漏在用户态表现为 RSS 持续增长不回落，容器环境要区分 cgroup OOM 与 JVM 堆 OO"
+        },
+        {
+          "contentHash": "25f305579653df28",
+          "rank": 3,
+          "score": 0.5268541872501373,
+          "excerpt": "储：按列组织数据利于分析聚合。LSM 树：写优化_memtable 加 sstable 的存储结构。B+ 树：数据在叶子层的平衡多路搜索树。TimeWheel：时间轮算法实现高效定时任务。\n\n## 反模式警示录\n\n反模式清单：过度设计第一天就上微服务；缓存当数据库不设过期；接口不设分页全量拉取；异常捕获后不记录直接吞掉；日志里打印明文密码与完整报文；上线不灰度直接全量；数据库事务里调外部 HTTP"
+        },
+        {
+          "contentHash": "efd24674836c5815",
+          "rank": 4,
+          "score": 0.5221496522426605,
+          "excerpt": "限流后的熔断与降级：熔断器有三态 closed、open、half-open，失败率超阈值后熔断跳闸，冷却期后半开放行探测请求。Sentinel 和 resilience4j 提供了滑动窗口统计与规则配置的现成实现。\n\n## 消息队列选型对比（干扰章节）\n\n本手册不展开 Kafka、RabbitMQ、RocketMQ 的内部原理，这里只给选型结论：日志流式处理与超高吞吐选 Kafka，传统企业集成"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 5,
+          "score": 0.5219812095165253,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        },
+        {
+          "contentHash": "feff7c8263ed0829",
+          "rank": 6,
+          "score": 0.5191633701324463,
+          "excerpt": "WAL：预写日志，先写日志再改数据页，保证崩溃可恢复。MVCC：多版本并发控制，读不加锁写不阻塞读。WAS/堆外内存：DirectByteBuffer 分配在堆外，避免堆内外拷贝但需要显式释放。零拷贝：sendfile 或 mmap 减少内核态到用户态的数据拷贝。协程：用户态调度的轻量执行单元。布隆过滤器：概率型集合，可能误报不漏报。一致性哈希：环状哈希空间的分片策略。Quorum：多数派读写，W"
+        },
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 7,
+          "score": 0.5180586874485016,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "1dea00856324fc79",
+          "rank": 8,
+          "score": 0.5101582705974579,
+          "excerpt": "5 倍。随机访问 O(1)，中间插入删除 O(n)。LinkedList 底层是双向链表，同时实现了 Deque，可以当队列和栈使用，但随机访问是 O(n)，实际工程中很少用它。\n\nLinkedHashMap 在 HashMap 基础上维护了双向链表维护插入顺序或访问顺序。将 accessOrder 设为 true 并重写 removeEldestEntry 即可实现 LRU 缓存，这是面试高频手"
+        }
+      ],
+      "hit": false,
+      "hitEvidenceIds": [],
+      "firstHitRank": null,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 144,
+      "generationMs": 25048,
+      "totalMs": 25202
+    },
+    {
+      "id": "oos-08",
+      "split": "holdout",
+      "tags": [
+        "知识库外题",
+        "易误召回"
+      ],
+      "question": "CMS 回收器是在 JDK 哪个版本被正式移除的？",
+      "shouldReject": true,
+      "evaluateGeneration": true,
+      "outcome": "ANSWERED",
+      "rewrittenQuestion": "CMS 回收器是在 JDK 哪个版本被正式移除的？",
+      "attemptedQueries": [
+        "CMS 回收器是在 JDK 哪个版本被正式移除的？"
+      ],
+      "resolvedTopK": 8,
+      "resolvedMinScore": 0.28,
+      "answer": "## 回答\n\n根据提供的知识库内容，文档中虽然提到了 JVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代，以及 G1 与 CMS 的区别，但**并未包含**关于 CMS 回收器在 JDK 哪个版本被正式移除的具体信息。\n\n因此，基于当前检索到的资料无法回答该问题。",
+      "retrievedDocs": [
+        {
+          "contentHash": "f8ec6eb11fc6af14",
+          "rank": 1,
+          "score": 0.6093010008335114,
+          "excerpt": "# Java 后端核心知识手册（测评专用）\n\n本文档为 RAG 测评人工编写的虚构知识库，内容与任何真实项目无关。\n\n## JVM 垃圾回收\n\nJVM 垃圾回收器的发展经历了 Serial、Parallel、CMS、G1、ZGC 几代。G1 回收器把堆划分为多个等大的 Region，默认期望停顿目标是 200 毫秒。ZGC 是面向低延迟的回收器，停顿时间不超过 1 毫秒，支持 TB 级堆。\n\n垃圾"
+        },
+        {
+          "contentHash": "dfabf3801d10cbf0",
+          "rank": 2,
+          "score": 0.5136309564113617,
+          "excerpt": "加 get 组合。第 13 题讲日期时间 API：LocalDateTime 无时区、ZonedDateTime 带时区、Instant 是时间戳，格式化用 DateTimeFormatter 线程安全。第 14 题讲 BigDecimal 的坑：构造用字符串，比较用 compareTo，等值判断 scale 敏感。第 15 题讲序列化的风险：反序列化漏洞、版本兼容，优先 JSON 或 proto"
+        },
+        {
+          "contentHash": "65520d9532b30e58",
+          "rank": 3,
+          "score": 0.48768115043640137,
+          "excerpt": "ThreadLocal 为每个线程维护独立的变量副本，底层是 Thread 对象里的 ThreadLocalMap，key 是 ThreadLocal 的弱引用，value 是强引用。如果线程池线程长期存活且忘记调用 remove，value 无法回收就会内存泄漏。父线程的 ThreadLocal 值传递给子线程需要 InheritableThreadLocal 或阿里开源的 Transmitta"
+        },
+        {
+          "contentHash": "47d948a5b1565e5b",
+          "rank": 4,
+          "score": 0.48653078079223633,
+          "excerpt": "TCP 三次握手的目的是同步双方初始序列号并确认彼此收发能力。TIME_WAIT 状态持续两倍最大报文段寿命，即 2MSL，目的是确保最后一个 ACK 能到达对端并让旧报文在网络中消亡。\n\nHTTP/2 相比 HTTP/1.1 的核心改进是二进制分帧、多路复用、头部压缩 HPACK 和服务器推送。多路复用解决了 HTTP/1.1 队头阻塞在连接层面的问题，但 TCP 层的队头阻塞仍然存在，直到 H"
+        },
+        {
+          "contentHash": "e66defe3fa599996",
+          "rank": 5,
+          "score": 0.48602092266082764,
+          "excerpt": "Feed 流的两种模式：推模式把内容写入每个粉丝收件箱，读快写放大；拉模式读时聚合，写轻读重。大 V 场景用推拉结合，普通用户推送、大 V 拉取。收件箱用 Redis list 或 zset 存储，滚动翻页用游标。排行榜用 zset 的 zadd zincrby zrevrange，同分按时间戳排序可以把 score 设计成分数乘以大常数加时间差。\n\n## 系统设计：签到与积分\n\n签到用 Redi"
+        },
+        {
+          "contentHash": "8d88fe064f990a46",
+          "rank": 6,
+          "score": 0.485539972782135,
+          "excerpt": "并清标志，捕获后要恢复中断或终止。第 30 题讲 Structured Concurrency：结构化并发把子任务生命周期绑定作用域，JDK 21 预览，虚拟线程的最佳搭档。\n\n## 面试软技能问答\n\n自我介绍的框架：我是谁、我做过什么、亮点数字、与岗位的匹配点，九十秒内讲完。项目介绍的 STAR 结构：背景任务行动结果，结果必须有数字。被问到不会的问题：坦诚边界加推理路径，比硬编好。反问环节问团"
+        },
+        {
+          "contentHash": "85ed224707e9cee5",
+          "rank": 7,
+          "score": 0.4830564856529236,
+          "excerpt": "HashMap 树化的完整条件必须同时满足两个阈值：当链表长度超过 8 且数组容量达到 64 时，链表转换为红黑树；只满足链表长度而容量不足时优先扩容而不是树化。树化后退化的条件是红黑树节点数收缩到 6 时退化回链表，两个阈值差用于抑制在边界附近反复转换的抖动。\n\n集合选型的实践建议：默认 ArrayList 与 HashMap，需要有序用 LinkedHashMap，需要排序用 TreeMap "
+        },
+        {
+          "contentHash": "c50e078f9e83d382",
+          "rank": 8,
+          "score": 0.47585994005203247,
+          "excerpt": "问：持久化怎么选？答：纯缓存可关持久化；允许分钟级丢失用 RDB；要求秒级安全开 AOF everysec；4.0 之后混合持久化兼顾恢复速度与数据安全。\n\n问：缓存预热与降级？答：预热是上线前把热点 key 提前写入；降级是故障时绕过缓存直接读库或返回默认值，降级开关要放配置中心。\n\n## 高频问题速查：框架篇\n\n问：Spring Bean 默认单例有并发问题吗？答：有，单例 bean 的可变成"
+        }
+      ],
+      "hit": false,
+      "hitEvidenceIds": [],
+      "firstHitRank": null,
+      "evidenceRecall": 1.0,
+      "predictedReject": false,
+      "rewriteMs": 0,
+      "retrievalMs": 125,
+      "generationMs": 15368,
+      "totalMs": 15505
+    }
+  ],
+  "datasetVersion": "rag-eval/dataset-v1.jsonl",
+  "datasetSize": 40
+}
