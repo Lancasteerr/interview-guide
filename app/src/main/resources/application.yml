@@ -169,8 +169,14 @@ app:
       rewrite:
         enabled: ${APP_AI_RAG_REWRITE_ENABLED:true}
       search:
-        # 双路召回融合（改写 Query + 原始 Query），测评证明收益前默认关闭
+        # 双路召回融合（改写 Query 与原始 Query），测评证明收益前默认关闭
         merge-original-query: ${APP_AI_RAG_MERGE_ORIGINAL_QUERY:false}
+        short-query-length: ${APP_AI_RAG_SHORT_QUERY_LENGTH:4}
+        topk-short: ${APP_AI_RAG_TOPK_SHORT:20}
+        topk-medium: ${APP_AI_RAG_TOPK_MEDIUM:12}
+        topk-long: ${APP_AI_RAG_TOPK_LONG:8}
+        min-score-short: ${APP_AI_RAG_MIN_SCORE_SHORT:0.18}
+        min-score-default: ${APP_AI_RAG_MIN_SCORE_DEFAULT:0.28}
       # 向量化 Chunk 策略（仅 Spring AI 2.0 原生参数，无 overlap；调整后需重新向量化）
       vectorization:
         splitter: ${APP_AI_RAG_VECTORIZATION_SPLITTER:token}
@@ -180,12 +186,6 @@ app:
         max-num-chunks: ${APP_AI_RAG_VECTORIZATION_MAX_NUM_CHUNKS:10000}
         keep-separator: ${APP_AI_RAG_VECTORIZATION_KEEP_SEPARATOR:true}
         strategy-version: ${APP_AI_RAG_VECTORIZATION_STRATEGY_VERSION:token-v1}
-        short-query-length: ${APP_AI_RAG_SHORT_QUERY_LENGTH:4}
-        topk-short: ${APP_AI_RAG_TOPK_SHORT:20}
-        topk-medium: ${APP_AI_RAG_TOPK_MEDIUM:12}
-        topk-long: ${APP_AI_RAG_TOPK_LONG:8}
-        min-score-short: ${APP_AI_RAG_MIN_SCORE_SHORT:0.18}
-        min-score-default: ${APP_AI_RAG_MIN_SCORE_DEFAULT:0.28}
 
   interview:
     follow-up-count: ${APP_INTERVIEW_FOLLOW_UP_COUNT:1}
