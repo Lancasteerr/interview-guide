@@ -3,6 +3,7 @@ package interview.guide.modules.knowledgebase.service;
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.PromptSecurityConstants;
 import interview.guide.common.log.ErrorLogSanitizer;
+import interview.guide.modules.knowledgebase.metrics.RagMetrics;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.modules.knowledgebase.model.QueryRequest;
@@ -43,6 +44,7 @@ public class KnowledgeBaseQueryService {
     private static final int MAX_REWRITE_HISTORY_CHAR = 200;
 
     private final LlmProviderRegistry llmProviderRegistry;
+    private final RagMetrics ragMetrics;
     private final KnowledgeBaseVectorService vectorService;
     private final KnowledgeBaseListService listService;
     private final KnowledgeBaseCountService countService;
@@ -60,12 +62,14 @@ public class KnowledgeBaseQueryService {
 
     public KnowledgeBaseQueryService(
             LlmProviderRegistry llmProviderRegistry,
+            RagMetrics ragMetrics,
             KnowledgeBaseVectorService vectorService,
             KnowledgeBaseListService listService,
             KnowledgeBaseCountService countService,
             KnowledgeBaseQueryProperties queryProperties,
             ResourceLoader resourceLoader) throws IOException {
         this.llmProviderRegistry = llmProviderRegistry;
+        this.ragMetrics = ragMetrics;
         this.vectorService = vectorService;
         this.listService = listService;
         this.countService = countService;
@@ -114,18 +118,29 @@ public class KnowledgeBaseQueryService {
      * @return AI回答
      */
     public String answerQuestion(List<Long> knowledgeBaseIds, String question) {
+        long totalStart = System.nanoTime();
         String normalized = normalizeQuestion(question);
         log.info("收到知识库提问: kbIds={}, questionLength={}", knowledgeBaseIds, normalized.length());
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalized.isBlank()) {
+            ragMetrics.recordRequest("sync", "reject");
+            ragMetrics.recordRefusal("invalid_request");
+            ragMetrics.recordStageDuration("total", "reject", System.nanoTime() - totalStart);
             return NO_RESULT_RESPONSE;
         }
 
         countService.updateQuestionCounts(knowledgeBaseIds);
 
         QueryContext queryContext = buildQueryContext(question, List.of());
+        long retrievalStart = System.nanoTime();
         List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
+        long retrievalNanos = System.nanoTime() - retrievalStart;
 
         if (!hasEffectiveHit(relevantDocs)) {
+            ragMetrics.recordRequest("sync", "reject");
+            ragMetrics.recordRefusal("no_hit");
+            ragMetrics.recordStageDuration("rewrite", "reject", queryContext.rewriteDurationMs() * 1_000_000L);
+            ragMetrics.recordStageDuration("retrieve", "reject", retrievalNanos);
+            ragMetrics.recordStageDuration("total", "reject", System.nanoTime() - totalStart);
             return NO_RESULT_RESPONSE;
         }
 
@@ -137,18 +152,36 @@ public class KnowledgeBaseQueryService {
         String userPrompt = buildUserPrompt(context, question);
 
         try {
+            long generationStart = System.nanoTime();
             String answer = getChatClient().prompt()
                     .system(systemPrompt)
                     .user(userPrompt)
                     .call()
                     .content();
             answer = normalizeAnswer(answer);
+            long generationNanos = System.nanoTime() - generationStart;
+
+            boolean rejected = NO_RESULT_RESPONSE.equals(answer);
+            ragMetrics.recordRequest("sync", rejected ? "reject" : "success");
+            if (rejected) {
+                ragMetrics.recordRefusal("no_hit");
+            }
+            ragMetrics.recordStageDuration("rewrite", rejected ? "reject" : "success",
+                queryContext.rewriteDurationMs() * 1_000_000L);
+            ragMetrics.recordStageDuration("retrieve", rejected ? "reject" : "success", retrievalNanos);
+            ragMetrics.recordStageDuration("generate", rejected ? "reject" : "success", generationNanos);
+            ragMetrics.recordStageDuration("total", rejected ? "reject" : "success",
+                System.nanoTime() - totalStart);
 
             log.info("知识库问答完成: kbIds={}", knowledgeBaseIds);
             return answer;
 
         } catch (Exception e) {
             log.error("知识库问答失败: {}", ErrorLogSanitizer.summarize(e), e);
+            ragMetrics.recordRequest("sync", "error");
+            ragMetrics.recordStageDuration("rewrite", "error", queryContext.rewriteDurationMs() * 1_000_000L);
+            ragMetrics.recordStageDuration("retrieve", "error", retrievalNanos);
+            ragMetrics.recordStageDuration("total", "error", System.nanoTime() - totalStart);
             throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_QUERY_FAILED, "知识库查询失败：" + e.getMessage());
         }
     }
@@ -218,10 +251,16 @@ public class KnowledgeBaseQueryService {
      */
     public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history,
                                              java.util.function.Consumer<RagQueryExecution> trace) {
+        long totalStart = System.nanoTime();
         String normalized = normalizeQuestion(question);
         log.info("收到知识库流式提问: kbIds={}, questionLength={}, historySize={}", knowledgeBaseIds,
                 normalized.length(), history != null ? history.size() : 0);
+        // 一次请求只允许记录一次结果：error 路径（含 onErrorResume 吞异常后的 Flux.just）先落，complete 检查后跳过
+        java.util.concurrent.atomic.AtomicBoolean resultRecorded = new java.util.concurrent.atomic.AtomicBoolean(false);
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalized.isBlank()) {
+            ragMetrics.recordRequest("stream", "reject");
+            ragMetrics.recordRefusal("invalid_request");
+            ragMetrics.recordStageDuration("total", "reject", System.nanoTime() - totalStart);
             return Flux.just(NO_RESULT_RESPONSE);
         }
 
@@ -240,6 +279,12 @@ public class KnowledgeBaseQueryService {
             if (!hasEffectiveHit(relevantDocs)) {
                 emitTrace(trace, question, queryContext, attemptedQueries, relevantDocs,
                     rewriteAndRetrievalMs, 0, NO_RESULT_RESPONSE, "NO_RESULT");
+                ragMetrics.recordRequest("stream", "reject");
+                ragMetrics.recordRefusal("no_hit");
+                ragMetrics.recordStageDuration("rewrite", "reject", queryContext.rewriteDurationMs() * 1_000_000L);
+                ragMetrics.recordStageDuration("retrieve", "reject",
+                    Math.max(0, rewriteAndRetrievalMs - queryContext.rewriteDurationMs()) * 1_000_000L);
+                ragMetrics.recordStageDuration("total", "reject", System.nanoTime() - totalStart);
                 return Flux.just(NO_RESULT_RESPONSE);
             }
 
@@ -270,23 +315,54 @@ public class KnowledgeBaseQueryService {
             return normalizeStreamOutput(responseFlux)
                 .doOnNext(collectedAnswer::append)
                 .doOnComplete(() -> {
-                    long generationMs = (System.nanoTime() - generationStart) / 1_000_000;
+                    // error 已记录（onErrorResume 转 Flux.just 后仍会走到 complete）时跳过
+                    if (!resultRecorded.compareAndSet(false, true)) {
+                        return;
+                    }
+                    long generationNanos = System.nanoTime() - generationStart;
                     boolean rejected = NO_RESULT_RESPONSE.equals(collectedAnswer.toString());
+                    String result = rejected ? "reject" : "success";
+                    ragMetrics.recordRequest("stream", result);
+                    if (rejected) {
+                        ragMetrics.recordRefusal("no_hit");
+                    }
+                    ragMetrics.recordStageDuration("rewrite", result, queryContext.rewriteDurationMs() * 1_000_000L);
+                    ragMetrics.recordStageDuration("retrieve", result,
+                        Math.max(0, rewriteAndRetrievalMs - queryContext.rewriteDurationMs()) * 1_000_000L);
+                    ragMetrics.recordStageDuration("generate", result, generationNanos);
+                    ragMetrics.recordStageDuration("total", result, System.nanoTime() - totalStart);
                     emitTrace(trace, question, queryContext, attemptedQueries, relevantDocs,
-                        rewriteAndRetrievalMs, generationMs, collectedAnswer.toString(),
+                        rewriteAndRetrievalMs, generationNanos / 1_000_000, collectedAnswer.toString(),
                         rejected ? "NO_RESULT" : "ANSWERED");
                     log.info("流式输出完成: kbIds={}", knowledgeBaseIds);
                 })
                 .onErrorResume(e -> {
                     log.error("流式输出失败: kbIds={}, error={}", knowledgeBaseIds, ErrorLogSanitizer.summarize(e), e);
+                    if (resultRecorded.compareAndSet(false, true)) {
+                        ragMetrics.recordRequest("stream", "error");
+                        ragMetrics.recordStageDuration("generate", "error", System.nanoTime() - generationStart);
+                        ragMetrics.recordStageDuration("total", "error", System.nanoTime() - totalStart);
+                    }
                     emitTrace(trace, question, queryContext, attemptedQueries, List.of(),
                         rewriteAndRetrievalMs, (System.nanoTime() - generationStart) / 1_000_000,
                         "【错误】知识库查询失败", "ERROR");
                     return Flux.just("【错误】知识库查询失败：AI服务暂时不可用，请稍后重试。");
+                })
+                .doOnCancel(() -> {
+                    if (resultRecorded.compareAndSet(false, true)) {
+                        ragMetrics.recordRequest("stream", "cancel");
+                        ragMetrics.recordStageDuration("generate", "cancel", System.nanoTime() - generationStart);
+                        ragMetrics.recordStageDuration("total", "cancel", System.nanoTime() - totalStart);
+                    }
                 });
 
         } catch (Exception e) {
             log.error("知识库流式问答失败: {}", ErrorLogSanitizer.summarize(e), e);
+            // 外层 catch 返回的错误文案同样记为 error，不是 success
+            if (resultRecorded.compareAndSet(false, true)) {
+                ragMetrics.recordRequest("stream", "error");
+                ragMetrics.recordStageDuration("total", "error", System.nanoTime() - totalStart);
+            }
             emitTrace(trace, normalizeQuestion(question), null, List.of(),
                 List.of(), 0, 0, "【错误】知识库查询失败", "ERROR");
             return Flux.just("【错误】知识库查询失败：" + e.getMessage());
@@ -355,6 +431,10 @@ public class KnowledgeBaseQueryService {
         List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds, attemptedQueries);
         long elapsedMs = (System.nanoTime() - start) / 1_000_000;
         boolean hit = hasEffectiveHit(relevantDocs);
+        String stageResult = hit ? "success" : "reject";
+        ragMetrics.recordStageDuration("rewrite", stageResult, queryContext.rewriteDurationMs() * 1_000_000L);
+        ragMetrics.recordStageDuration("retrieve", stageResult,
+            Math.max(0, elapsedMs - queryContext.rewriteDurationMs()) * 1_000_000L);
         return new RagQueryExecution(
             normalized,
             queryContext.candidateQueries().getFirst(),
@@ -429,6 +509,7 @@ public class KnowledgeBaseQueryService {
                 knowledgeBaseIds.size(), candidateQuery.length(),
                 i == 0 ? "rewritten" : "original", docs.size(), durationMs);
             if (hasEffectiveHit(docs)) {
+                ragMetrics.recordRetrievalHits("single", docs.size());
                 return docs;
             }
         }
@@ -471,6 +552,9 @@ public class KnowledgeBaseQueryService {
             .collect(Collectors.toList());
         log.info("RAG 双路融合完成: kbCount={}, rewrittenHits={}, originalHits={}, dedupedHits={}, finalHits={}, topK={}",
             knowledgeBaseIds.size(), rewrittenHits, originalHits, merged.size(), result.size(), topK);
+        ragMetrics.recordRetrievalHits("rewritten", rewrittenHits);
+        ragMetrics.recordRetrievalHits("original", originalHits);
+        ragMetrics.recordRetrievalHits("merged", result.size());
         return result;
     }
 
@@ -517,7 +601,12 @@ public class KnowledgeBaseQueryService {
 
 //    改写
     private String rewriteQuestion(String question, List<Message> history) {
-        if (!rewriteEnabled || question.isBlank()) {
+        if (!rewriteEnabled) {
+            ragMetrics.recordRewriteFallback("disabled");
+            return question;
+        }
+        if (question.isBlank()) {
+            ragMetrics.recordRewriteFallback("blank");
             return question;
         }
         try {
@@ -533,10 +622,14 @@ public class KnowledgeBaseQueryService {
                 return question;
             }
             String normalized = rewritten.trim();
+            if (normalized.equals(question)) {
+                ragMetrics.recordRewriteFallback("unchanged");
+            }
             log.info("Query rewrite 完成: originLength={}, rewrittenLength={}, changed={}, historySize={}",
                 question.length(), normalized.length(), !normalized.equals(question), history.size());
             return normalized;
         } catch (Exception e) {
+            ragMetrics.recordRewriteFallback("error");
             log.warn("Query rewrite 失败，使用原问题继续检索: {}", ErrorLogSanitizer.summarize(e), e);
             return question;
         }

@@ -9,6 +9,10 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "app.ai.rag")
 public class KnowledgeBaseQueryProperties {
 
+    /**
+     * RAG 业务指标开关（app.rag.* Micrometer 指标），默认开启。
+     */
+    private boolean metricsEnabled = true;
     private Rewrite rewrite = new Rewrite();
     private Search search = new Search();
     private History history = new History();

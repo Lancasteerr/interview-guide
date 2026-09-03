@@ -1,6 +1,8 @@
 package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
+import interview.guide.modules.knowledgebase.metrics.RagMetrics;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -31,7 +33,9 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -42,6 +46,8 @@ class KnowledgeBaseQueryServiceTest {
 
   @Mock
   private LlmProviderRegistry llmProviderRegistry;
+  @Mock
+  private RagMetrics ragMetrics;
   @Mock
   private KnowledgeBaseVectorService vectorService;
   @Mock
@@ -66,6 +72,7 @@ class KnowledgeBaseQueryServiceTest {
     properties.getRewrite().setEnabled(rewriteEnabled);
     return new KnowledgeBaseQueryService(
         llmProviderRegistry,
+        ragMetrics,
         vectorService,
         listService,
         countService,
@@ -148,6 +155,192 @@ class KnowledgeBaseQueryServiceTest {
   }
 
   @Nested
+  @DisplayName("业务指标埋点")
+  class MetricsInstrumentation {
+
+    private SimpleMeterRegistry meterRegistry;
+
+    private KnowledgeBaseQueryService buildMetricsService() throws Exception {
+      meterRegistry = new SimpleMeterRegistry();
+      @SuppressWarnings("unchecked")
+      org.springframework.beans.factory.ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider =
+          mock(org.springframework.beans.factory.ObjectProvider.class);
+      when(provider.getIfAvailable()).thenReturn(meterRegistry);
+      KnowledgeBaseQueryProperties properties = new KnowledgeBaseQueryProperties();
+      properties.setMetricsEnabled(true);
+      RagMetrics ragMetrics = new RagMetrics(provider, properties);
+      return new KnowledgeBaseQueryService(llmProviderRegistry, ragMetrics, vectorService, listService,
+          countService, properties, resourceLoader);
+    }
+
+    @Test
+    @DisplayName("同步成功：requests(success) 恰好一次，含全阶段 Timer")
+    void syncSuccessRecordsOnce() throws Exception {
+      service = buildMetricsService();
+      mockPlainClient();
+      stubDocuments();
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).call().content())
+          .thenReturn("同步回答");
+
+      service.answerQuestion(List.of(1L), "什么是 Java 内存模型");
+
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().count()).isEqualTo(1.0);
+      meterRegistry.get(RagMetrics.REQUESTS).counter();
+      assertThat(meterRegistry.get(RagMetrics.STAGE_DURATION).timers())
+          .extracting(t -> t.getId().getTag("stage"))
+          .contains("rewrite", "retrieve", "generate", "total");
+    }
+
+    @Test
+    @DisplayName("同步无效请求：reject + refusal(invalid_request) 只记一次")
+    void syncInvalidRequestRecordsReject() throws Exception {
+      service = buildMetricsService();
+
+      service.answerQuestion(List.of(1L), "   ");
+
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().count()).isEqualTo(1.0);
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().getId().getTag("result")).isEqualTo("reject");
+      assertThat(meterRegistry.get(RagMetrics.REFUSALS).counter().count()).isEqualTo(1.0);
+      assertThat(meterRegistry.get(RagMetrics.REFUSALS).counter().getId().getTag("reason"))
+          .isEqualTo("invalid_request");
+    }
+
+    @Test
+    @DisplayName("同步无命中：reject + refusal(no_hit)")
+    void syncNoHitRecordsReject() throws Exception {
+      service = buildMetricsService();
+      mockPlainClient();
+      when(vectorService.similaritySearch(anyString(), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of());
+
+      service.answerQuestion(List.of(1L), "什么是 Java 内存模型");
+
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().getId().getTag("result").equals("reject"))
+          .isTrue();
+      assertThat(meterRegistry.get(RagMetrics.REFUSALS).counter().getId().getTag("reason").equals("no_hit"))
+          .isTrue();
+    }
+
+    @Test
+    @DisplayName("同步异常：error 只记一次且不记 refusals")
+    void syncErrorRecordsOnce() throws Exception {
+      service = buildMetricsService();
+      mockPlainClient();
+      stubDocuments();
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).call().content())
+          .thenThrow(new IllegalStateException("llm down"));
+
+      assertThatThrownBy(() -> service.answerQuestion(List.of(1L), "什么是 Java 内存模型"))
+          .isInstanceOf(interview.guide.common.exception.BusinessException.class);
+
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().count()).isEqualTo(1.0);
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().getId().getTag("result")).isEqualTo("error");
+      assertThat(meterRegistry.find(RagMetrics.REFUSALS).counter()).isNull();
+    }
+
+    @Test
+    @DisplayName("流式完成：success 恰好一次")
+    void streamCompleteRecordsOnce() throws Exception {
+      service = buildMetricsService();
+      mockPlainClient();
+      stubDocuments();
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("流式回答"));
+
+      service.answerQuestionStream(List.of(1L), "什么是 Java 内存模型")
+          .collectList().block();
+
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().count()).isEqualTo(1.0);
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().getId().getTag("result")).isEqualTo("success");
+    }
+
+    @Test
+    @DisplayName("流式 error 被 onErrorResume 吞掉后 complete 不重复计数")
+    void streamErrorRecordsOnceDespiteErrorResume() throws Exception {
+      service = buildMetricsService();
+      mockPlainClient();
+      stubDocuments();
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.error(new IllegalStateException("llm down")));
+
+      List<String> chunks = service.answerQuestionStream(List.of(1L), "什么是 Java 内存模型")
+          .collectList().block();
+
+      assertThat(chunks).isNotEmpty();  // onErrorResume 返回错误文案
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().count()).isEqualTo(1.0);
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().getId().getTag("result")).isEqualTo("error");
+    }
+
+    @Test
+    @DisplayName("流式取消：cancel 只记一次")
+    void streamCancelRecordsOnce() throws Exception {
+      service = buildMetricsService();
+      mockPlainClient();
+      stubDocuments();
+      // 订阅后主动 dispose 模拟客户端断开，触发 doOnCancel
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("chunk").delayElements(java.time.Duration.ofSeconds(30)));
+
+      reactor.core.Disposable subscription = service.answerQuestionStream(List.of(1L), "什么是 Java 内存模型")
+          .subscribe();
+      Thread.sleep(500);
+      subscription.dispose();
+
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().getId().getTag("result")).isEqualTo("cancel");
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().count()).isEqualTo(1.0);
+    }
+
+    @Test
+    @DisplayName("改写失败回退：rewrite.fallbacks(error) 计数")
+    void rewriteFallbackOnError() throws Exception {
+      service = buildMetricsService();
+      mockPlainClient();
+      stubDocuments();
+      when(plainChatClient.prompt().user(anyString()).call().content())
+          .thenThrow(new IllegalStateException("llm down"));
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).call().content())
+          .thenReturn("同步回答");
+
+      service.answerQuestion(List.of(1L), "什么是 Java 内存模型");
+
+      assertThat(meterRegistry.get(RagMetrics.REWRITE_FALLBACKS).counter().count()).isEqualTo(1.0);
+      assertThat(meterRegistry.get(RagMetrics.REWRITE_FALLBACKS).counter().getId().getTag("reason"))
+          .isEqualTo("error");
+    }
+
+    @Test
+    @DisplayName("retrieveOnly 只记检索指标，不记 requests/refusals")
+    void retrieveOnlySkipsRequestCounters() throws Exception {
+      service = buildMetricsService();
+      mockPlainClient();
+      stubDocuments();
+
+      service.retrieveOnly(List.of(1L), "什么是 Java 内存模型", List.of());
+
+      assertThat(meterRegistry.find(RagMetrics.REQUESTS).counter()).isNull();
+      assertThat(meterRegistry.find(RagMetrics.REFUSALS).counter()).isNull();
+      assertThat(meterRegistry.get(RagMetrics.STAGE_DURATION).timers()).isNotEmpty();
+    }
+
+    @Test
+    @DisplayName("全部 Meter 的标签键白名单：mode/result/stage/variant/reason")
+    void tagKeysWhitelisted() throws Exception {
+      service = buildMetricsService();
+      mockPlainClient();
+      stubDocuments();
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).call().content())
+          .thenReturn("同步回答");
+
+      service.answerQuestion(List.of(1L), "什么是 Java 内存模型");
+      service.retrieveOnly(List.of(1L), "另一个问题", List.of());
+
+      meterRegistry.getMeters().forEach(meter ->
+          assertThat(meter.getId().getTags()).allSatisfy(tag ->
+              assertThat(tag.getKey()).isIn("mode", "result", "stage", "variant", "reason")));
+    }
+  }
+
+  @Nested
   @DisplayName("双路召回融合")
   class DualPathMerge {
 
@@ -159,7 +352,7 @@ class KnowledgeBaseQueryServiceTest {
     private KnowledgeBaseQueryService buildMergeService() throws Exception {
       KnowledgeBaseQueryProperties properties = new KnowledgeBaseQueryProperties();
       properties.getSearch().setMergeOriginalQuery(true);
-      return new KnowledgeBaseQueryService(llmProviderRegistry, vectorService, listService,
+      return new KnowledgeBaseQueryService(llmProviderRegistry, ragMetrics, vectorService, listService,
           countService, properties, resourceLoader);
     }
 
