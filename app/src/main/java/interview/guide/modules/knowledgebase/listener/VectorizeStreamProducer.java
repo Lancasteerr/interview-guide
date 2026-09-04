@@ -32,8 +32,8 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
      *
      * @param kbId 知识库ID
      */
-    public void sendVectorizeTask(Long kbId) {
-        sendTask(new VectorizeTaskPayload(kbId));
+    public boolean sendVectorizeTask(Long kbId) {
+        return sendTask(new VectorizeTaskPayload(kbId));
     }
 
     @Override
@@ -61,19 +61,8 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
 
     @Override
     protected void onSendFailed(VectorizeTaskPayload payload, String error) {
-        updateVectorStatus(payload.kbId(), VectorStatus.FAILED, truncateError(error));
-    }
-
-    /**
-     * 更新向量化状态
-     */
-    private void updateVectorStatus(Long kbId, VectorStatus status, String error) {
-        knowledgeBaseRepository.findById(kbId).ifPresent(kb -> {
-            kb.setVectorStatus(status);
-            if (error != null) {
-                kb.setVectorError(error.length() > 500 ? error.substring(0, 500) : error);
-            }
-            knowledgeBaseRepository.save(kb);
-        });
+        // 条件更新：不覆盖已被其他路径改写的终态（如 COMPLETED）
+        knowledgeBaseRepository.failVectorUnlessCompleted(
+            payload.kbId(), truncateError(error), java.time.LocalDateTime.now());
     }
 }

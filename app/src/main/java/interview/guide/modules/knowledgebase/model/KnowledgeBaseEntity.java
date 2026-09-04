@@ -85,6 +85,18 @@ public class KnowledgeBaseEntity {
     @Column(name = "vectorized_at")
     private LocalDateTime vectorizedAt;
 
+    /**
+     * 最后一次有效进展时间（状态变化与心跳都推进），用于卡住任务恢复判定。
+     */
+    @Column(name = "vector_updated_at")
+    private LocalDateTime vectorUpdatedAt;
+
+    /**
+     * 恢复调度器自动补投次数（手动重试清零），与 Stream retryCount 独立。
+     */
+    @Column(name = "vector_recovery_count", nullable = false)
+    private int vectorRecoveryCount = 0;
+
     // 问题生成状态
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
@@ -268,6 +280,22 @@ public class KnowledgeBaseEntity {
 
     public LocalDateTime getVectorizedAt() {
         return vectorizedAt;
+    }
+
+    public LocalDateTime getVectorUpdatedAt() {
+        return vectorUpdatedAt;
+    }
+
+    public void setVectorUpdatedAt(LocalDateTime vectorUpdatedAt) {
+        this.vectorUpdatedAt = vectorUpdatedAt;
+    }
+
+    public int getVectorRecoveryCount() {
+        return vectorRecoveryCount;
+    }
+
+    public void setVectorRecoveryCount(int vectorRecoveryCount) {
+        this.vectorRecoveryCount = vectorRecoveryCount;
     }
 
     public void setVectorizedAt(LocalDateTime vectorizedAt) {

@@ -78,7 +78,9 @@ public class ResumePersistenceService {
             resume.setStorageKey(storageKey);
             resume.setStorageUrl(storageUrl);
             resume.setResumeText(resumeText);
-            
+            // 进展时间初始化：NULL 会被 stale 扫描的阈值比较排除
+            resume.setAnalyzeUpdatedAt(java.time.LocalDateTime.now());
+
             ResumeEntity saved = resumeRepository.save(resume);
             log.info("简历已保存: id={}, hash={}", saved.getId(), fileHash);
             

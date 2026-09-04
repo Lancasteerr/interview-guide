@@ -77,6 +77,13 @@ public class KnowledgeBaseVectorService {
      * @param content 知识库文本内容
      */
     public void vectorizeAndStore(Long knowledgeBaseId, String content) {
+        vectorizeAndStore(knowledgeBaseId, content, () -> { });
+    }
+
+    /**
+     * 带进度心跳回调的向量化：分块完成与每个 Embedding 批次后回调（由调用方决定节流）。
+     */
+    public void vectorizeAndStore(Long knowledgeBaseId, String content, Runnable progressHeartbeat) {
         String jobId = null;
         try {
             if (knowledgeBaseId == null) {
@@ -96,6 +103,9 @@ public class KnowledgeBaseVectorService {
             // 2. 为每个 chunk 添加临时 metadata，成功后再提升为正式 kb_id。
             applyPendingMetadata(chunks, knowledgeBaseId, jobId);
 
+            // 分块完成心跳
+            progressHeartbeat.run();
+
             // 3. 分批向量化并存储（阿里云 DashScope API 限制 batch size <= 10）
             int totalChunks = chunks.size();
             int batchCount = (totalChunks + MAX_BATCH_SIZE - 1) / MAX_BATCH_SIZE; // 向上取整
@@ -107,6 +117,8 @@ public class KnowledgeBaseVectorService {
                 List<Document> batch = chunks.subList(start, end);
                 log.debug("处理第 {}/{} 批: chunks {}-{}", i + 1, batchCount, start + 1, end);
                 vectorStore.add(batch);
+                // Embedding 批次心跳（调用方节流）
+                progressHeartbeat.run();
             }
             activateVectorJob(knowledgeBaseId, jobId);
             // 提升成功后以独立短事务写入配置快照与统计（失败路径不写成功快照）

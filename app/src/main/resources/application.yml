@@ -216,6 +216,26 @@ app:
     api-call-attempt-timeout: ${APP_STORAGE_API_CALL_ATTEMPT_TIMEOUT:20s}
     auto-create-bucket: ${APP_STORAGE_AUTO_CREATE_BUCKET:true}
   
+  # 卡住任务恢复调度（P1-07）：pending 阈值必须大于正常排队时间（消费者单线程）
+  async:
+    recovery:
+      vectorize:
+        enabled: ${APP_ASYNC_RECOVERY_VECTORIZE_ENABLED:true}
+        pending-threshold: ${APP_ASYNC_RECOVERY_VECTORIZE_PENDING_THRESHOLD:10m}
+        processing-threshold: ${APP_ASYNC_RECOVERY_VECTORIZE_PROCESSING_THRESHOLD:15m}
+        heartbeat-throttle: ${APP_ASYNC_RECOVERY_VECTORIZE_HEARTBEAT_THROTTLE:30s}
+        interval-ms: ${APP_ASYNC_RECOVERY_VECTORIZE_INTERVAL_MS:60000}
+        batch-size: ${APP_ASYNC_RECOVERY_VECTORIZE_BATCH_SIZE:10}
+        max-recovery-count: ${APP_ASYNC_RECOVERY_VECTORIZE_MAX_RECOVERY_COUNT:3}
+      resume-analyze:
+        enabled: ${APP_ASYNC_RECOVERY_RESUME_ENABLED:true}
+        pending-threshold: ${APP_ASYNC_RECOVERY_RESUME_PENDING_THRESHOLD:10m}
+        processing-threshold: ${APP_ASYNC_RECOVERY_RESUME_PROCESSING_THRESHOLD:15m}
+        heartbeat-throttle: ${APP_ASYNC_RECOVERY_RESUME_HEARTBEAT_THROTTLE:30s}
+        interval-ms: ${APP_ASYNC_RECOVERY_RESUME_INTERVAL_MS:60000}
+        batch-size: ${APP_ASYNC_RECOVERY_RESUME_BATCH_SIZE:10}
+        max-recovery-count: ${APP_ASYNC_RECOVERY_RESUME_MAX_RECOVERY_COUNT:3}
+
   # CORS配置 - React前端
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:80,http://127.0.0.1:5173,http://127.0.0.1:5174,http://127.0.0.1:80}

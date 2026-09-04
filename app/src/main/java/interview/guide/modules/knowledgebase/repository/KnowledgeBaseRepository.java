@@ -3,12 +3,14 @@ package interview.guide.modules.knowledgebase.repository;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.model.QuestionGenStatus;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
@@ -121,4 +123,76 @@ public interface KnowledgeBaseRepository extends JpaRepository<KnowledgeBaseEnti
     List<KnowledgeBaseEntity> findStaleQuestionGenerationTasks(
         @Param("status") QuestionGenStatus status,
         @Param("threshold") LocalDateTime threshold);
+
+    // ========== P1-07 条件状态更新（终态不被覆盖，多实例安全） ==========
+
+    /** PENDING → PROCESSING 条件领取，返回是否领取成功 */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'PROCESSING', kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PENDING'")
+    int tryMarkVectorProcessing(@Param("id") Long id,
+                                @Param("now") LocalDateTime now);
+
+    /** 心跳：仍为 PROCESSING 才推进进展时间 */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING'")
+    int heartbeatVectorProcessing(@Param("id") Long id,
+                                  @Param("now") LocalDateTime now);
+
+    /** PROCESSING → COMPLETED（非 PROCESSING 时 no-op） */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'COMPLETED', kb.vectorError = null, kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING'")
+    int completeVectorIfProcessing(@Param("id") Long id,
+                                   @Param("now") LocalDateTime now);
+
+    /** → FAILED（不覆盖 COMPLETED） */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'FAILED', kb.vectorError = :error, kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus <> 'COMPLETED'")
+    int failVectorUnlessCompleted(@Param("id") Long id,
+                                  @Param("error") String error,
+                                  @Param("now") LocalDateTime now);
+
+    /** PROCESSING → PENDING（重试重置） */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'PENDING', kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING'")
+    int resetVectorToPending(@Param("id") Long id,
+                             @Param("now") LocalDateTime now);
+
+    /** 恢复补投前原子推进时间（PENDING 且早于阈值），保证同期只补投一次 */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PENDING' AND kb.vectorUpdatedAt < :threshold")
+    int touchQueuedVectorForRecovery(@Param("id") Long id,
+                                     @Param("threshold") LocalDateTime threshold,
+                                     @Param("now") LocalDateTime now);
+
+    /** PROCESSING 无进展超阈值 → PENDING（恢复前置条件重置） */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'PENDING', kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING' AND kb.vectorUpdatedAt < :threshold")
+    int resetStaleVectorProcessing(@Param("id") Long id,
+                                   @Param("threshold") LocalDateTime threshold,
+                                   @Param("now") LocalDateTime now);
+
+    /** 恢复计数 +1，返回更新后计数用 findById 读取；此处只做自增 */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorRecoveryCount = kb.vectorRecoveryCount + 1 WHERE kb.id = :id")
+    int incrementVectorRecoveryCount(@Param("id") Long id);
+
+    /** 手动重试清零恢复计数 */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorRecoveryCount = 0 WHERE kb.id = :id")
+    int resetVectorRecoveryCount(@Param("id") Long id);
+
+    /** 卡住任务扫描（带每轮上限） */
+    @Query("SELECT kb FROM KnowledgeBaseEntity kb WHERE kb.vectorStatus = :status AND kb.vectorUpdatedAt < :threshold ORDER BY kb.vectorUpdatedAt ASC")
+    java.util.List<KnowledgeBaseEntity> findStaleByVectorStatus(@Param("status") VectorStatus status,
+                                                                @Param("threshold") LocalDateTime threshold,
+                                                                Pageable pageable);
 }

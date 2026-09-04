@@ -95,9 +95,21 @@ public class AnalyzeStreamConsumer extends AbstractStreamConsumer<AnalyzeStreamC
             .orElse(true);
     }
 
+    /**
+     * 条件领取模式下 markProcessing 不再使用。
+     */
     @Override
     protected void markProcessing(AnalyzePayload payload) {
-        updateAnalyzeStatus(payload.resumeId(), AsyncTaskStatus.PROCESSING, null);
+        // tryMarkProcessing 原子领取
+    }
+
+    /**
+     * 条件领取：只有 PENDING → PROCESSING 成功的消费者才执行任务（多实例防重复）。
+     */
+    @Override
+    protected boolean tryMarkProcessing(AnalyzePayload payload) {
+        return resumeRepository.tryMarkAnalyzeProcessing(
+            payload.resumeId(), java.time.LocalDateTime.now()) == 1;
     }
 
     @Override
@@ -114,6 +126,8 @@ public class AnalyzeStreamConsumer extends AbstractStreamConsumer<AnalyzeStreamC
             // 历史数据正文为空时，从 RustFS 恢复文本并以独立短事务回填后再分析
             resumeText = parseService.downloadAndParseContent(
                 resume.getStorageKey(), resume.getOriginalFilename());
+            // 下载 + 解析完成心跳
+            resumeRepository.heartbeatAnalyzeProcessing(resumeId, java.time.LocalDateTime.now());
             if (isBlank(resumeText)) {
                 throw new BusinessException(ErrorCode.RESUME_PARSE_FAILED, "无法获取简历文本内容");
             }
@@ -121,6 +135,8 @@ public class AnalyzeStreamConsumer extends AbstractStreamConsumer<AnalyzeStreamC
         }
 
         ResumeAnalysisResponse analysis = gradingService.analyzeResume(resumeText);
+        // LLM 分析完成心跳（单次外部调用，无循环；分析超时必须小于 PROCESSING 阈值）
+        resumeRepository.heartbeatAnalyzeProcessing(resumeId, java.time.LocalDateTime.now());
         ResumeEntity latestResume = resumeRepository.findById(resumeId).orElse(null);
         if (latestResume == null) {
             log.warn("简历在分析期间被删除，跳过保存结果: resumeId={}", resumeId);
@@ -135,17 +151,26 @@ public class AnalyzeStreamConsumer extends AbstractStreamConsumer<AnalyzeStreamC
 
     @Override
     protected void markCompleted(AnalyzePayload payload) {
-        updateAnalyzeStatus(payload.resumeId(), AsyncTaskStatus.COMPLETED, null);
+        // 条件写入：状态已不是 PROCESSING 时 no-op，防止覆盖他人结果
+        resumeRepository.completeAnalyzeIfProcessing(
+            payload.resumeId(), java.time.LocalDateTime.now());
     }
 
     @Override
     protected void markFailed(AnalyzePayload payload, String error) {
-        updateAnalyzeStatus(payload.resumeId(), AsyncTaskStatus.FAILED, error);
+        resumeRepository.failAnalyzeUnlessCompleted(
+            payload.resumeId(), truncateError(error), java.time.LocalDateTime.now());
     }
 
     @Override
     protected void retryMessage(AnalyzePayload payload, int retryCount) {
         Long resumeId = payload.resumeId();
+        // 条件领取的配套重置：PROCESSING → PENDING 成功才重新投递，否则只记录并 ACK 丢弃
+        int reset = resumeRepository.resetAnalyzeToPending(resumeId, java.time.LocalDateTime.now());
+        if (reset != 1) {
+            log.warn("重试重置失败（任务已完成或状态不再匹配），ACK 丢弃: resumeId={}, retryCount={}", resumeId, retryCount);
+            return;
+        }
         try {
             Map<String, String> message = Map.of(
                 AsyncTaskStreamConstants.FIELD_RESUME_ID, resumeId.toString(),
@@ -161,24 +186,11 @@ public class AnalyzeStreamConsumer extends AbstractStreamConsumer<AnalyzeStreamC
 
         } catch (Exception e) {
             log.error("重试入队失败: resumeId={}, error={}", resumeId, e.getMessage(), e);
-            updateAnalyzeStatus(resumeId, AsyncTaskStatus.FAILED, truncateError("重试入队失败: " + e.getMessage()));
+            // 重投失败标 FAILED，避免停在 PENDING 被恢复调度器反复补投
+            resumeRepository.failAnalyzeUnlessCompleted(
+                resumeId, truncateError("重试入队失败: " + e.getMessage()), java.time.LocalDateTime.now());
         }
     }
 
-    /**
-     * 更新分析状态
-     */
-    private void updateAnalyzeStatus(Long resumeId, AsyncTaskStatus status, String error) {
-        try {
-            resumeRepository.findById(resumeId).ifPresent(resume -> {
-                resume.setAnalyzeStatus(status);
-                resume.setAnalyzeError(error);
-                resumeRepository.save(resume);
-                log.debug("分析状态已更新: resumeId={}, status={}", resumeId, status);
-            });
-        } catch (Exception e) {
-            log.error("更新分析状态失败: resumeId={}, status={}, error={}", resumeId, status, e.getMessage(), e);
-        }
-    }
 
 }

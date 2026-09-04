@@ -47,6 +47,9 @@ export interface UploadKnowledgeBaseResponse {
     fileKey: string;
     fileUrl: string;
   };
+  /** 任务是否成功投递到异步队列；false 时文件已保存但状态为 FAILED，可重试 */
+  enqueueAccepted: boolean;
+  message: string;
   duplicate: boolean;
 }
 

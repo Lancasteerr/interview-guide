@@ -39,8 +39,8 @@ public class AnalyzeStreamProducer extends AbstractStreamProducer<AnalyzeStreamP
      *
      * @param resumeId 简历ID
      */
-    public void sendAnalyzeTask(Long resumeId) {
-        sendTask(new AnalyzeTaskPayload(resumeId));
+    public boolean sendAnalyzeTask(Long resumeId) {
+        return sendTask(new AnalyzeTaskPayload(resumeId));
     }
 
     @Override
@@ -68,20 +68,8 @@ public class AnalyzeStreamProducer extends AbstractStreamProducer<AnalyzeStreamP
 
     @Override
     protected void onSendFailed(AnalyzeTaskPayload payload, String error) {
-        transactionalExecutor.runRequiresNew(
-            () -> updateAnalyzeStatus(payload.resumeId(), AsyncTaskStatus.FAILED, truncateError(error)));
-    }
-
-    /**
-     * 更新分析状态
-     */
-    private void updateAnalyzeStatus(Long resumeId, AsyncTaskStatus status, String error) {
-        resumeRepository.findById(resumeId).ifPresent(resume -> {
-            resume.setAnalyzeStatus(status);
-            if (error != null) {
-                resume.setAnalyzeError(error.length() > 500 ? error.substring(0, 500) : error);
-            }
-            resumeRepository.save(resume);
-        });
+        // 条件更新：不覆盖已被其他路径改写的终态（如 COMPLETED）
+        resumeRepository.failAnalyzeUnlessCompleted(
+            payload.resumeId(), truncateError(error), java.time.LocalDateTime.now());
     }
 }

@@ -84,28 +84,42 @@ public class ResumeUploadService {
         log.info("简历已存储到RustFS: {} - 存储耗时: {}ms",
             fileKey, System.currentTimeMillis() - storageStart);
 
-        // 6. 保存简历到数据库（状态为 PENDING）
-        ResumeEntity savedResume = persistenceService.saveResume(file, resumeText, fileKey, fileUrl);
+        // 6. 保存简历到数据库（状态为 PENDING）；失败时按 fileKey 补偿删除孤儿对象（简历是先解析再上传，补偿只包在 S3 成功之后）
+        ResumeEntity savedResume;
+        try {
+            savedResume = persistenceService.saveResume(file, resumeText, fileKey, fileUrl);
+        } catch (Exception dbError) {
+            try {
+                storageService.deleteResume(fileKey);
+                log.warn("数据库保存失败已补偿删除孤儿对象: fileKey={}", fileKey);
+            } catch (Exception cleanupError) {
+                log.error("补偿删除孤儿对象失败，需人工清理: fileKey={}, error={}",
+                    fileKey, cleanupError.getMessage(), cleanupError);
+            }
+            throw dbError;
+        }
 
-        // 7. 发送分析任务到 Redis Stream（异步处理，正文以数据库实体为事实来源）
-        analyzeStreamProducer.sendAnalyzeTask(savedResume.getId());
+        // 7. 发送分析任务到 Redis Stream；投递失败时文件与实体保留（手动重试依据），返回真实状态
+        boolean enqueueAccepted = analyzeStreamProducer.sendAnalyzeTask(savedResume.getId());
 
         long totalTime = System.currentTimeMillis() - startTime;
         log.info("简历上传处理完成: {}, resumeId={} - 总耗时: {}ms (解析+存储+入库)",
             fileName, savedResume.getId(), totalTime);
 
-        // 8. 返回结果（状态为 PENDING，前端可轮询获取最新状态）
+        // 8. 返回结果：状态与数据库真实状态一致，投递失败不伪装成 PENDING
         return Map.of(
             "resume", Map.of(
                 "id", savedResume.getId(),
                 "filename", savedResume.getOriginalFilename(),
-                "analyzeStatus", AsyncTaskStatus.PENDING.name()
+                "analyzeStatus", enqueueAccepted ? AsyncTaskStatus.PENDING.name() : AsyncTaskStatus.FAILED.name()
             ),
             "storage", Map.of(
                 "fileKey", fileKey,
                 "fileUrl", fileUrl,
                 "resumeId", savedResume.getId()
             ),
+            "enqueueAccepted", enqueueAccepted,
+            "message", enqueueAccepted ? "" : "简历已保存，但分析任务投递失败，请稍后重试",
             "duplicate", false
         );
     }
@@ -182,11 +196,16 @@ public class ResumeUploadService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND, "简历不存在"));
             resume.setAnalyzeStatus(AsyncTaskStatus.PENDING);
             resume.setAnalyzeError(null);
+            resume.setAnalyzeUpdatedAt(java.time.LocalDateTime.now());
             resumeRepository.save(resume);
         });
+        // 手动重试清零自动恢复计数
+        resumeRepository.resetAnalyzeRecoveryCount(resumeId);
 
-        // 事务提交后再发送分析任务到 Stream
-        analyzeStreamProducer.sendAnalyzeTask(resumeId);
+        // 事务提交后再发送分析任务到 Stream；投递失败必须让调用方感知
+        if (!analyzeStreamProducer.sendAnalyzeTask(resumeId)) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "任务投递失败，请稍后重试");
+        }
 
         log.info("重新分析任务已发送: resumeId={}", resumeId);
     }

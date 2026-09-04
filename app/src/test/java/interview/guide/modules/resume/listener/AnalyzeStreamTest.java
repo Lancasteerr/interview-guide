@@ -159,6 +159,8 @@ class AnalyzeStreamTest {
     @Test
     @DisplayName("重试消息只携带 resumeId 与 retryCount")
     void shouldRetryWithIdOnlyMessage() {
+      when(resumeRepository.resetAnalyzeToPending(org.mockito.ArgumentMatchers.eq(5L),
+          org.mockito.ArgumentMatchers.any())).thenReturn(1);
       consumer.retryMessage(new AnalyzeStreamConsumer.AnalyzePayload(5L), 3);
 
       @SuppressWarnings("unchecked")

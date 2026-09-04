@@ -61,6 +61,7 @@ public class KnowledgeBasePersistenceService {
             kb.setChunkCount(chunkCount);
             kb.setVectorConfig(vectorConfig);
             kb.setVectorizedAt(java.time.LocalDateTime.now());
+            kb.setVectorUpdatedAt(java.time.LocalDateTime.now());
             knowledgeBaseRepository.save(kb);
         });
     }
@@ -81,6 +82,8 @@ public class KnowledgeBasePersistenceService {
             kb.setContentType(file.getContentType());
             kb.setStorageKey(storageKey);
             kb.setStorageUrl(storageUrl);
+            // 进展时间初始化：NULL 会被 stale 扫描的阈值比较排除，导致 PENDING 永远不被恢复
+            kb.setVectorUpdatedAt(java.time.LocalDateTime.now());
 
             KnowledgeBaseEntity saved = knowledgeBaseRepository.save(kb);
             log.info("知识库已保存: id={}, name={}, category={}, hash={}", saved.getId(), saved.getName(), saved.getCategory(), fileHash);
@@ -101,6 +104,7 @@ public class KnowledgeBasePersistenceService {
         
         kb.setVectorStatus(VectorStatus.PENDING);
         kb.setVectorError(null);
+        kb.setVectorUpdatedAt(java.time.LocalDateTime.now());
         knowledgeBaseRepository.save(kb);
         
         log.info("知识库向量化状态已更新为 PENDING: kbId={}", kbId);

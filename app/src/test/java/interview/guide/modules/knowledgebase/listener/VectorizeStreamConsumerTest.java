@@ -5,6 +5,7 @@ import interview.guide.infrastructure.redis.RedisService;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
 import interview.guide.modules.knowledgebase.service.KnowledgeBaseParseService;
+import interview.guide.common.async.recovery.VectorizeRecoveryProperties;
 import interview.guide.modules.knowledgebase.service.KnowledgeBaseVectorService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -48,7 +50,7 @@ class VectorizeStreamConsumerTest {
   @BeforeEach
   void setUp() {
     consumer = new VectorizeStreamConsumer(redisService, vectorService,
-        knowledgeBaseRepository, parseService);
+        knowledgeBaseRepository, parseService, new VectorizeRecoveryProperties());
   }
 
   private KnowledgeBaseEntity kb(String storageKey, String filename) {
@@ -135,13 +137,71 @@ class VectorizeStreamConsumerTest {
 
       consumer.processBusiness(new VectorizeStreamConsumer.VectorizePayload(7L));
 
-      verify(vectorService).vectorizeAndStore(7L, "解析后的正文");
+      verify(vectorService).vectorizeAndStore(org.mockito.ArgumentMatchers.eq(7L),
+            org.mockito.ArgumentMatchers.eq("解析后的正文"), org.mockito.ArgumentMatchers.any(Runnable.class));
     }
+  }
+
+  @Test
+  @DisplayName("条件领取：tryMarkProcessing 走 PENDING→PROCESSING 条件更新")
+  void conditionalClaim() {
+    when(knowledgeBaseRepository.tryMarkVectorProcessing(eq(7L), any()))
+        .thenReturn(1);
+
+    boolean claimed = consumer.tryMarkProcessing(new VectorizeStreamConsumer.VectorizePayload(7L));
+
+    assertThat(claimed).isTrue();
+    verify(knowledgeBaseRepository).tryMarkVectorProcessing(eq(7L), any());
+  }
+
+  @Test
+  @DisplayName("条件领取失败（他人已领取）：不执行任务")
+  void conditionalClaimRejected() {
+    when(knowledgeBaseRepository.tryMarkVectorProcessing(eq(7L), any()))
+        .thenReturn(0);
+
+    boolean claimed = consumer.tryMarkProcessing(new VectorizeStreamConsumer.VectorizePayload(7L));
+
+    assertThat(claimed).isFalse();
+  }
+
+  @Test
+  @DisplayName("markCompleted/markFailed 走条件更新，非 PROCESSING 时由 SQL 层 no-op")
+  void terminalStatesAreConditional() {
+    consumer.markCompleted(new VectorizeStreamConsumer.VectorizePayload(7L));
+    consumer.markFailed(new VectorizeStreamConsumer.VectorizePayload(7L), "错误");
+
+    verify(knowledgeBaseRepository).completeVectorIfProcessing(eq(7L), any());
+    verify(knowledgeBaseRepository).failVectorUnlessCompleted(eq(7L), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("重试重置失败（任务已完成或被替代）：不重新投递，ACK 丢弃")
+  void retrySkippedWhenResetFails() {
+    when(knowledgeBaseRepository.resetVectorToPending(eq(7L), any())).thenReturn(0);
+
+    consumer.retryMessage(new VectorizeStreamConsumer.VectorizePayload(7L), 2);
+
+    verify(redisService, never()).streamAdd(anyString(), anyMap(), anyInt());
+  }
+
+  @Test
+  @DisplayName("心跳节流：Embedding 阶段连续多批只写一次库（阈值内）")
+  void heartbeatThrottledDuringEmbedding() {
+    // 首批会写库一次（lastNanos 从 0 起步）
+    consumer.throttledEmbeddingHeartbeat(7L);
+    // 节流窗口内的后续批次不再写库
+    consumer.throttledEmbeddingHeartbeat(7L);
+    consumer.throttledEmbeddingHeartbeat(7L);
+
+    verify(knowledgeBaseRepository, org.mockito.Mockito.times(1))
+        .heartbeatVectorProcessing(eq(7L), any());
   }
 
   @Test
   @DisplayName("重试消息只携带 kbId 与 retryCount")
   void shouldRetryWithIdOnlyMessage() {
+    when(knowledgeBaseRepository.resetVectorToPending(eq(7L), any())).thenReturn(1);
     consumer.retryMessage(new VectorizeStreamConsumer.VectorizePayload(7L), 2);
 
     @SuppressWarnings("unchecked")
