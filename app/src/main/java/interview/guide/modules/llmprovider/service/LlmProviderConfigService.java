@@ -300,7 +300,7 @@ public class LlmProviderConfigService {
         socket.close();
         return ProviderTestResult.builder()
             .success(true)
-            .message("ASR WebSocket 连接成功: " + host)
+            .message("ASR 服务网络端口可达: " + host + "；尚未验证 API Key、模型权限及语音识别能力")
             .model(asr.getModel())
             .build();
       } catch (Exception e) {
