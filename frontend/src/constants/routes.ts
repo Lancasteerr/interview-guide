@@ -3,6 +3,7 @@ export const ROUTES = {
   interviewCreate: (requestId: string) => `/interview/create/${requestId}`,
   interviewSession: (sessionId: string) => `/interview/session/${sessionId}`,
   resumeUpload: '/upload',
+  resumeHistory: '/history',
   knowledgebaseUpload: '/knowledgebase/upload',
 } as const;
 

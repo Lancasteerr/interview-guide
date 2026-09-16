@@ -1,0 +1,45 @@
+export type ProcessingStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+export type BatchUploadStatus = Exclude<ProcessingStatus, 'FAILED'>
+  | 'READY' | 'QUEUED' | 'UPLOADING' | 'UPLOAD_FAILED' | 'PROCESS_FAILED';
+
+export interface BatchUploadItem {
+  clientId: string;
+  file: File;
+  customName: string;
+  status: BatchUploadStatus;
+  entityId?: number;
+  duplicate?: boolean;
+  error?: string;
+  retryAvailableAt?: number;
+  /** 上传响应未包含失败详情时，补查一次。 */
+  needsStatusRefresh?: boolean;
+}
+
+export interface FileUploadPolicy {
+  extensions: readonly string[];
+  maxFileSize: number;
+  maxSizeLabel: string;
+  formatLabel: string;
+}
+
+export interface FileSelectionResult {
+  accepted: BatchUploadItem[];
+  rejected: string[];
+}
+
+export interface ProcessingResult {
+  id: number;
+  status: ProcessingStatus;
+  error?: string | null;
+}
+
+export type BatchUploadResult = Pick<BatchUploadItem,
+  'status' | 'duplicate' | 'error' | 'needsStatusRefresh'> & { entityId: number };
+
+/** 业务适配器保持稳定引用，上传编排无需了解简历或知识库响应结构。 */
+export interface BatchUploadAdapter {
+  processLabel: string;
+  upload: (file: File, customName?: string) => Promise<BatchUploadResult>;
+  getStatus: (id: number, signal: AbortSignal) => Promise<ProcessingResult>;
+  retry: (id: number) => Promise<void>;
+}

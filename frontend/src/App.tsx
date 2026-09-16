@@ -37,12 +37,7 @@ const Loading = () => (
 function UploadPageWrapper() {
   const navigate = useNavigate();
 
-  const handleUploadComplete = (resumeId: number) => {
-    // 异步模式：上传成功后跳转到简历库，让用户在列表中查看分析状态
-    navigate('/history', { state: { newResumeId: resumeId } });
-  };
-
-  return <UploadPage onUploadComplete={handleUploadComplete} />;
+  return <UploadPage onBack={() => navigate(ROUTES.resumeHistory)} />;
 }
 
 // 历史记录列表包装器

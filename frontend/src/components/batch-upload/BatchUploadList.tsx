@@ -8,23 +8,22 @@ import {
   X,
 } from 'lucide-react';
 
-import {
-  MAX_BATCH_FILES,
-  type BatchUploadItem,
-  type BatchUploadStatus,
-} from '../../pages/knowledgeBaseBatchUpload';
+import { MAX_BATCH_FILES } from '../../utils/batchUpload';
+import type { BatchUploadItem, BatchUploadStatus } from '../../types/batchUpload';
 
-interface KnowledgeBaseUploadListProps {
+interface BatchUploadListProps {
+  processLabel: string;
+  customNamePlaceholder?: string;
   items: BatchUploadItem[];
   completedCount: number;
   failedCount: number;
   hasUploadActivity: boolean;
-  revectorizingId: number | null;
+  retryingProcessId: number | null;
   onClear: () => void;
   onNameChange: (clientId: string, customName: string) => void;
   onRemove: (clientId: string) => void;
   onRetryUpload: (clientId: string) => void;
-  onRevectorize: (clientId: string) => void;
+  onRetryProcessing: (clientId: string) => void;
 }
 
 function formatFileSize(bytes: number): string {
@@ -33,7 +32,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function StatusBadge({ status }: { status: BatchUploadStatus }) {
+function StatusBadge({ status, processLabel }: { status: BatchUploadStatus; processLabel: string }) {
   const styles = 'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium';
 
   switch (status) {
@@ -52,13 +51,13 @@ function StatusBadge({ status }: { status: BatchUploadStatus }) {
     case 'PENDING':
       return (
         <span className={`${styles} bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300`}>
-          <Clock3 className="h-3.5 w-3.5" />等待向量化
+          <Clock3 className="h-3.5 w-3.5" />等待{processLabel}
         </span>
       );
     case 'PROCESSING':
       return (
         <span className={`${styles} bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300`}>
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />向量化中
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />{processLabel}中
         </span>
       );
     case 'COMPLETED':
@@ -73,10 +72,10 @@ function StatusBadge({ status }: { status: BatchUploadStatus }) {
           <AlertCircle className="h-3.5 w-3.5" />上传失败
         </span>
       );
-    case 'VECTOR_FAILED':
+    case 'PROCESS_FAILED':
       return (
         <span className={`${styles} bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-300`}>
-          <AlertCircle className="h-3.5 w-3.5" />向量化失败
+          <AlertCircle className="h-3.5 w-3.5" />{processLabel}失败
         </span>
       );
     case 'QUEUED':
@@ -88,18 +87,20 @@ function StatusBadge({ status }: { status: BatchUploadStatus }) {
   }
 }
 
-export default function KnowledgeBaseUploadList({
+export default function BatchUploadList({
+  processLabel,
+  customNamePlaceholder,
   items,
   completedCount,
   failedCount,
   hasUploadActivity,
-  revectorizingId,
+  retryingProcessId,
   onClear,
   onNameChange,
   onRemove,
   onRetryUpload,
-  onRevectorize,
-}: KnowledgeBaseUploadListProps) {
+  onRetryProcessing,
+}: BatchUploadListProps) {
   if (items.length === 0) return null;
 
   return (
@@ -148,19 +149,20 @@ export default function KnowledgeBaseUploadList({
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       {formatFileSize(item.file.size)}
                     </p>
-                    <input
+                    {customNamePlaceholder && <input
                       type="text"
                       value={item.customName}
                       disabled={!canEdit}
                       onChange={event => onNameChange(item.clientId, event.target.value)}
-                      placeholder="知识库名称（可选，默认使用文件名）"
+                      placeholder={customNamePlaceholder}
+                      aria-label={`${item.file.name}的名称`}
                       className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-primary-400 focus:ring-2 focus:ring-primary-100 disabled:bg-slate-50 disabled:text-slate-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white dark:focus:ring-primary-900/40 dark:disabled:bg-slate-800"
-                    />
+                    />}
                   </div>
                 </div>
 
                 <div className="flex shrink-0 items-center justify-between gap-2 md:justify-end">
-                  <StatusBadge status={item.status} />
+                  <StatusBadge status={item.status} processLabel={processLabel} />
                   {item.status === 'UPLOAD_FAILED' && (
                     <button
                       type="button"
@@ -172,16 +174,16 @@ export default function KnowledgeBaseUploadList({
                       <RefreshCw className="h-4 w-4" />
                     </button>
                   )}
-                  {item.status === 'VECTOR_FAILED' && item.knowledgeBaseId && (
+                  {item.status === 'PROCESS_FAILED' && item.entityId && (
                     <button
                       type="button"
-                      disabled={revectorizingId !== null}
-                      onClick={() => onRevectorize(item.clientId)}
+                      disabled={retryingProcessId !== null}
+                      onClick={() => onRetryProcessing(item.clientId)}
                       className="rounded-lg p-2 text-slate-400 transition hover:bg-primary-50 hover:text-primary-500 disabled:opacity-50 dark:hover:bg-primary-900/30"
-                      title="重新向量化"
+                      title={`重新${processLabel}`}
                     >
                       <RefreshCw className={`h-4 w-4 ${
-                        revectorizingId === item.knowledgeBaseId ? 'animate-spin' : ''
+                        retryingProcessId === item.entityId ? 'animate-spin' : ''
                       }`} />
                     </button>
                   )}

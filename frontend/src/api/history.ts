@@ -98,8 +98,8 @@ export const historyApi = {
   /**
    * 获取简历详情
    */
-  async getResumeDetail(id: number): Promise<ResumeDetail> {
-    return request.get<ResumeDetail>(`/api/resumes/${id}/detail`);
+  async getResumeDetail(id: number, signal?: AbortSignal): Promise<ResumeDetail> {
+    return request.get<ResumeDetail>(`/api/resumes/${id}/detail`, { signal });
   },
 
   /**

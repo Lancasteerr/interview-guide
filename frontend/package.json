@@ -12,8 +12,8 @@
     "test:question-generation": "node --test src/pages/questionGenerationStatus.test.ts",
     "test:interview-capacity": "node --test src/components/knowledgebaseInterview/interviewCapacity.test.ts",
     "test:interview-entry": "node --test src/pages/interviewEntry.test.ts",
-    "test:knowledge-base-upload": "node --test src/pages/knowledgeBaseBatchUpload.test.ts",
-    "test:e2e:knowledge-base-upload": "playwright test e2e/knowledgebase-upload.spec.ts"
+    "test:batch-upload": "node --test src/utils/batchUpload.test.ts",
+    "test:e2e:batch-upload": "playwright test e2e/knowledgebase-upload.spec.ts e2e/resume-upload.spec.ts"
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.18",

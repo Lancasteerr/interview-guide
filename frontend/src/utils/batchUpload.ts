@@ -1,71 +1,54 @@
-import type { UploadKnowledgeBaseResponse, VectorStatus } from '../api/knowledgebase';
+import type { BatchUploadItem, BatchUploadStatus, FileSelectionResult, FileUploadPolicy, ProcessingStatus } from '../types/batchUpload';
 
 export const MAX_BATCH_FILES = 10;
-export const MAX_FILE_SIZE = 50 * 1024 * 1024;
 export const MAX_CONCURRENT_UPLOADS = 2;
 export const UPLOAD_START_INTERVAL_MS = 500;
 export const UPLOAD_RETRY_COOLDOWN_MS = 2000;
-export const VECTOR_STATUS_POLL_INTERVAL_MS = 5000;
+export const STATUS_POLL_INTERVAL_MS = 5000;
 
-const SUPPORTED_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'txt', 'md']);
-
-export type BatchUploadStatus =
-  | 'READY'
-  | 'QUEUED'
-  | 'UPLOADING'
-  | 'PENDING'
-  | 'PROCESSING'
-  | 'COMPLETED'
-  | 'UPLOAD_FAILED'
-  | 'VECTOR_FAILED';
-
-export interface BatchUploadItem {
-  clientId: string;
-  file: File;
-  customName: string;
-  status: BatchUploadStatus;
-  knowledgeBaseId?: number;
-  duplicate?: boolean;
-  error?: string;
-  retryAvailableAt?: number;
-  /** 上传响应未包含失败详情时，补查一次。 */
-  needsStatusRefresh?: boolean;
-}
+export const KNOWLEDGE_BASE_FILE_POLICY: FileUploadPolicy = {
+  extensions: ['pdf', 'doc', 'docx', 'txt', 'md'],
+  maxFileSize: 50 * 1024 * 1024,
+  maxSizeLabel: '50MB',
+  formatLabel: 'PDF、DOCX、DOC、TXT、MD',
+};
+export const RESUME_FILE_POLICY: FileUploadPolicy = {
+  extensions: ['pdf', 'doc', 'docx', 'txt'],
+  maxFileSize: 10 * 1024 * 1024,
+  maxSizeLabel: '10MB',
+  formatLabel: 'PDF、DOCX、DOC、TXT',
+};
 
 interface QueuedUploadTask {
   clientId: string;
   run: () => Promise<void>;
 }
 
-export interface FileSelectionResult {
-  accepted: BatchUploadItem[];
-  rejected: string[];
-}
-
 export function getFileIdentity(file: Pick<File, 'name' | 'size' | 'lastModified'>): string {
   return `${file.name}:${file.size}:${file.lastModified}`;
 }
 
-export function validateKnowledgeBaseFile(file: Pick<File, 'name' | 'size'>): string | null {
+export function validateUploadFile(file: Pick<File, 'name' | 'size'>, policy: FileUploadPolicy): string | null {
   if (file.size <= 0) {
     return '文件为空';
   }
-  if (file.size > MAX_FILE_SIZE) {
-    return '文件超过 50MB';
+  if (file.size > policy.maxFileSize) {
+    return `文件超过 ${policy.maxSizeLabel}`;
   }
 
   const extension = file.name.includes('.')
     ? file.name.slice(file.name.lastIndexOf('.') + 1).toLowerCase()
     : '';
-  if (!SUPPORTED_EXTENSIONS.has(extension)) {
-    return '仅支持 PDF、DOCX、DOC、TXT、MD';
+  if (!policy.extensions.includes(extension)) {
+    return `仅支持 ${policy.formatLabel}`;
   }
   return null;
 }
 
-export function selectKnowledgeBaseFiles(
+export function selectUploadFiles(
   currentItems: readonly BatchUploadItem[],
   files: FileList | File[],
+  policy: FileUploadPolicy,
   now = Date.now(),
 ): FileSelectionResult {
   const identities = new Set(currentItems.map(item => getFileIdentity(item.file)));
@@ -75,7 +58,7 @@ export function selectKnowledgeBaseFiles(
 
   Array.from(files).forEach((file, index) => {
     const identity = getFileIdentity(file);
-    const validationError = validateKnowledgeBaseFile(file);
+    const validationError = validateUploadFile(file, policy);
 
     if (identities.has(identity)) {
       rejected.push(`${file.name}（已在列表中）`);
@@ -98,25 +81,33 @@ export function selectKnowledgeBaseFiles(
   return { accepted, rejected };
 }
 
-export function toBatchUploadStatus(status: VectorStatus): BatchUploadStatus {
-  return status === 'FAILED' ? 'VECTOR_FAILED' : status;
+export function normalizeProcessingStatus(status?: string, fallback: ProcessingStatus = 'PENDING'): ProcessingStatus {
+  return status === 'PENDING' || status === 'PROCESSING' || status === 'COMPLETED' || status === 'FAILED'
+    ? status : fallback;
 }
 
-export function getUploadOutcome(result: UploadKnowledgeBaseResponse): Pick<
-  BatchUploadItem, 'status' | 'error' | 'needsStatusRefresh'
-> {
-  const enqueueFailed = result.enqueueAccepted === false;
-  const status = enqueueFailed ? 'FAILED' : result.knowledgeBase.vectorStatus ?? 'PENDING';
+export function toBatchUploadStatus(status: ProcessingStatus): BatchUploadStatus {
+  return status === 'FAILED' ? 'PROCESS_FAILED' : status;
+}
+
+export function getUploadOutcome(
+  processStatus: ProcessingStatus,
+  enqueueAccepted: boolean | undefined,
+  message: string | undefined,
+  processLabel: string,
+): Pick<BatchUploadItem, 'status' | 'error' | 'needsStatusRefresh'> {
+  const enqueueFailed = enqueueAccepted === false;
+  const status = enqueueFailed ? 'FAILED' : processStatus;
   return {
     status: toBatchUploadStatus(status),
     error: status === 'FAILED'
-      ? (enqueueFailed && result.message) || '向量化失败，请重试'
+      ? (enqueueFailed && message) || `${processLabel}失败，请重试`
       : undefined,
     needsStatusRefresh: status === 'FAILED' && !enqueueFailed,
   };
 }
 
-export function isVectorizationActive(status: BatchUploadStatus): boolean {
+export function isProcessingActive(status: BatchUploadStatus): boolean {
   return status === 'PENDING' || status === 'PROCESSING';
 }
 

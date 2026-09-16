@@ -68,7 +68,7 @@ jobs:
           pnpm run test:question-generation
           pnpm run test:interview-capacity
           pnpm run test:interview-entry
-          pnpm run test:knowledge-base-upload
+          pnpm run test:batch-upload
 
       - name: Build frontend
         run: pnpm run build
@@ -76,5 +76,5 @@ jobs:
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Test knowledge base batch upload in browser
-        run: pnpm run test:e2e:knowledge-base-upload
+      - name: Test resume and knowledge base batch uploads in browser
+        run: pnpm run test:e2e:batch-upload

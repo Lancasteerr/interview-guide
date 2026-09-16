@@ -1,17 +1,23 @@
-import { useState, type ChangeEvent, type DragEvent } from 'react';
+import { useId, useState, type ChangeEvent, type DragEvent } from 'react';
 import { AlertCircle, Upload } from 'lucide-react';
+import type { FileUploadPolicy } from '../../types/batchUpload';
 
-interface KnowledgeBaseUploadDropzoneProps {
+interface BatchUploadDropzoneProps {
+  policy: FileUploadPolicy;
+  entityLabel: string;
   full: boolean;
   notice: string;
   onFilesSelected: (files: FileList) => void;
 }
 
-export default function KnowledgeBaseUploadDropzone({
+export default function BatchUploadDropzone({
+  policy,
+  entityLabel,
   full,
   notice,
   onFilesSelected,
-}: KnowledgeBaseUploadDropzoneProps) {
+}: BatchUploadDropzoneProps) {
+  const inputId = useId();
   const [dragOver, setDragOver] = useState(false);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -32,7 +38,7 @@ export default function KnowledgeBaseUploadDropzone({
   return (
     <>
       <label
-        htmlFor="knowledge-base-files"
+        htmlFor={inputId}
         className={`relative block rounded-2xl border-2 border-dashed p-10 text-center transition-colors focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2 ${
           full
             ? 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-70 dark:border-slate-700 dark:bg-slate-800/60'
@@ -51,11 +57,11 @@ export default function KnowledgeBaseUploadDropzone({
         onDrop={handleDrop}
       >
         <input
-          id="knowledge-base-files"
+          id={inputId}
           className="sr-only"
-          aria-label="选择知识库文件"
+          aria-label={`选择${entityLabel}文件`}
           type="file"
-          accept=".pdf,.doc,.docx,.txt,.md"
+          accept={policy.extensions.map(extension => `.${extension}`).join(',')}
           multiple
           disabled={full}
           onChange={handleFileChange}
@@ -65,7 +71,7 @@ export default function KnowledgeBaseUploadDropzone({
           点击选择或拖拽多个文件到这里
         </p>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          支持 PDF、DOCX、DOC、TXT、MD，单个文件最大 50MB；上传期间仍可继续添加
+          支持 {policy.formatLabel}，单个文件最大 {policy.maxSizeLabel}；上传期间仍可继续添加
         </p>
       </label>
 
