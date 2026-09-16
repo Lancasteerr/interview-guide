@@ -119,7 +119,8 @@ class VectorizeRecoverySchedulerTest {
     scheduler.recoverStuckTasks();
 
     verify(producer, never()).sendVectorizeTask(anyLong());
-    verify(knowledgeBaseRepository).failVectorUnlessCompleted(eq(3L), anyString(), any(LocalDateTime.class));
+    verify(knowledgeBaseRepository).failVectorIfPending(
+        eq(3L), anyString(), any(LocalDateTime.class));
   }
 
   @Test

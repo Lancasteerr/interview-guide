@@ -97,6 +97,12 @@ public class KnowledgeBaseEntity {
     @Column(name = "vector_recovery_count", nullable = false)
     private int vectorRecoveryCount = 0;
 
+    /**
+     * 当前 PROCESSING 执行代次；条件心跳和终态写入必须同时匹配该值。
+     */
+    @Column(name = "vector_attempt_id", length = 36)
+    private String vectorAttemptId;
+
     // 问题生成状态
     @Enumerated(EnumType.STRING)
     @Column(length = 20)
@@ -296,6 +302,14 @@ public class KnowledgeBaseEntity {
 
     public void setVectorRecoveryCount(int vectorRecoveryCount) {
         this.vectorRecoveryCount = vectorRecoveryCount;
+    }
+
+    public String getVectorAttemptId() {
+        return vectorAttemptId;
+    }
+
+    public void setVectorAttemptId(String vectorAttemptId) {
+        this.vectorAttemptId = vectorAttemptId;
     }
 
     public void setVectorizedAt(LocalDateTime vectorizedAt) {

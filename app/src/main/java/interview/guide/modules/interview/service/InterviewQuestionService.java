@@ -7,6 +7,7 @@ import interview.guide.common.ai.StructuredOutputInvoker;
 import interview.guide.common.constant.CommonConstants.InterviewDefaults;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
+import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.interview.model.HistoricalQuestion;
 import interview.guide.modules.interview.model.InterviewQuestionDTO;
 import interview.guide.modules.interview.skill.InterviewSkillService;
@@ -160,7 +161,8 @@ public class InterviewQuestionService {
         try {
             resumeQuestions = resumeFuture.join();
         } catch (CompletionException e) {
-            log.error("简历题生成失败，降级为全方向题", e.getCause());
+            log.error("简历题生成失败，降级为全方向题",
+                ErrorLogSanitizer.forLogging(e.getCause()));
             directionFuture.cancel(true);
             return generateDirectionOnly(questionChatClient, skill, difficultyDesc, questionCount,
                 historicalSection);
@@ -169,7 +171,8 @@ public class InterviewQuestionService {
         try {
             directionQuestions = directionFuture.join();
         } catch (CompletionException e) {
-            log.error("方向题生成失败，降级为全简历题", e.getCause());
+            log.error("方向题生成失败，降级为全简历题",
+                ErrorLogSanitizer.forLogging(e.getCause()));
             if (resumeQuestions.isEmpty()) {
                 return generateFallbackQuestions(skill, questionCount);
             }
@@ -218,7 +221,8 @@ public class InterviewQuestionService {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("简历题生成异常: {}", e.getMessage(), e);
+            log.error("简历题生成异常: {}", ErrorLogSanitizer.summarize(e),
+                ErrorLogSanitizer.forLogging(e));
             throw e;
         }
     }
@@ -267,7 +271,8 @@ public class InterviewQuestionService {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("方向题生成失败，回退到默认问题: {}", e.getMessage(), e);
+            log.error("方向题生成失败，回退到默认问题: {}",
+                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
             return generateFallbackQuestions(skill, questionCount);
         }
     }

@@ -61,6 +61,13 @@ class VectorizeStreamConsumerTest {
     return kb;
   }
 
+  private VectorizeStreamConsumer.VectorizePayload payload() {
+    VectorizeStreamConsumer.VectorizePayload payload =
+        new VectorizeStreamConsumer.VectorizePayload(7L);
+    payload.setAttemptId("attempt-1");
+    return payload;
+  }
+
   @Test
   @DisplayName("解析旧格式消息时忽略 content 字段")
   void shouldIgnoreLegacyContentField() {
@@ -90,7 +97,7 @@ class VectorizeStreamConsumerTest {
     void shouldSkipWhenEntityDeleted() {
       when(knowledgeBaseRepository.findById(7L)).thenReturn(Optional.empty());
 
-      consumer.processBusiness(new VectorizeStreamConsumer.VectorizePayload(7L));
+      consumer.processBusiness(payload());
 
       verify(vectorService, never()).vectorizeAndStore(anyLong(), anyString());
     }
@@ -101,7 +108,7 @@ class VectorizeStreamConsumerTest {
       when(knowledgeBaseRepository.findById(7L))
           .thenReturn(Optional.of(kb(" ", "a.pdf")));
 
-      assertThatThrownBy(() -> consumer.processBusiness(new VectorizeStreamConsumer.VectorizePayload(7L)))
+      assertThatThrownBy(() -> consumer.processBusiness(payload()))
           .isInstanceOf(BusinessException.class)
           .hasMessageContaining("缺少存储信息");
       verify(vectorService, never()).vectorizeAndStore(anyLong(), anyString());
@@ -114,7 +121,7 @@ class VectorizeStreamConsumerTest {
       when(parseService.downloadAndParseContent("kb/7", "a.pdf"))
           .thenThrow(new BusinessException(interview.guide.common.exception.ErrorCode.INTERNAL_ERROR, "RustFS 不可用"));
 
-      assertThatThrownBy(() -> consumer.processBusiness(new VectorizeStreamConsumer.VectorizePayload(7L)))
+      assertThatThrownBy(() -> consumer.processBusiness(payload()))
           .isInstanceOf(BusinessException.class);
     }
 
@@ -123,8 +130,10 @@ class VectorizeStreamConsumerTest {
     void shouldThrowWhenParsedContentEmpty() {
       when(knowledgeBaseRepository.findById(7L)).thenReturn(Optional.of(kb("kb/7", "a.pdf")));
       when(parseService.downloadAndParseContent("kb/7", "a.pdf")).thenReturn("   ");
+      when(knowledgeBaseRepository.heartbeatVectorProcessing(eq(7L), eq("attempt-1"), any()))
+          .thenReturn(1);
 
-      assertThatThrownBy(() -> consumer.processBusiness(new VectorizeStreamConsumer.VectorizePayload(7L)))
+      assertThatThrownBy(() -> consumer.processBusiness(payload()))
           .isInstanceOf(BusinessException.class)
           .hasMessageContaining("无法从文件中提取文本内容");
     }
@@ -134,30 +143,36 @@ class VectorizeStreamConsumerTest {
     void shouldVectorizeDownloadedContent() {
       when(knowledgeBaseRepository.findById(7L)).thenReturn(Optional.of(kb("kb/7", "a.pdf")));
       when(parseService.downloadAndParseContent("kb/7", "a.pdf")).thenReturn("解析后的正文");
+      when(knowledgeBaseRepository.heartbeatVectorProcessing(eq(7L), eq("attempt-1"), any()))
+          .thenReturn(1);
 
-      consumer.processBusiness(new VectorizeStreamConsumer.VectorizePayload(7L));
+      consumer.processBusiness(payload());
 
       verify(vectorService).vectorizeAndStore(org.mockito.ArgumentMatchers.eq(7L),
-            org.mockito.ArgumentMatchers.eq("解析后的正文"), org.mockito.ArgumentMatchers.any(Runnable.class));
+            org.mockito.ArgumentMatchers.eq("解析后的正文"),
+            org.mockito.ArgumentMatchers.eq("attempt-1"),
+            org.mockito.ArgumentMatchers.any(Runnable.class));
     }
   }
 
   @Test
   @DisplayName("条件领取：tryMarkProcessing 走 PENDING→PROCESSING 条件更新")
   void conditionalClaim() {
-    when(knowledgeBaseRepository.tryMarkVectorProcessing(eq(7L), any()))
+    when(knowledgeBaseRepository.tryMarkVectorProcessing(eq(7L), anyString(), any()))
         .thenReturn(1);
 
-    boolean claimed = consumer.tryMarkProcessing(new VectorizeStreamConsumer.VectorizePayload(7L));
+    VectorizeStreamConsumer.VectorizePayload payload = new VectorizeStreamConsumer.VectorizePayload(7L);
+    boolean claimed = consumer.tryMarkProcessing(payload);
 
     assertThat(claimed).isTrue();
-    verify(knowledgeBaseRepository).tryMarkVectorProcessing(eq(7L), any());
+    assertThat(payload.attemptId()).isNotBlank();
+    verify(knowledgeBaseRepository).tryMarkVectorProcessing(eq(7L), eq(payload.attemptId()), any());
   }
 
   @Test
   @DisplayName("条件领取失败（他人已领取）：不执行任务")
   void conditionalClaimRejected() {
-    when(knowledgeBaseRepository.tryMarkVectorProcessing(eq(7L), any()))
+    when(knowledgeBaseRepository.tryMarkVectorProcessing(eq(7L), anyString(), any()))
         .thenReturn(0);
 
     boolean claimed = consumer.tryMarkProcessing(new VectorizeStreamConsumer.VectorizePayload(7L));
@@ -168,19 +183,21 @@ class VectorizeStreamConsumerTest {
   @Test
   @DisplayName("markCompleted/markFailed 走条件更新，非 PROCESSING 时由 SQL 层 no-op")
   void terminalStatesAreConditional() {
-    consumer.markCompleted(new VectorizeStreamConsumer.VectorizePayload(7L));
-    consumer.markFailed(new VectorizeStreamConsumer.VectorizePayload(7L), "错误");
+    consumer.markCompleted(payload());
+    consumer.markFailed(payload(), "错误");
 
-    verify(knowledgeBaseRepository).completeVectorIfProcessing(eq(7L), any());
-    verify(knowledgeBaseRepository).failVectorUnlessCompleted(eq(7L), anyString(), any());
+    verify(knowledgeBaseRepository).completeVectorIfProcessing(eq(7L), eq("attempt-1"), any());
+    verify(knowledgeBaseRepository).failVectorIfProcessing(
+        eq(7L), eq("attempt-1"), anyString(), any());
   }
 
   @Test
   @DisplayName("重试重置失败（任务已完成或被替代）：不重新投递，ACK 丢弃")
   void retrySkippedWhenResetFails() {
-    when(knowledgeBaseRepository.resetVectorToPending(eq(7L), any())).thenReturn(0);
+    when(knowledgeBaseRepository.resetVectorToPending(eq(7L), eq("attempt-1"), any()))
+        .thenReturn(0);
 
-    consumer.retryMessage(new VectorizeStreamConsumer.VectorizePayload(7L), 2);
+    consumer.retryMessage(payload(), 2);
 
     verify(redisService, never()).streamAdd(anyString(), anyMap(), anyInt());
   }
@@ -189,20 +206,24 @@ class VectorizeStreamConsumerTest {
   @DisplayName("心跳节流：Embedding 阶段连续多批只写一次库（阈值内）")
   void heartbeatThrottledDuringEmbedding() {
     // 首批会写库一次（lastNanos 从 0 起步）
-    consumer.throttledEmbeddingHeartbeat(7L);
+    when(knowledgeBaseRepository.heartbeatVectorProcessing(eq(7L), eq("attempt-1"), any()))
+        .thenReturn(1);
+    VectorizeStreamConsumer.VectorizePayload payload = payload();
+    consumer.throttledEmbeddingHeartbeat(payload);
     // 节流窗口内的后续批次不再写库
-    consumer.throttledEmbeddingHeartbeat(7L);
-    consumer.throttledEmbeddingHeartbeat(7L);
+    consumer.throttledEmbeddingHeartbeat(payload);
+    consumer.throttledEmbeddingHeartbeat(payload);
 
     verify(knowledgeBaseRepository, org.mockito.Mockito.times(1))
-        .heartbeatVectorProcessing(eq(7L), any());
+        .heartbeatVectorProcessing(eq(7L), eq("attempt-1"), any());
   }
 
   @Test
   @DisplayName("重试消息只携带 kbId 与 retryCount")
   void shouldRetryWithIdOnlyMessage() {
-    when(knowledgeBaseRepository.resetVectorToPending(eq(7L), any())).thenReturn(1);
-    consumer.retryMessage(new VectorizeStreamConsumer.VectorizePayload(7L), 2);
+    when(knowledgeBaseRepository.resetVectorToPending(eq(7L), eq("attempt-1"), any()))
+        .thenReturn(1);
+    consumer.retryMessage(payload(), 2);
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);

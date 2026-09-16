@@ -530,7 +530,8 @@ public class QwenAsrService {
             }
 
         } catch (Exception e) {
-            log.error("[Session: {}] Error processing server event: {}", sessionId, ErrorLogSanitizer.summarize(e), e);
+            log.error("[Session: {}] Error processing server event: {}", sessionId,
+                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
             onError.accept(e);
         }
     }

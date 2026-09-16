@@ -129,37 +129,65 @@ public interface KnowledgeBaseRepository extends JpaRepository<KnowledgeBaseEnti
     /** PENDING → PROCESSING 条件领取，返回是否领取成功 */
     @Transactional
     @Modifying
-    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'PROCESSING', kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PENDING'")
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'PROCESSING', "
+        + "kb.vectorAttemptId = :attemptId, kb.vectorUpdatedAt = :now "
+        + "WHERE kb.id = :id AND kb.vectorStatus = 'PENDING'")
     int tryMarkVectorProcessing(@Param("id") Long id,
+                                @Param("attemptId") String attemptId,
                                 @Param("now") LocalDateTime now);
 
     /** 心跳：仍为 PROCESSING 才推进进展时间 */
     @Transactional
     @Modifying
-    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING'")
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorUpdatedAt = :now "
+        + "WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING' "
+        + "AND kb.vectorAttemptId = :attemptId")
     int heartbeatVectorProcessing(@Param("id") Long id,
+                                  @Param("attemptId") String attemptId,
                                   @Param("now") LocalDateTime now);
 
     /** PROCESSING → COMPLETED（非 PROCESSING 时 no-op） */
     @Transactional
     @Modifying
-    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'COMPLETED', kb.vectorError = null, kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING'")
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'COMPLETED', "
+        + "kb.vectorError = null, kb.vectorAttemptId = null, kb.vectorUpdatedAt = :now "
+        + "WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING' "
+        + "AND kb.vectorAttemptId = :attemptId")
     int completeVectorIfProcessing(@Param("id") Long id,
+                                   @Param("attemptId") String attemptId,
                                    @Param("now") LocalDateTime now);
 
-    /** → FAILED（不覆盖 COMPLETED） */
+    /** 当前执行代次 PROCESSING → FAILED。 */
     @Transactional
     @Modifying
-    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'FAILED', kb.vectorError = :error, kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus <> 'COMPLETED'")
-    int failVectorUnlessCompleted(@Param("id") Long id,
-                                  @Param("error") String error,
-                                  @Param("now") LocalDateTime now);
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'FAILED', "
+        + "kb.vectorError = :error, kb.vectorAttemptId = null, kb.vectorUpdatedAt = :now "
+        + "WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING' "
+        + "AND kb.vectorAttemptId = :attemptId")
+    int failVectorIfProcessing(@Param("id") Long id,
+                               @Param("attemptId") String attemptId,
+                               @Param("error") String error,
+                               @Param("now") LocalDateTime now);
+
+    /** 尚未领取的 PENDING → FAILED，用于生产者或恢复补投失败。 */
+    @Transactional
+    @Modifying
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'FAILED', "
+        + "kb.vectorError = :error, kb.vectorAttemptId = null, kb.vectorUpdatedAt = :now "
+        + "WHERE kb.id = :id AND kb.vectorStatus = 'PENDING'")
+    int failVectorIfPending(@Param("id") Long id,
+                            @Param("error") String error,
+                            @Param("now") LocalDateTime now);
 
     /** PROCESSING → PENDING（重试重置） */
     @Transactional
     @Modifying
-    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'PENDING', kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING'")
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'PENDING', "
+        + "kb.vectorAttemptId = null, kb.vectorUpdatedAt = :now "
+        + "WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING' "
+        + "AND kb.vectorAttemptId = :attemptId")
     int resetVectorToPending(@Param("id") Long id,
+                             @Param("attemptId") String attemptId,
                              @Param("now") LocalDateTime now);
 
     /** 恢复补投前原子推进时间（PENDING 且早于阈值），保证同期只补投一次 */
@@ -173,7 +201,10 @@ public interface KnowledgeBaseRepository extends JpaRepository<KnowledgeBaseEnti
     /** PROCESSING 无进展超阈值 → PENDING（恢复前置条件重置） */
     @Transactional
     @Modifying
-    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'PENDING', kb.vectorUpdatedAt = :now WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING' AND kb.vectorUpdatedAt < :threshold")
+    @Query("UPDATE KnowledgeBaseEntity kb SET kb.vectorStatus = 'PENDING', "
+        + "kb.vectorAttemptId = null, kb.vectorUpdatedAt = :now "
+        + "WHERE kb.id = :id AND kb.vectorStatus = 'PROCESSING' "
+        + "AND kb.vectorUpdatedAt < :threshold")
     int resetStaleVectorProcessing(@Param("id") Long id,
                                    @Param("threshold") LocalDateTime threshold,
                                    @Param("now") LocalDateTime now);

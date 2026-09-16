@@ -16,6 +16,7 @@ import org.springframework.core.io.DefaultResourceLoader;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -313,6 +314,18 @@ class VoiceContextCompressorTest {
             assertTrue(formattedChars(r.summary(), r.recent()) <= 500);
             // 始终保留最近消息
             assertEquals(5, r.recent().getLast().getSequenceNum());
+        }
+
+        @Test
+        @DisplayName("最近窗口降级格式化仍受字符硬预算约束")
+        void fallbackWindowFormattingRespectsBudget() {
+            enableSummary(120, 80);
+            List<String> history = compressor.formatRecentWithinBudget(List.of(
+                turn(1, "早期问题".repeat(40), "早期回答".repeat(40)),
+                turn(2, "最近问题".repeat(40), "最近回答".repeat(40))));
+
+            assertTrue(history.stream().mapToInt(String::length).sum() <= 120);
+            assertThat(history).anySatisfy(line -> assertThat(line).contains("最近回答"));
         }
 
         @Test

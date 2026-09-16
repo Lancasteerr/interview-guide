@@ -162,6 +162,8 @@ public class ResumeUploadService {
                         "fileUrl", resume.getStorageUrl() != null ? resume.getStorageUrl() : "",
                         "resumeId", resume.getId()
                 ),
+                "enqueueAccepted", true,
+                "message", "检测到重复文件，已返回现有分析结果",
                 "duplicate", true
         )).orElseGet(() -> Map.of(
                 "resume", Map.of(
@@ -174,6 +176,8 @@ public class ResumeUploadService {
                         "fileUrl", resume.getStorageUrl() != null ? resume.getStorageUrl() : "",
                         "resumeId", resume.getId()
                 ),
+                "enqueueAccepted", true,
+                "message", "检测到重复文件，已返回现有简历",
                 "duplicate", true
         ));
     }
@@ -196,6 +200,7 @@ public class ResumeUploadService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND, "简历不存在"));
             resume.setAnalyzeStatus(AsyncTaskStatus.PENDING);
             resume.setAnalyzeError(null);
+            resume.setAnalyzeAttemptId(null);
             resume.setAnalyzeUpdatedAt(java.time.LocalDateTime.now());
             resumeRepository.save(resume);
         });

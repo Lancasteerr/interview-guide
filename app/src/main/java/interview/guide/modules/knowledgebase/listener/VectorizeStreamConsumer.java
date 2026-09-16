@@ -7,6 +7,7 @@ import interview.guide.infrastructure.redis.RedisService;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
+import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
 import interview.guide.common.async.recovery.VectorizeRecoveryProperties;
@@ -17,6 +18,7 @@ import org.redisson.api.stream.StreamMessageId;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 知识库向量化 Stream 消费者
@@ -47,7 +49,27 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
         this.recoveryProperties = recoveryProperties;
     }
 
-    record VectorizePayload(Long kbId) {}
+    static final class VectorizePayload {
+
+        private final Long kbId;
+        private String attemptId;
+
+        VectorizePayload(Long kbId) {
+            this.kbId = kbId;
+        }
+
+        Long kbId() {
+            return kbId;
+        }
+
+        String attemptId() {
+            return attemptId;
+        }
+
+        void setAttemptId(String attemptId) {
+            this.attemptId = attemptId;
+        }
+    }
 
     @Override
     protected String taskDisplayName() {
@@ -110,9 +132,11 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
      */
     @Override
     protected boolean tryMarkProcessing(VectorizePayload payload) {
+        String attemptId = UUID.randomUUID().toString();
         boolean claimed = knowledgeBaseRepository.tryMarkVectorProcessing(
-            payload.kbId(), java.time.LocalDateTime.now()) == 1;
+            payload.kbId(), attemptId, java.time.LocalDateTime.now()) == 1;
         if (claimed) {
+            payload.setAttemptId(attemptId);
             lastEmbeddingHeartbeatNanos = 0;
         }
         return claimed;
@@ -121,21 +145,25 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
     /**
      * 心跳：独立短事务条件更新，只推进仍为 PROCESSING 的行。
      */
-    private void heartbeat(Long kbId) {
-        knowledgeBaseRepository.heartbeatVectorProcessing(kbId, java.time.LocalDateTime.now());
+    private void heartbeat(VectorizePayload payload) {
+        int updated = knowledgeBaseRepository.heartbeatVectorProcessing(
+            payload.kbId(), payload.attemptId(), java.time.LocalDateTime.now());
+        if (updated != 1) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "向量化任务执行权已失效");
+        }
     }
 
     /**
      * Embedding 阶段节流心跳：距上次超过阈值才写库一次。
      */
-    void throttledEmbeddingHeartbeat(Long kbId) {
+    void throttledEmbeddingHeartbeat(VectorizePayload payload) {
         long now = System.nanoTime();
         long throttleNanos = recoveryProperties.getHeartbeatThrottle().toNanos();
         if (lastEmbeddingHeartbeatNanos != 0 && now - lastEmbeddingHeartbeatNanos < throttleNanos) {
             return;
         }
+        heartbeat(payload);
         lastEmbeddingHeartbeatNanos = now;
-        heartbeat(kbId);
     }
 
     @Override
@@ -151,13 +179,13 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
         }
         String content = parseService.downloadAndParseContent(kb.getStorageKey(), kb.getOriginalFilename());
         // 下载 + 解析完成心跳
-        heartbeat(kbId);
+        heartbeat(payload);
         if (content == null || content.trim().isEmpty()) {
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "无法从文件中提取文本内容");
         }
-        vectorService.vectorizeAndStore(kbId, content, () -> {
+        vectorService.vectorizeAndStore(kbId, content, payload.attemptId(), () -> {
             // 分块完成与每个 Embedding 批次后的节流心跳
-            throttledEmbeddingHeartbeat(kbId);
+            throttledEmbeddingHeartbeat(payload);
         });
     }
 
@@ -169,20 +197,22 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
     protected void markCompleted(VectorizePayload payload) {
         // 条件写入：状态已不是 PROCESSING（被恢复/重试路径改写）时 no-op，防止覆盖他人结果
         knowledgeBaseRepository.completeVectorIfProcessing(
-            payload.kbId(), java.time.LocalDateTime.now());
+            payload.kbId(), payload.attemptId(), java.time.LocalDateTime.now());
     }
 
     @Override
     protected void markFailed(VectorizePayload payload, String error) {
-        knowledgeBaseRepository.failVectorUnlessCompleted(
-            payload.kbId(), truncateError(error), java.time.LocalDateTime.now());
+        knowledgeBaseRepository.failVectorIfProcessing(
+            payload.kbId(), payload.attemptId(), truncateError(error),
+            java.time.LocalDateTime.now());
     }
 
     @Override
     protected void retryMessage(VectorizePayload payload, int retryCount) {
         Long kbId = payload.kbId();
         // 条件领取的配套重置：PROCESSING → PENDING 成功才重新投递，否则任务已完成/被替代，只记录并 ACK 丢弃
-        int reset = knowledgeBaseRepository.resetVectorToPending(kbId, java.time.LocalDateTime.now());
+        int reset = knowledgeBaseRepository.resetVectorToPending(
+            kbId, payload.attemptId(), java.time.LocalDateTime.now());
         if (reset != 1) {
             log.warn("重试重置失败（任务已完成或状态不再匹配），ACK 丢弃: kbId={}, retryCount={}", kbId, retryCount);
             return;
@@ -201,9 +231,10 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
             log.info("向量化任务已重新入队: kbId={}, retryCount={}", kbId, retryCount);
 
         } catch (Exception e) {
-            log.error("重试入队失败: kbId={}, error={}", kbId, e.getMessage(), e);
-            knowledgeBaseRepository.failVectorUnlessCompleted(
-                kbId, truncateError("重试入队失败: " + e.getMessage()), java.time.LocalDateTime.now());
+            log.error("重试入队失败: kbId={}, error={}", kbId,
+                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
+            knowledgeBaseRepository.failVectorIfPending(
+                kbId, "重试入队失败", java.time.LocalDateTime.now());
         }
     }
 

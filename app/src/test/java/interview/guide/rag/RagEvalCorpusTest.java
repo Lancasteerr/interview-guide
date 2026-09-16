@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TextSplitter;
-import org.springframework.ai.transformer.splitter.TokenTextSplitter;
+import interview.guide.modules.knowledgebase.service.KnowledgeBaseVectorProperties;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
@@ -29,7 +29,7 @@ class RagEvalCorpusTest {
 
   private static final int MAX_TOP_K = 20;
 
-  private final TextSplitter splitter = TokenTextSplitter.builder().build();
+  private final TextSplitter splitter = new KnowledgeBaseVectorProperties().createTextSplitter();
 
   private List<RagEvalSample> samples() throws IOException {
     String jsonl = new String(

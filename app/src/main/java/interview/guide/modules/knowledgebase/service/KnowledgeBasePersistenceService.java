@@ -5,6 +5,7 @@ import interview.guide.common.exception.ErrorCode;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
+import interview.guide.modules.knowledgebase.repository.VectorRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 知识库持久化服务
@@ -23,6 +25,7 @@ import java.util.Map;
 public class KnowledgeBasePersistenceService {
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
+    private final VectorRepository vectorRepository;
 
     /**
      * 处理重复知识库（更新访问计数）
@@ -48,6 +51,8 @@ public class KnowledgeBasePersistenceService {
                 "fileKey", kb.getStorageKey() != null ? kb.getStorageKey() : "",
                 "fileUrl", kb.getStorageUrl() != null ? kb.getStorageUrl() : ""
             ),
+            "enqueueAccepted", true,
+            "message", "检测到重复文件，已返回现有知识库",
             "duplicate", true
         );
     }
@@ -64,6 +69,30 @@ public class KnowledgeBasePersistenceService {
             kb.setVectorUpdatedAt(java.time.LocalDateTime.now());
             knowledgeBaseRepository.save(kb);
         });
+    }
+
+    /**
+     * 在锁定知识库行后校验执行代次，并原子提升临时向量与写入配置快照。
+     * Embedding 已在调用前完成，不会进入本数据库事务。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void activateVectorJobAndUpdateSnapshot(Long knowledgeBaseId, String attemptId,
+                                                    String jobId, int chunkCount,
+                                                    String vectorConfig) {
+        KnowledgeBaseEntity kb = knowledgeBaseRepository.findByIdForUpdate(knowledgeBaseId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.KNOWLEDGE_BASE_NOT_FOUND));
+        if (kb.getVectorStatus() != VectorStatus.PROCESSING
+            || !Objects.equals(kb.getVectorAttemptId(), attemptId)) {
+            throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_VECTORIZATION_FAILED,
+                "向量化任务执行权已失效");
+        }
+        vectorRepository.deleteByKnowledgeBaseId(knowledgeBaseId);
+        vectorRepository.promoteVectorJob(knowledgeBaseId, jobId);
+        kb.setChunkCount(chunkCount);
+        kb.setVectorConfig(vectorConfig);
+        kb.setVectorizedAt(java.time.LocalDateTime.now());
+        kb.setVectorUpdatedAt(java.time.LocalDateTime.now());
+        knowledgeBaseRepository.save(kb);
     }
 
     /**
@@ -104,6 +133,7 @@ public class KnowledgeBasePersistenceService {
         
         kb.setVectorStatus(VectorStatus.PENDING);
         kb.setVectorError(null);
+        kb.setVectorAttemptId(null);
         kb.setVectorUpdatedAt(java.time.LocalDateTime.now());
         knowledgeBaseRepository.save(kb);
         
@@ -124,4 +154,3 @@ public class KnowledgeBasePersistenceService {
         return filename;
     }
 }
-

@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
+import interview.guide.common.log.ErrorLogSanitizer;
 import org.slf4j.Logger;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.converter.BeanOutputConverter;
@@ -88,10 +89,12 @@ public class StructuredOutputInvoker {
                 recordAttempt(contextTag, STATUS_FAILURE);
                 if (attempt < maxAttempts) {
                     log.warn("{}结构化解析失败，准备重试: attempt={}/{}, error={}",
-                        logContext, attempt, maxAttempts, e.getMessage());
+                        logContext, attempt, maxAttempts, ErrorLogSanitizer.summarize(e),
+                        ErrorLogSanitizer.forLogging(e));
                 } else {
                     log.error("{}结构化解析失败，已达最大重试次数: attempts={}, error={}",
-                        logContext, maxAttempts, e.getMessage());
+                        logContext, maxAttempts, ErrorLogSanitizer.summarize(e),
+                        ErrorLogSanitizer.forLogging(e));
                 }
             }
         }
@@ -99,7 +102,7 @@ public class StructuredOutputInvoker {
         recordInvocation(contextTag, STATUS_FAILURE, startNanos);
         throw new BusinessException(
             errorCode,
-            errorPrefix + (lastError != null ? lastError.getMessage() : "unknown")
+            errorPrefix + "请稍后重试"
         );
     }
 

@@ -187,6 +187,7 @@ app:
         min-chunk-length-to-embed: ${APP_AI_RAG_VECTORIZATION_MIN_CHUNK_LENGTH_TO_EMBED:5}
         max-num-chunks: ${APP_AI_RAG_VECTORIZATION_MAX_NUM_CHUNKS:10000}
         keep-separator: ${APP_AI_RAG_VECTORIZATION_KEEP_SEPARATOR:true}
+        punctuation-marks: ${APP_AI_RAG_VECTORIZATION_PUNCTUATION_MARKS:.,?,!,\\n,。,？,！,；}
         strategy-version: ${APP_AI_RAG_VECTORIZATION_STRATEGY_VERSION:token-v1}
 
   interview:
@@ -215,6 +216,11 @@ app:
     api-call-timeout: ${APP_STORAGE_API_CALL_TIMEOUT:60s}
     api-call-attempt-timeout: ${APP_STORAGE_API_CALL_ATTEMPT_TIMEOUT:20s}
     auto-create-bucket: ${APP_STORAGE_AUTO_CREATE_BUCKET:true}
+
+  document-parse:
+    timeout: ${APP_DOCUMENT_PARSE_TIMEOUT:2m}
+    pool-size: ${APP_DOCUMENT_PARSE_POOL_SIZE:2}
+    queue-capacity: ${APP_DOCUMENT_PARSE_QUEUE_CAPACITY:20}
   
   # 卡住任务恢复调度（P1-07）：pending 阈值必须大于正常排队时间（消费者单线程）
   async:

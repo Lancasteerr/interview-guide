@@ -1,5 +1,7 @@
 package interview.guide.common.exception;
 
+import interview.guide.common.log.ErrorLogSanitizer;
+
 import interview.guide.common.result.Result;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +33,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     @ResponseStatus(HttpStatus.OK)
     public Result<Void> handleBusinessException(BusinessException e) {
-        log.warn("业务异常: code={}, message={}", e.getCode(), e.getMessage());
+        log.warn("业务异常: code={}", e.getCode());
         return Result.error(e.getCode(), e.getMessage());
     }
     
@@ -67,7 +69,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     @ResponseStatus(HttpStatus.OK)
     public Result<Void> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException e) {
-        log.warn("文件上传大小超限: {}", e.getMessage());
+        log.warn("文件上传大小超限: {}", ErrorLogSanitizer.summarize(e));
         return Result.error(ErrorCode.BAD_REQUEST, "文件大小超过限制");
     }
     
@@ -77,7 +79,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalArgumentException.class)
     @ResponseStatus(HttpStatus.OK)
     public Result<Void> handleIllegalArgumentException(IllegalArgumentException e) {
-        log.warn("非法参数: {}", e.getMessage());
+        log.warn("非法参数: {}", ErrorLogSanitizer.summarize(e));
         return Result.error(ErrorCode.BAD_REQUEST, e.getMessage());
     }
     
@@ -88,7 +90,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ResourceAccessException.class)
     @ResponseStatus(HttpStatus.OK)
     public Result<Void> handleResourceAccessException(ResourceAccessException e) {
-        log.error("AI服务连接失败: {}", e.getMessage(), e);
+        log.error("AI服务连接失败: {}", ErrorLogSanitizer.summarize(e),
+            ErrorLogSanitizer.forLogging(e));
 
         return switch (e.getCause()) {
             case SocketTimeoutException _ ->
@@ -110,7 +113,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RestClientException.class)
     @ResponseStatus(HttpStatus.OK)
     public Result<Void> handleRestClientException(RestClientException e) {
-        log.error("AI服务调用失败: {}", e.getMessage(), e);
+        log.error("AI服务调用失败: {}", ErrorLogSanitizer.summarize(e),
+            ErrorLogSanitizer.forLogging(e));
 
         return switch (e.getMessage()) {
             case null -> Result.error(ErrorCode.AI_SERVICE_ERROR, "AI服务调用失败，请稍后重试");
@@ -149,7 +153,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.OK)
     public Result<Void> handleException(Exception e) {
-        log.error("系统异常: {}", e.getMessage(), e);
+        log.error("系统异常: {}", ErrorLogSanitizer.summarize(e),
+            ErrorLogSanitizer.forLogging(e));
         return Result.error(ErrorCode.INTERNAL_ERROR, "系统繁忙，请稍后重试");
     }
 }

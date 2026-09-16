@@ -19,6 +19,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -107,6 +108,11 @@ public class ResumePersistenceService {
      */
     @Transactional(rollbackFor = Exception.class)
     public ResumeAnalysisEntity saveAnalysis(ResumeEntity resume, ResumeAnalysisResponse analysis) {
+        return saveAnalysisInternal(resume, analysis);
+    }
+
+    private ResumeAnalysisEntity saveAnalysisInternal(ResumeEntity resume,
+                                                       ResumeAnalysisResponse analysis) {
         try {
             // 使用 MapStruct 映射基础字段
             ResumeAnalysisEntity entity = resumeMapper.toAnalysisEntity(analysis);
@@ -125,6 +131,23 @@ public class ResumePersistenceService {
             log.error("序列化评测结果失败: {}", e.getMessage(), e);
             throw new BusinessException(ErrorCode.RESUME_ANALYSIS_FAILED, "保存评测结果失败");
         }
+    }
+
+    /**
+     * 锁定简历行并校验当前执行代次后保存分析，防止超时回收后的旧消费者落库。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ResumeAnalysisEntity saveAnalysisIfOwned(Long resumeId, String attemptId,
+                                                     ResumeAnalysisResponse analysis) {
+        ResumeEntity resume = resumeRepository.findByIdForUpdate(resumeId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.RESUME_NOT_FOUND, "简历不存在"));
+        if (resume.getAnalyzeStatus() != interview.guide.common.model.AsyncTaskStatus.PROCESSING
+            || !Objects.equals(resume.getAnalyzeAttemptId(), attemptId)) {
+            throw new BusinessException(ErrorCode.RESUME_ANALYSIS_FAILED, "简历分析任务执行权已失效");
+        }
+        resume.setAnalyzeUpdatedAt(java.time.LocalDateTime.now());
+        resumeRepository.save(resume);
+        return saveAnalysisInternal(resume, analysis);
     }
     
     /**

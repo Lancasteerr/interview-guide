@@ -69,7 +69,7 @@ public class AnalyzeStreamProducer extends AbstractStreamProducer<AnalyzeStreamP
     @Override
     protected void onSendFailed(AnalyzeTaskPayload payload, String error) {
         // 条件更新：不覆盖已被其他路径改写的终态（如 COMPLETED）
-        resumeRepository.failAnalyzeUnlessCompleted(
+        resumeRepository.failAnalyzeIfPending(
             payload.resumeId(), truncateError(error), java.time.LocalDateTime.now());
     }
 }

@@ -62,7 +62,7 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
     @Override
     protected void onSendFailed(VectorizeTaskPayload payload, String error) {
         // 条件更新：不覆盖已被其他路径改写的终态（如 COMPLETED）
-        knowledgeBaseRepository.failVectorUnlessCompleted(
+        knowledgeBaseRepository.failVectorIfPending(
             payload.kbId(), truncateError(error), java.time.LocalDateTime.now());
     }
 }

@@ -38,7 +38,7 @@ public interface VoiceInterviewMessageRepository extends JpaRepository<VoiceInte
     /**
      * 定位排除 SUMMARY 后第 N 条消息（OFFSET/LIMIT 1），用于旧 SUMMARY 行覆盖轮数到边界的迁移。
      */
-    Optional<VoiceInterviewMessageEntity> findFirstBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(
+    List<VoiceInterviewMessageEntity> findBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(
         Long sessionId, String messageType, Pageable pageable);
 
     Optional<VoiceInterviewMessageEntity>

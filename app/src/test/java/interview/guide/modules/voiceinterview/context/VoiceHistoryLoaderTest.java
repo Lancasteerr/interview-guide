@@ -131,8 +131,8 @@ class VoiceHistoryLoaderTest {
     stubWindow(17, 20);
     // 旧编码：sequenceNum=-16 → coveredTurns=15
     when(interviewService.loadSummaryRow("1")).thenReturn(Optional.of(summaryRow(-16, null)));
-    when(messageRepository.findFirstBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(
-        any(), anyString(), any(Pageable.class))).thenReturn(Optional.of(msg(15)));
+    when(messageRepository.findBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(
+        any(), anyString(), any(Pageable.class))).thenReturn(List.of(msg(15)));
     when(messageRepository.findBySessionIdAndMessageTypeNotAndSequenceNumGreaterThanAndSequenceNumLessThanOrderBySequenceNumAsc(
         any(), anyString(), eq(15), eq(17), any(Pageable.class))).thenReturn(List.of());
     when(compressor.compress(any(), anyString(), eq(0), isNull()))
@@ -143,10 +143,11 @@ class VoiceHistoryLoaderTest {
 
     // 迁移定位：OFFSET 14, LIMIT 1
     ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
-    verify(messageRepository).findFirstBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(
+    verify(messageRepository).findBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(
         any(), anyString(), captor.capture());
     assertThat(captor.getValue().getOffset()).isEqualTo(14);
     assertThat(captor.getValue().getPageSize()).isEqualTo(1);
+    verify(interviewService).saveSummaryRow("1", "已有摘要", 15);
     // 全量读取从未发生
     verify(messageRepository, never())
         .findBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(any(), anyString());
@@ -157,7 +158,7 @@ class VoiceHistoryLoaderTest {
   void fallsBackToWindowOnFailure() {
     when(interviewService.loadSummaryRow("1")).thenThrow(new RuntimeException("db down"));
     stubWindow(81, 20);
-    when(compressor.formatRecent(any())).thenReturn(List.of("面试官：问题100"));
+    when(compressor.formatRecentWithinBudget(any())).thenReturn(List.of("面试官：问题100"));
 
     List<String> history = loader.loadHistory("1", null);
 
@@ -167,6 +168,7 @@ class VoiceHistoryLoaderTest {
     // 主路径在 SUMMARY 读取即失败，窗口查询只发生在降级路径（一次且有界）
     verify(messageRepository, times(1))
         .findBySessionIdAndMessageTypeNotOrderBySequenceNumDesc(any(), anyString(), any(Pageable.class));
+    verify(compressor).formatRecentWithinBudget(any());
   }
 
   @Test

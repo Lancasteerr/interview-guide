@@ -2,6 +2,7 @@ package interview.guide.infrastructure.file;
 
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
+import interview.guide.common.log.ErrorLogSanitizer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.exception.TikaException;
 import org.apache.tika.extractor.EmbeddedDocumentExtractor;
@@ -12,12 +13,18 @@ import org.apache.tika.parser.Parser;
 import org.apache.tika.parser.pdf.PDFParserConfig;
 import org.apache.tika.sax.BodyContentHandler;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.web.multipart.MultipartFile;
 import org.xml.sax.SAXException;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * 通用文档解析服务
@@ -31,9 +38,21 @@ public class DocumentParseService {
     private static final int MAX_TEXT_LENGTH = 5 * 1024 * 1024; // 5MB
 
     private final TextCleaningService textCleaningService;
+    private final ThreadPoolExecutor parseExecutor;
+    private final DocumentParseProperties properties;
 
     public DocumentParseService(TextCleaningService textCleaningService) {
+        this(textCleaningService, null, new DocumentParseProperties());
+    }
+
+    @Autowired
+    public DocumentParseService(TextCleaningService textCleaningService,
+                                @Qualifier("documentParseExecutor")
+                                ThreadPoolExecutor parseExecutor,
+                                DocumentParseProperties properties) {
         this.textCleaningService = textCleaningService;
+        this.parseExecutor = parseExecutor;
+        this.properties = properties;
     }
 
     /**
@@ -52,14 +71,17 @@ public class DocumentParseService {
             return "";
         }
 
-        try (InputStream inputStream = file.getInputStream()) {
-            String content = parseContent(inputStream);
+        try {
+            String content = parseWithTimeout(file.getBytes());
             String cleanedContent = textCleaningService.cleanText(content);
             log.info("文件解析成功，提取文本长度: {} 字符", cleanedContent.length());
             return cleanedContent;
-        } catch (IOException | TikaException | SAXException e) {
-            log.error("文件解析失败: {}", e.getMessage(), e);
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "文件解析失败: " + e.getMessage());
+        } catch (BusinessException e) {
+            throw e;
+        } catch (IOException e) {
+            log.error("文件读取失败: {}", ErrorLogSanitizer.summarize(e),
+                ErrorLogSanitizer.forLogging(e));
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "文件读取失败");
         }
     }
 
@@ -79,14 +101,13 @@ public class DocumentParseService {
             return "";
         }
 
-        try (InputStream inputStream = new ByteArrayInputStream(fileBytes)) {
-            String content = parseContent(inputStream);
+        try {
+            String content = parseWithTimeout(fileBytes);
             String cleanedContent = textCleaningService.cleanText(content);
             log.info("文件解析成功，提取文本长度: {} 字符", cleanedContent.length());
             return cleanedContent;
-        } catch (IOException | TikaException | SAXException e) {
-            log.error("文件解析失败: {}", e.getMessage(), e);
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "文件解析失败: " + e.getMessage());
+        } catch (BusinessException e) {
+            throw e;
         }
     }
 
@@ -138,6 +159,42 @@ public class DocumentParseService {
         return handler.toString();
     }
 
+    private String parseWithTimeout(byte[] fileBytes) {
+        if (parseExecutor == null) {
+            return parseDirect(fileBytes);
+        }
+        var future = parseExecutor.submit(() -> {
+            try (InputStream inputStream = new ByteArrayInputStream(fileBytes)) {
+                return parseContent(inputStream);
+            }
+        });
+        try {
+            return future.get(properties.getTimeout().toMillis(), TimeUnit.MILLISECONDS);
+        } catch (TimeoutException e) {
+            future.cancel(true);
+            log.error("文件解析超时: timeoutMs={}", properties.getTimeout().toMillis(),
+                ErrorLogSanitizer.forLogging(e));
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "文件解析超时，请检查文件内容");
+        } catch (InterruptedException e) {
+            future.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "文件解析被中断");
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
+            log.error("文件解析失败: {}", ErrorLogSanitizer.summarize(cause),
+                ErrorLogSanitizer.forLogging(cause));
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "文件解析失败");
+        }
+    }
+
+    private String parseDirect(byte[] fileBytes) {
+        try (InputStream inputStream = new ByteArrayInputStream(fileBytes)) {
+            return parseContent(inputStream);
+        } catch (IOException | TikaException | SAXException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "文件解析失败");
+        }
+    }
+
     /**
      * 从存储下载文件并解析内容
      *
@@ -156,8 +213,9 @@ public class DocumentParseService {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("下载并解析文件失败: storageKey={}, error={}", storageKey, e.getMessage(), e);
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "下载并解析文件失败: " + e.getMessage());
+            log.error("下载并解析文件失败: storageKey={}, error={}", storageKey,
+                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "下载并解析文件失败");
         }
     }
 }

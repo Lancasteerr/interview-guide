@@ -1,6 +1,7 @@
 package interview.guide.modules.voiceinterview.context;
 
 import interview.guide.common.ai.LlmProviderRegistry;
+import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
 import interview.guide.modules.voiceinterview.model.VoiceInterviewMessageEntity;
 import lombok.extern.slf4j.Slf4j;
@@ -257,6 +258,13 @@ public class VoiceContextCompressor {
     }
 
     /**
+     * 先应用字符硬预算，再格式化最近窗口；用于加载失败时的有界降级路径。
+     */
+    public List<String> formatRecentWithinBudget(List<VoiceInterviewMessageEntity> turns) {
+        return formatRecent(applyCharBudget(null, turns));
+    }
+
+    /**
      * 将早期轮次增量合并进已有摘要。生成失败返回 null，由调用方降级为最近窗口，不阻塞主链路。
      */
     private String summarize(String prevSummary, List<String> earlyTurns, String llmProvider) {
@@ -276,7 +284,8 @@ public class VoiceContextCompressor {
                     .prompt().user(prompt).call().content();
             return (result == null || result.isBlank()) ? null : result.trim();
         } catch (Exception e) {
-            log.warn("上下文摘要生成失败: error={}", e.getMessage(), e);
+            log.warn("上下文摘要生成失败: error={}", ErrorLogSanitizer.summarize(e),
+                ErrorLogSanitizer.forLogging(e));
             return null;
         }
     }

@@ -1,7 +1,12 @@
 package interview.guide.modules.knowledgebase.service;
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Pattern;
 import lombok.Data;
+import org.springframework.ai.transformer.splitter.TextSplitter;
+import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import org.springframework.validation.annotation.Validated;
@@ -24,6 +29,8 @@ public class KnowledgeBaseVectorProperties {
     /**
      * 分块器类型，当前仅支持 token。
      */
+    @NotBlank(message = "splitter 不能为空")
+    @Pattern(regexp = "token", message = "splitter 当前仅支持 token")
     private String splitter = "token";
 
     /**
@@ -58,12 +65,28 @@ public class KnowledgeBaseVectorProperties {
     /**
      * 句末标点集合，YAML 中用 "\\n" 表示换行符。
      */
+    @NotEmpty(message = "punctuationMarks 不能为空")
     private List<String> punctuationMarks = List.of(".", "?", "!", "\\n", "。", "？", "！", "；");
 
     /**
      * 策略版本标识，写入向量 metadata 与知识库配置快照，排查混用问题。
      */
+    @NotBlank(message = "strategyVersion 不能为空")
     private String strategyVersion = "token-v1";
+
+    /**
+     * 按当前配置构造生产使用的分块器，测试与运行时必须复用该入口。
+     */
+    public TextSplitter createTextSplitter() {
+        return TokenTextSplitter.builder()
+            .withChunkSize(chunkSize)
+            .withMinChunkSizeChars(minChunkSizeChars)
+            .withMinChunkLengthToEmbed(minChunkLengthToEmbed)
+            .withMaxNumChunks(maxNumChunks)
+            .withKeepSeparator(keepSeparator)
+            .withPunctuationMarks(toPunctuationCharacters())
+            .build();
+    }
 
     /**
      * 标点字符串转字符集合；"\\n" 转义为换行符，其余取首字符。

@@ -180,7 +180,7 @@ class DocumentParseServiceTest {
         when(file.getOriginalFilename()).thenReturn("error.txt");
         when(file.isEmpty()).thenReturn(false);  // 文件不为空
         when(file.getSize()).thenReturn(1024L);  // 文件有内容
-        when(file.getInputStream()).thenThrow(new IOException("IO Error"));
+        when(file.getBytes()).thenThrow(new IOException("IO Error"));
 
         // When & Then
         BusinessException exception = assertThrows(
@@ -188,7 +188,7 @@ class DocumentParseServiceTest {
             () -> documentParseService.parseContent(file)
         );
         
-        assertTrue(exception.getMessage().contains("文件解析失败"));
+        assertTrue(exception.getMessage().contains("文件读取失败"));
     }
 
     @Test

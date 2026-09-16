@@ -78,6 +78,7 @@ public class VoiceHistoryLoader {
       // 2. 旧数据迁移：只用 OFFSET/LIMIT 1 定位第 N 条，不全量读取、不重新摘要
       coveredSequenceNum = migrateLegacyBoundary(sessionIdLong,
           summaryRow.getSequenceNum());
+      interviewService.saveSummaryRow(sessionId, cachedSummary, coveredSequenceNum);
     }
 
     // 3. 倒序取最近窗口，内存恢复升序
@@ -136,9 +137,11 @@ public class VoiceHistoryLoader {
       return 0;
     }
     VoiceInterviewMessageEntity nth = messageRepository
-        .findFirstBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(
+        .findBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(
             sessionIdLong, VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY,
             PageRequest.of(coveredTurns - 1, 1))
+        .stream()
+        .findFirst()
         .orElse(null);
     if (nth == null || nth.getSequenceNum() == null) {
       log.warn("旧摘要边界迁移定位失败，回退边界 0: sessionId={}", sessionIdLong);
@@ -159,7 +162,7 @@ public class VoiceHistoryLoader {
             PageRequest.of(0, windowSize));
     List<VoiceInterviewMessageEntity> recent = new ArrayList<>(recentDesc);
     java.util.Collections.reverse(recent);
-    return new ArrayList<>(compressor.formatRecent(recent));
+    return new ArrayList<>(compressor.formatRecentWithinBudget(recent));
   }
 
   /**

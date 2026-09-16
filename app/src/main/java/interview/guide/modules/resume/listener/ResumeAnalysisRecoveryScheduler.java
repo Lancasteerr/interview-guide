@@ -71,7 +71,7 @@ public class ResumeAnalysisRecoveryScheduler {
       return;
     }
     if (resume.getAnalyzeRecoveryCount() >= properties.getMaxRecoveryCount()) {
-      resumeRepository.failAnalyzeUnlessCompleted(resumeId,
+      resumeRepository.failAnalyzeIfPending(resumeId,
           "自动恢复次数达到上限（" + resume.getAnalyzeRecoveryCount() + "），请手动重试", LocalDateTime.now());
       log.warn("简历分析任务自动恢复达到上限转 FAILED: resumeId={}, recoveryCount={}",
           resumeId, resume.getAnalyzeRecoveryCount());

@@ -73,6 +73,12 @@ class AnalyzeStreamTest {
     return resume;
   }
 
+  private AnalyzeStreamConsumer.AnalyzePayload payload() {
+    AnalyzeStreamConsumer.AnalyzePayload payload = new AnalyzeStreamConsumer.AnalyzePayload(5L);
+    payload.setAttemptId("attempt-1");
+    return payload;
+  }
+
   @Nested
   @DisplayName("生产者")
   class ProducerTests {
@@ -112,11 +118,16 @@ class AnalyzeStreamTest {
       when(resumeRepository.findById(5L))
           .thenReturn(Optional.of(resume("数据库中的简历正文", "resume/5", "a.pdf")));
       when(gradingService.analyzeResume("数据库中的简历正文")).thenReturn(analysis());
+      when(resumeRepository.heartbeatAnalyzeProcessing(
+          org.mockito.ArgumentMatchers.eq(5L),
+          org.mockito.ArgumentMatchers.eq("attempt-1"), any())).thenReturn(1);
 
-      consumer.processBusiness(new AnalyzeStreamConsumer.AnalyzePayload(5L));
+      consumer.processBusiness(payload());
 
       verify(parseService, never()).downloadAndParseContent(anyString(), anyString());
-      verify(persistenceService).saveAnalysis(any(ResumeEntity.class), any(ResumeAnalysisResponse.class));
+      verify(persistenceService).saveAnalysisIfOwned(
+          org.mockito.ArgumentMatchers.eq(5L), org.mockito.ArgumentMatchers.eq("attempt-1"),
+          any(ResumeAnalysisResponse.class));
     }
 
     @Test
@@ -126,11 +137,16 @@ class AnalyzeStreamTest {
           .thenReturn(Optional.of(resume(null, "resume/5", "a.pdf")));
       when(parseService.downloadAndParseContent("resume/5", "a.pdf")).thenReturn("恢复的简历正文");
       when(gradingService.analyzeResume("恢复的简历正文")).thenReturn(analysis());
+      when(resumeRepository.heartbeatAnalyzeProcessing(
+          org.mockito.ArgumentMatchers.eq(5L),
+          org.mockito.ArgumentMatchers.eq("attempt-1"), any())).thenReturn(1);
 
-      consumer.processBusiness(new AnalyzeStreamConsumer.AnalyzePayload(5L));
+      consumer.processBusiness(payload());
 
       verify(persistenceService).updateResumeText(5L, "恢复的简历正文");
-      verify(persistenceService).saveAnalysis(any(ResumeEntity.class), any(ResumeAnalysisResponse.class));
+      verify(persistenceService).saveAnalysisIfOwned(
+          org.mockito.ArgumentMatchers.eq(5L), org.mockito.ArgumentMatchers.eq("attempt-1"),
+          any(ResumeAnalysisResponse.class));
     }
 
     @Test
@@ -140,7 +156,11 @@ class AnalyzeStreamTest {
           .thenReturn(Optional.of(resume("", "resume/5", "a.pdf")));
       when(parseService.downloadAndParseContent("resume/5", "a.pdf")).thenReturn(" ");
 
-      assertThatThrownBy(() -> consumer.processBusiness(new AnalyzeStreamConsumer.AnalyzePayload(5L)))
+      when(resumeRepository.heartbeatAnalyzeProcessing(
+          org.mockito.ArgumentMatchers.eq(5L),
+          org.mockito.ArgumentMatchers.eq("attempt-1"), any())).thenReturn(1);
+
+      assertThatThrownBy(() -> consumer.processBusiness(payload()))
           .isInstanceOf(BusinessException.class)
           .hasMessageContaining("无法获取简历文本内容");
       verify(gradingService, never()).analyzeResume(anyString());
@@ -151,7 +171,7 @@ class AnalyzeStreamTest {
     void shouldSkipWhenEntityDeleted() {
       when(resumeRepository.findById(5L)).thenReturn(Optional.empty());
 
-      consumer.processBusiness(new AnalyzeStreamConsumer.AnalyzePayload(5L));
+      consumer.processBusiness(payload());
 
       verify(gradingService, never()).analyzeResume(anyString());
     }
@@ -160,8 +180,9 @@ class AnalyzeStreamTest {
     @DisplayName("重试消息只携带 resumeId 与 retryCount")
     void shouldRetryWithIdOnlyMessage() {
       when(resumeRepository.resetAnalyzeToPending(org.mockito.ArgumentMatchers.eq(5L),
-          org.mockito.ArgumentMatchers.any())).thenReturn(1);
-      consumer.retryMessage(new AnalyzeStreamConsumer.AnalyzePayload(5L), 3);
+          org.mockito.ArgumentMatchers.eq("attempt-1"), org.mockito.ArgumentMatchers.any()))
+          .thenReturn(1);
+      consumer.retryMessage(payload(), 3);
 
       @SuppressWarnings("unchecked")
       ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);

@@ -2,19 +2,21 @@ package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
+import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.common.transaction.TransactionalExecutor;
 import jakarta.annotation.PostConstruct;
 import interview.guide.modules.knowledgebase.repository.VectorRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TextSplitter;
-import org.springframework.ai.transformer.splitter.TokenTextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -57,14 +59,7 @@ public class KnowledgeBaseVectorService {
         this.vectorProperties = vectorProperties;
         this.persistenceService = persistenceService;
         // Chunk 策略由 app.ai.rag.vectorization 配置驱动（仅 Spring AI 原生参数，无 overlap）
-        this.textSplitter = TokenTextSplitter.builder()
-            .withChunkSize(vectorProperties.getChunkSize())
-            .withMinChunkSizeChars(vectorProperties.getMinChunkSizeChars())
-            .withMinChunkLengthToEmbed(vectorProperties.getMinChunkLengthToEmbed())
-            .withMaxNumChunks(vectorProperties.getMaxNumChunks())
-            .withKeepSeparator(vectorProperties.isKeepSeparator())
-            .withPunctuationMarks(vectorProperties.toPunctuationCharacters())
-            .build();
+        this.textSplitter = vectorProperties.createTextSplitter();
     }
 
     KnowledgeBaseVectorService(VectorStore vectorStore, VectorRepository vectorRepository) {
@@ -84,6 +79,14 @@ public class KnowledgeBaseVectorService {
      * 带进度心跳回调的向量化：分块完成与每个 Embedding 批次后回调（由调用方决定节流）。
      */
     public void vectorizeAndStore(Long knowledgeBaseId, String content, Runnable progressHeartbeat) {
+        vectorizeAndStore(knowledgeBaseId, content, null, progressHeartbeat);
+    }
+
+    /**
+     * 带执行代次的向量化。临时向量仅在数据库锁内确认当前代次仍有效后才会被提升。
+     */
+    public void vectorizeAndStore(Long knowledgeBaseId, String content, String attemptId,
+                                  Runnable progressHeartbeat) {
         String jobId = null;
         try {
             if (knowledgeBaseId == null) {
@@ -120,17 +123,24 @@ public class KnowledgeBaseVectorService {
                 // Embedding 批次心跳（调用方节流）
                 progressHeartbeat.run();
             }
-            activateVectorJob(knowledgeBaseId, jobId);
-            // 提升成功后以独立短事务写入配置快照与统计（失败路径不写成功快照）
-            updateVectorizationSnapshot(knowledgeBaseId, totalChunks);
+            String configJson = vectorConfigJson();
+            if (attemptId != null && persistenceService != null) {
+                persistenceService.activateVectorJobAndUpdateSnapshot(
+                    knowledgeBaseId, attemptId, jobId, totalChunks, configJson);
+            } else {
+                activateVectorJob(knowledgeBaseId, jobId);
+                // 兼容直接调用：提升成功后再以独立短事务写入快照
+                updateVectorizationSnapshot(knowledgeBaseId, totalChunks, configJson);
+            }
             log.info("知识库向量化完成: kbId={}, jobId={}, chunks={}, batches={}",
                     knowledgeBaseId, jobId, totalChunks, batchCount);
         } catch (Exception e) {
             cleanupPendingVectorJob(knowledgeBaseId, jobId);
             log.error("向量化知识库失败: kbId={}, jobId={}, error={}",
-                knowledgeBaseId, jobId, e.getMessage(), e);
+                knowledgeBaseId, jobId, ErrorLogSanitizer.summarize(e),
+                ErrorLogSanitizer.forLogging(e));
             throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_VECTORIZATION_FAILED,
-                "向量化知识库失败: " + e.getMessage());
+                "向量化知识库失败");
         }
     }
 
@@ -184,7 +194,8 @@ public class KnowledgeBaseVectorService {
             return limitedResults;
             
         } catch (Exception e) {
-            log.warn("向量搜索前置过滤失败，回退到本地过滤: {}", e.getMessage());
+            log.warn("向量搜索前置过滤失败，回退到本地过滤: {}",
+                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
             return similaritySearchFallback(query, knowledgeBaseIds, topK, minScore);
         }
     }
@@ -217,9 +228,10 @@ public class KnowledgeBaseVectorService {
             log.info("回退检索完成: 找到 {} 个相关文档", results.size());
             return results;
         } catch (Exception e) {
-            log.error("向量搜索失败: {}", e.getMessage(), e);
+            log.error("向量搜索失败: {}", ErrorLogSanitizer.summarize(e),
+                ErrorLogSanitizer.forLogging(e));
             throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_QUERY_FAILED,
-                "向量搜索失败: " + e.getMessage());
+                "向量搜索失败");
         }
     }
 
@@ -257,7 +269,8 @@ public class KnowledgeBaseVectorService {
         try {
             deleteByKnowledgeBaseIdStrict(knowledgeBaseId);
         } catch (Exception e) {
-            log.error("删除向量数据失败: kbId={}, error={}", knowledgeBaseId, e.getMessage(), e);
+            log.error("删除向量数据失败: kbId={}, error={}", knowledgeBaseId,
+                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
             // 不抛出异常，允许继续执行其他删除操作
             // 如果确实需要严格保证，可以取消下面的注释
             // throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_DELETE_FAILED, "删除向量数据失败");
@@ -279,11 +292,11 @@ public class KnowledgeBaseVectorService {
      * 向量化成功后的配置快照：chunkCount、vectorConfig（无密钥 JSON）、vectorizedAt。
      * 失败（含清理）路径不会调用；与 Embedding 写入不在同一事务。
      */
-    private void updateVectorizationSnapshot(Long knowledgeBaseId, int chunkCount) {
+    private void updateVectorizationSnapshot(Long knowledgeBaseId, int chunkCount,
+                                             String configJson) {
         if (persistenceService == null) {
             return;
         }
-        String configJson = vectorConfigJson();
         Runnable update = () -> persistenceService.updateVectorizationSnapshot(
             knowledgeBaseId, chunkCount, configJson);
         if (transactionalExecutor == null) {
@@ -294,20 +307,20 @@ public class KnowledgeBaseVectorService {
     }
 
     private String vectorConfigJson() {
-        String marks = vectorProperties.getPunctuationMarks() == null ? "[]"
-            : vectorProperties.getPunctuationMarks().toString();
-        return String.format(
-            "{\"splitter\":\"%s\",\"chunkSize\":%d,\"minChunkSizeChars\":%d,"
-                + "\"minChunkLengthToEmbed\":%d,\"maxNumChunks\":%d,\"keepSeparator\":%s,"
-                + "\"punctuationMarks\":\"%s\",\"strategyVersion\":\"%s\"}",
-            vectorProperties.getSplitter(),
-            vectorProperties.getChunkSize(),
-            vectorProperties.getMinChunkSizeChars(),
-            vectorProperties.getMinChunkLengthToEmbed(),
-            vectorProperties.getMaxNumChunks(),
-            vectorProperties.isKeepSeparator(),
-            marks,
-            vectorProperties.getStrategyVersion());
+        Map<String, Object> config = new LinkedHashMap<>();
+        config.put("splitter", vectorProperties.getSplitter());
+        config.put("chunkSize", vectorProperties.getChunkSize());
+        config.put("minChunkSizeChars", vectorProperties.getMinChunkSizeChars());
+        config.put("minChunkLengthToEmbed", vectorProperties.getMinChunkLengthToEmbed());
+        config.put("maxNumChunks", vectorProperties.getMaxNumChunks());
+        config.put("keepSeparator", vectorProperties.isKeepSeparator());
+        config.put("punctuationMarks", vectorProperties.getPunctuationMarks());
+        config.put("strategyVersion", vectorProperties.getStrategyVersion());
+        try {
+            return new tools.jackson.databind.ObjectMapper().writeValueAsString(config);
+        } catch (tools.jackson.core.JacksonException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "向量化配置快照序列化失败");
+        }
     }
 
     private void cleanupPendingVectorJob(Long knowledgeBaseId, String jobId) {
@@ -318,7 +331,8 @@ public class KnowledgeBaseVectorService {
             runVectorRepositoryMutation(() -> vectorRepository.deleteByVectorJobId(jobId));
         } catch (Exception cleanupError) {
             log.warn("清理临时向量数据失败，可后续按 jobId 补偿: kbId={}, jobId={}, error={}",
-                knowledgeBaseId, jobId, cleanupError.getMessage(), cleanupError);
+                knowledgeBaseId, jobId, ErrorLogSanitizer.summarize(cleanupError),
+                ErrorLogSanitizer.forLogging(cleanupError));
         }
     }
 

@@ -76,7 +76,7 @@ public class VectorizeRecoveryScheduler {
       return;
     }
     if (kb.getVectorRecoveryCount() >= properties.getMaxRecoveryCount()) {
-      knowledgeBaseRepository.failVectorUnlessCompleted(kbId,
+      knowledgeBaseRepository.failVectorIfPending(kbId,
           "自动恢复次数达到上限（" + kb.getVectorRecoveryCount() + "），请手动重试", LocalDateTime.now());
       log.warn("向量化任务自动恢复达到上限转 FAILED: kbId={}, recoveryCount={}",
           kbId, kb.getVectorRecoveryCount());

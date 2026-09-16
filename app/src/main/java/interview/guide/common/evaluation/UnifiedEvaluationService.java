@@ -5,6 +5,7 @@ import interview.guide.common.evaluation.EvaluationReport.CategoryScore;
 import interview.guide.common.evaluation.EvaluationReport.QuestionEvaluation;
 import interview.guide.common.evaluation.EvaluationReport.ReferenceAnswer;
 import interview.guide.common.exception.ErrorCode;
+import interview.guide.common.log.ErrorLogSanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -326,7 +327,8 @@ public class UnifiedEvaluationService {
             );
         } catch (Exception e) {
             log.error("批次评估失败: sessionId={}, batchSize={}, error={}",
-                sessionId, batch.size(), e.getMessage(), e);
+                sessionId, batch.size(), ErrorLogSanitizer.summarize(e),
+                ErrorLogSanitizer.forLogging(e));
             // 返回空报告，让合并逻辑用零分兜底
             return null;
         }
@@ -460,7 +462,8 @@ public class UnifiedEvaluationService {
             List<String> improvements = sanitizeItems(dto != null ? dto.improvements() : null, fallbackImprovements);
             return new SummaryDTO(feedback, strengths, improvements);
         } catch (Exception e) {
-            log.warn("二次汇总评估失败，降级到批次聚合结果: sessionId={}, error={}", sessionId, e.getMessage());
+            log.warn("二次汇总评估失败，降级到批次聚合结果: sessionId={}, error={}",
+                sessionId, ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
             return new SummaryDTO(fallbackFeedback, fallbackStrengths, fallbackImprovements);
         }
     }

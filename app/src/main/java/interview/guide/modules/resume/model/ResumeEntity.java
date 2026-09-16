@@ -72,6 +72,12 @@ public class ResumeEntity {
     @jakarta.persistence.Column(name = "analyze_recovery_count", nullable = false)
     private int analyzeRecoveryCount = 0;
 
+    /**
+     * 当前 PROCESSING 执行代次；条件心跳和终态写入必须同时匹配该值。
+     */
+    @Column(name = "analyze_attempt_id", length = 36)
+    private String analyzeAttemptId;
+
     // 分析错误信息（失败时记录）
     @Column(length = 500)
     private String analyzeError;
@@ -195,6 +201,14 @@ public class ResumeEntity {
 
     public void setAnalyzeRecoveryCount(int analyzeRecoveryCount) {
         this.analyzeRecoveryCount = analyzeRecoveryCount;
+    }
+
+    public String getAnalyzeAttemptId() {
+        return analyzeAttemptId;
+    }
+
+    public void setAnalyzeAttemptId(String analyzeAttemptId) {
+        this.analyzeAttemptId = analyzeAttemptId;
     }
 
     public void setAnalyzeStatus(AsyncTaskStatus analyzeStatus) {

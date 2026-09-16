@@ -54,7 +54,8 @@ public class DashscopeLlmService {
             return optimized;
 
         } catch (Exception e) {
-            log.error("LLM chat error for session {}: {}", session.getId(), ErrorLogSanitizer.summarize(e), e);
+            log.error("LLM chat error for session {}: {}", session.getId(),
+                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
             return mapLlmErrorToUserMessage(e);
         }
     }
@@ -150,7 +151,8 @@ public class DashscopeLlmService {
                 session.getId(), optimized.length());
             return optimized;
         } catch (Exception e) {
-            log.error("LLM sentence stream error for session {}: {}", session.getId(), ErrorLogSanitizer.summarize(e), e);
+            log.error("LLM sentence stream error for session {}: {}", session.getId(),
+                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
             return mapLlmErrorToUserMessage(e);
         }
     }

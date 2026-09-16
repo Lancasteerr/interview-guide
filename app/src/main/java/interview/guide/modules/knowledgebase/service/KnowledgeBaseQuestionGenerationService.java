@@ -7,6 +7,7 @@ import interview.guide.common.ai.StructuredOutputInvoker;
 import interview.guide.common.constant.CommonConstants.InterviewDefaults;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
+import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionEntity;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionFollowUpDTO;
@@ -187,9 +188,10 @@ public class KnowledgeBaseQuestionGenerationService {
     } catch (BusinessException e) {
       throw e;
     } catch (Exception e) {
-      log.error("知识库题库生成LLM调用失败: kbId={}, error={}", kb.getId(), e.getMessage(), e);
+      log.error("知识库题库生成LLM调用失败: kbId={}, error={}", kb.getId(),
+          ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
       throw new BusinessException(ErrorCode.INTERVIEW_QUESTION_GENERATION_FAILED,
-          "知识库题库生成失败：" + e.getMessage());
+          "知识库题库生成失败");
     }
   }
 

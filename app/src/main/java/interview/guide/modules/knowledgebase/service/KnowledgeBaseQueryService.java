@@ -128,30 +128,32 @@ public class KnowledgeBaseQueryService {
             return NO_RESULT_RESPONSE;
         }
 
-        countService.updateQuestionCounts(knowledgeBaseIds);
-
-        QueryContext queryContext = buildQueryContext(question, List.of());
-        long retrievalStart = System.nanoTime();
-        List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
-        long retrievalNanos = System.nanoTime() - retrievalStart;
-
-        if (!hasEffectiveHit(relevantDocs)) {
-            ragMetrics.recordRequest("sync", "reject");
-            ragMetrics.recordRefusal("no_hit");
-            ragMetrics.recordStageDuration("rewrite", "reject", queryContext.rewriteDurationMs() * 1_000_000L);
-            ragMetrics.recordStageDuration("retrieve", "reject", retrievalNanos);
-            ragMetrics.recordStageDuration("total", "reject", System.nanoTime() - totalStart);
-            return NO_RESULT_RESPONSE;
-        }
-
-        String context = relevantDocs.stream()
-                .map(Document::getText)
-                .collect(Collectors.joining("\n\n---\n\n"));
-
-        String systemPrompt = buildSystemPrompt();
-        String userPrompt = buildUserPrompt(context, question);
-
+        QueryContext queryContext = null;
+        long retrievalNanos = 0;
         try {
+            countService.updateQuestionCounts(knowledgeBaseIds);
+
+            queryContext = buildQueryContext(question, List.of());
+            long retrievalStart = System.nanoTime();
+            List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
+            retrievalNanos = System.nanoTime() - retrievalStart;
+
+            if (!hasEffectiveHit(relevantDocs)) {
+                ragMetrics.recordRequest("sync", "reject");
+                ragMetrics.recordRefusal("no_hit");
+                ragMetrics.recordStageDuration("rewrite", "reject",
+                    queryContext.rewriteDurationMs() * 1_000_000L);
+                ragMetrics.recordStageDuration("retrieve", "reject", retrievalNanos);
+                ragMetrics.recordStageDuration("total", "reject", System.nanoTime() - totalStart);
+                return NO_RESULT_RESPONSE;
+            }
+
+            String context = relevantDocs.stream()
+                    .map(Document::getText)
+                    .collect(Collectors.joining("\n\n---\n\n"));
+            String systemPrompt = buildSystemPrompt();
+            String userPrompt = buildUserPrompt(context, question);
+
             long generationStart = System.nanoTime();
             String answer = getChatClient().prompt()
                     .system(systemPrompt)
@@ -177,12 +179,17 @@ public class KnowledgeBaseQueryService {
             return answer;
 
         } catch (Exception e) {
-            log.error("知识库问答失败: {}", ErrorLogSanitizer.summarize(e), e);
+            log.error("知识库问答失败: {}", ErrorLogSanitizer.summarize(e),
+                ErrorLogSanitizer.forLogging(e));
             ragMetrics.recordRequest("sync", "error");
-            ragMetrics.recordStageDuration("rewrite", "error", queryContext.rewriteDurationMs() * 1_000_000L);
-            ragMetrics.recordStageDuration("retrieve", "error", retrievalNanos);
+            if (queryContext != null) {
+                ragMetrics.recordStageDuration("rewrite", "error",
+                    queryContext.rewriteDurationMs() * 1_000_000L);
+                ragMetrics.recordStageDuration("retrieve", "error", retrievalNanos);
+            }
             ragMetrics.recordStageDuration("total", "error", System.nanoTime() - totalStart);
-            throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_QUERY_FAILED, "知识库查询失败：" + e.getMessage());
+            throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_QUERY_FAILED,
+                "知识库查询失败，请稍后重试");
         }
     }
 
@@ -337,7 +344,8 @@ public class KnowledgeBaseQueryService {
                     log.info("流式输出完成: kbIds={}", knowledgeBaseIds);
                 })
                 .onErrorResume(e -> {
-                    log.error("流式输出失败: kbIds={}, error={}", knowledgeBaseIds, ErrorLogSanitizer.summarize(e), e);
+                    log.error("流式输出失败: kbIds={}, error={}", knowledgeBaseIds,
+                        ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
                     if (resultRecorded.compareAndSet(false, true)) {
                         ragMetrics.recordRequest("stream", "error");
                         ragMetrics.recordStageDuration("generate", "error", System.nanoTime() - generationStart);
@@ -357,7 +365,8 @@ public class KnowledgeBaseQueryService {
                 });
 
         } catch (Exception e) {
-            log.error("知识库流式问答失败: {}", ErrorLogSanitizer.summarize(e), e);
+            log.error("知识库流式问答失败: {}", ErrorLogSanitizer.summarize(e),
+                ErrorLogSanitizer.forLogging(e));
             // 外层 catch 返回的错误文案同样记为 error，不是 success
             if (resultRecorded.compareAndSet(false, true)) {
                 ragMetrics.recordRequest("stream", "error");
@@ -365,7 +374,7 @@ public class KnowledgeBaseQueryService {
             }
             emitTrace(trace, normalizeQuestion(question), null, List.of(),
                 List.of(), 0, 0, "【错误】知识库查询失败", "ERROR");
-            return Flux.just("【错误】知识库查询失败：" + e.getMessage());
+            return Flux.just("【错误】知识库查询失败：AI服务暂时不可用，请稍后重试。");
         }
     }
 
@@ -630,7 +639,8 @@ public class KnowledgeBaseQueryService {
             return normalized;
         } catch (Exception e) {
             ragMetrics.recordRewriteFallback("error");
-            log.warn("Query rewrite 失败，使用原问题继续检索: {}", ErrorLogSanitizer.summarize(e), e);
+            log.warn("Query rewrite 失败，使用原问题继续检索: {}",
+                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
             return question;
         }
     }

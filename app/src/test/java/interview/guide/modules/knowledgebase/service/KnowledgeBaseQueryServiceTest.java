@@ -239,6 +239,40 @@ class KnowledgeBaseQueryServiceTest {
     }
 
     @Test
+    @DisplayName("同步计数前置异常：仍记录 error 与 total，且只记录一次")
+    void syncCountFailureStillRecordsError() throws Exception {
+      service = buildMetricsService();
+      org.mockito.Mockito.doThrow(new IllegalStateException("db down"))
+          .when(countService).updateQuestionCounts(anyList());
+
+      assertThatThrownBy(() -> service.answerQuestion(List.of(1L), "什么是 Java 内存模型"))
+          .isInstanceOf(interview.guide.common.exception.BusinessException.class);
+
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().count()).isEqualTo(1.0);
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().getId().getTag("result"))
+          .isEqualTo("error");
+      assertThat(meterRegistry.get(RagMetrics.STAGE_DURATION).timers())
+          .extracting(timer -> timer.getId().getTag("stage"))
+          .containsExactly("total");
+    }
+
+    @Test
+    @DisplayName("同步检索异常：仍记录 error、rewrite、retrieve 与 total")
+    void syncRetrievalFailureStillRecordsError() throws Exception {
+      service = buildMetricsService();
+      when(vectorService.similaritySearch(anyString(), anyList(), anyInt(), anyDouble()))
+          .thenThrow(new IllegalStateException("vector down"));
+
+      assertThatThrownBy(() -> service.answerQuestion(List.of(1L), "什么是 Java 内存模型"))
+          .isInstanceOf(interview.guide.common.exception.BusinessException.class);
+
+      assertThat(meterRegistry.get(RagMetrics.REQUESTS).counter().count()).isEqualTo(1.0);
+      assertThat(meterRegistry.get(RagMetrics.STAGE_DURATION).timers())
+          .extracting(timer -> timer.getId().getTag("stage"))
+          .contains("rewrite", "retrieve", "total");
+    }
+
+    @Test
     @DisplayName("流式完成：success 恰好一次")
     void streamCompleteRecordsOnce() throws Exception {
       service = buildMetricsService();
@@ -566,8 +600,8 @@ class KnowledgeBaseQueryServiceTest {
     }
 
     @Test
-    @DisplayName("异常消息超长时日志只保留类名与截断消息")
-    void shouldTruncateLongExceptionMessageInLogs() throws Exception {
+    @DisplayName("异常消息与 Throwable 渲染均不包含上游自由文本")
+    void shouldRemoveExceptionMessageFromLogs() throws Exception {
       String tail = "敏感尾部标记MARKER-ERR-TAIL-1a2b3c4d5e6f";
       service = buildService(true);
       mockPlainClient();
@@ -581,12 +615,17 @@ class KnowledgeBaseQueryServiceTest {
 
       String logs = capturedLogs();
       assertThat(logs).doesNotContain(tail);
-      assertThat(logs).contains("IllegalStateException: ");
-      assertThat(logs).contains("…");
+      assertThat(logs).contains("IllegalStateException");
+      ILoggingEvent warnEvent = logAppender.list.stream()
+          .filter(event -> event.getLevel() == Level.WARN)
+          .findFirst().orElseThrow();
+      assertThat(warnEvent.getThrowableProxy().getMessage())
+          .doesNotContain(tail)
+          .contains("sanitized-error type=IllegalStateException");
     }
 
     @Test
-    @DisplayName("改写失败回退时异常日志保留错误消息且不包含问题原文")
+    @DisplayName("改写失败回退时日志只保留错误类型且不包含问题原文")
     void shouldKeepErrorTypeWithoutQuestionText() throws Exception {
       String questionMarker = "问题敏感标记MARKER-Q-ERR-51d0";
       service = buildService(true);
@@ -603,7 +642,8 @@ class KnowledgeBaseQueryServiceTest {
       String logs = capturedLogs();
       assertThat(logs).doesNotContain(questionMarker);
       assertThat(logs).contains("Query rewrite 失败");
-      assertThat(logs).contains("LLM 连接超时");
+      assertThat(logs).doesNotContain("LLM 连接超时");
+      assertThat(logs).contains("IllegalStateException");
       ILoggingEvent warnEvent = logAppender.list.stream()
           .filter(event -> event.getLevel() == Level.WARN)
           .findFirst().orElse(null);
