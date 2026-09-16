@@ -119,6 +119,7 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
   const [searchKeyword, setSearchKeyword] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('time');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedVectorStatus, setSelectedVectorStatus] = useState<VectorStatus | ''>('');
   const [categories, setCategories] = useState<string[]>([]);
   const [deleteItem, setDeleteItem] = useState<KnowledgeBaseItem | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -141,7 +142,7 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
           ? knowledgeBaseApi.search(searchKeyword)
           : selectedCategory
           ? knowledgeBaseApi.getByCategory(selectedCategory)
-          : knowledgeBaseApi.getAllKnowledgeBases(sortBy),
+          : knowledgeBaseApi.getAllKnowledgeBases(sortBy, selectedVectorStatus || undefined),
         knowledgeBaseApi.getAllCategories(),
       ]);
       setStats(statsData);
@@ -150,7 +151,7 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
     } catch (error) {
       console.error('加载数据失败:', error);
     }
-  }, [searchKeyword, sortBy, selectedCategory]);
+  }, [searchKeyword, sortBy, selectedCategory, selectedVectorStatus]);
 
   // 加载数据
   const loadData = useCallback(async () => {
@@ -162,7 +163,7 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
           ? knowledgeBaseApi.search(searchKeyword)
           : selectedCategory
           ? knowledgeBaseApi.getByCategory(selectedCategory)
-          : knowledgeBaseApi.getAllKnowledgeBases(sortBy),
+          : knowledgeBaseApi.getAllKnowledgeBases(sortBy, selectedVectorStatus || undefined),
         knowledgeBaseApi.getAllCategories(),
       ]);
       setStats(statsData);
@@ -173,7 +174,7 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
     } finally {
       setLoading(false);
     }
-  }, [searchKeyword, sortBy, selectedCategory]);
+  }, [searchKeyword, sortBy, selectedCategory, selectedVectorStatus]);
 
   useEffect(() => {
     loadData();
@@ -349,7 +350,11 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
               <input
                 type="text"
                 value={searchKeyword}
-                onChange={(e) => setSearchKeyword(e.target.value)}
+                onChange={(e) => {
+                  setSearchKeyword(e.target.value);
+                  setSelectedCategory(null);
+                  setSelectedVectorStatus('');
+                }}
                 placeholder="搜索知识库名称..."
                 className="w-full pl-10 pr-4 py-2 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
               />
@@ -382,6 +387,7 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
               onChange={(e) => {
                 setSelectedCategory(e.target.value || null);
                 setSearchKeyword('');
+                setSelectedVectorStatus('');
               }}
               className="appearance-none pl-4 pr-10 py-2 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white cursor-pointer"
             >
@@ -391,6 +397,27 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
                   {cat}
                 </option>
               ))}
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* 向量化状态筛选 */}
+          <div className="relative">
+            <select
+              aria-label="向量化状态"
+              value={selectedVectorStatus}
+              onChange={(e) => {
+                setSelectedVectorStatus(e.target.value as VectorStatus | '');
+                setSearchKeyword('');
+                setSelectedCategory(null);
+              }}
+              className="appearance-none pl-4 pr-10 py-2 border border-slate-200 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-white cursor-pointer"
+            >
+              <option value="">全部状态</option>
+              <option value="PENDING">待处理</option>
+              <option value="PROCESSING">处理中</option>
+              <option value="COMPLETED">已完成</option>
+              <option value="FAILED">失败</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
@@ -561,8 +588,8 @@ export default function KnowledgeBaseManagePage({ onUpload, onChat }: KnowledgeB
                       >
                         <Download className="w-4 h-4" />
                       </button>
-                      {/* 重新向量化按钮（仅 FAILED 状态显示） */}
-                      {kb.vectorStatus === 'FAILED' && (
+                      {/* 已完成或失败任务都允许手动重新向量化 */}
+                      {(kb.vectorStatus === 'FAILED' || kb.vectorStatus === 'COMPLETED') && (
                         <button
                           onClick={() => handleRevectorize(kb.id)}
                           disabled={revectorizing === kb.id}

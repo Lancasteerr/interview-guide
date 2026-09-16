@@ -221,16 +221,30 @@ export default function AnalysisPanel({
               <TrendingUp className="w-5 h-5" />
               <span className="font-semibold">核心评价</span>
             </div>
-            <motion.button
-              onClick={onExport}
-              disabled={exporting}
-              className="px-4 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-all disabled:opacity-50 flex items-center gap-2"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Download className="w-4 h-4" />
-              {exporting ? '导出中...' : '导出分析报告'}
-            </motion.button>
+            <div className="flex items-center gap-2">
+              {onReanalyze && (
+                <motion.button
+                  onClick={onReanalyze}
+                  disabled={reanalyzing}
+                  className="px-4 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-all disabled:opacity-50 flex items-center gap-2"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <RefreshCw className={`w-4 h-4 ${reanalyzing ? 'animate-spin' : ''}`} />
+                  {reanalyzing ? '重新分析中...' : '重新分析'}
+                </motion.button>
+              )}
+              <motion.button
+                onClick={onExport}
+                disabled={exporting}
+                className="px-4 py-2 border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 rounded-lg text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-all disabled:opacity-50 flex items-center gap-2"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Download className="w-4 h-4" />
+                {exporting ? '导出中...' : '导出分析报告'}
+              </motion.button>
+            </div>
           </div>
 
           <div

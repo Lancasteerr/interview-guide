@@ -25,9 +25,9 @@ export interface UploadResponse {
   };
   storage: StorageInfo;
   /** 任务是否成功投递到异步队列；false 时简历已保存但状态为 FAILED，可重试 */
-  enqueueAccepted?: boolean;
-  duplicate?: boolean;
-  message?: string;
+  enqueueAccepted: boolean;
+  duplicate: boolean;
+  message: string;
 }
 
 export interface ScoreDetail {
