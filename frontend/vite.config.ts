@@ -31,7 +31,19 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': {
           target: apiProxyTarget,
-          changeOrigin: true,
+          // 保留浏览器的 Host，与 Origin 一致，避免同源上传被后端误判为跨域。
+          changeOrigin: false,
+          configure(proxy) {
+            proxy.on('error', (_error, _request, response) => {
+              if (!response || !('writeHead' in response) || response.headersSent || response.writableEnded) return;
+              response.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' });
+              response.end(JSON.stringify({
+                code: 503,
+                message: '无法连接后端服务，请确认后端已启动后重试',
+                data: null,
+              }));
+            });
+          },
         },
       },
       // 忽略 @ricky0123/vad-web 的 sourcemap 警告

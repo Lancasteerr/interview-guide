@@ -135,14 +135,17 @@ instance.interceptors.response.use(
   async (error) => {
     // 有响应的情况：后端返回了结果（即使是错误）
     if (error.response) {
-      const { data } = error.response;
+      const { data, status } = error.response;
       // 尝试解析 Result 格式
       const responseError = await getErrorFromResponseData(data);
       if (responseError) {
         return Promise.reject(responseError);
       }
-      // 响应格式不对
-      return Promise.reject(new Error('请求失败，请重试'));
+      // 网关和 CORS 拒绝等错误可能不使用 Result，保留状态码便于定位。
+      const message = status === 403
+        ? '请求被服务端拒绝（403），请检查访问权限或跨域配置'
+        : `请求失败（HTTP ${status}），请稍后重试`;
+      return Promise.reject(new Error(message));
     }
 
     // 没有响应的情况：真正的网络错误或连接被重置
