@@ -69,6 +69,7 @@ jobs:
           pnpm run test:interview-capacity
           pnpm run test:interview-entry
           pnpm run test:batch-upload
+          pnpm run test:voice-url
 
       - name: Build frontend
         run: pnpm run build
@@ -78,3 +79,6 @@ jobs:
 
       - name: Test resume and knowledge base batch uploads in browser
         run: pnpm run test:e2e:batch-upload
+
+      - name: Test voice interview WebSocket connection in browser
+        run: pnpm run test:e2e:voice

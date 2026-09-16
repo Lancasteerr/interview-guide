@@ -1,4 +1,5 @@
-import { request } from './request';
+import { API_BASE_URL, request } from './request';
+import { buildVoiceWebSocketUrl } from '../utils/voiceWebSocketUrl';
 
 // ========== 类型定义 ==========
 
@@ -403,9 +404,9 @@ export class VoiceInterviewWebSocket {
  */
 export function connectWebSocket(
   sessionId: number,
-  webSocketUrl: string,
   handlers: WebSocketEventHandlers
 ): VoiceInterviewWebSocket {
+  const webSocketUrl = buildVoiceWebSocketUrl(sessionId, API_BASE_URL, window.location.href);
   const ws = new VoiceInterviewWebSocket(sessionId, webSocketUrl, handlers);
   ws.connect();
   return ws;

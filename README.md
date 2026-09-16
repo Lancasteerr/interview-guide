@@ -533,6 +533,15 @@ docker compose -f docker-compose.dev.yml up -d --force-recreate postgres redis
 
 运行时 Provider 配置默认写到 `~/.interview-guide/llm-providers.yml` 和 `~/.interview-guide/llm-providers.env`。可以在设置页点击测试连接，或调用 `/api/llm-provider/reload` 重新加载配置。Docker 部署时如果希望配置持久化，建议为该目录挂载卷。
 
+### Q: 语音面试提示“连接已断开，请刷新页面重试”？
+
+先在浏览器开发者工具的 Network → WS 中检查 `/ws/voice-interview/{sessionId}` 的连接，正常握手状态为 `101`。语音连接与 REST API 使用同一服务入口，HTTPS 页面使用 `wss://`；不要把远程部署的连接地址写成 `ws://localhost:8080`，这里的 localhost 指的是访问者的电脑。
+
+- 本地开发：Vite 已配置 `/ws` 代理，与 `/api` 共用 `VITE_API_PROXY_TARGET`，默认后端为 `http://localhost:8080`。修改代理配置后重启前端。
+- Docker / Nginx：使用更新后的 `frontend/nginx.conf`，重新构建前端镜像。自行配置反向代理时，需要转发 `/ws/`，并保留 `Upgrade`、`Connection` 和包含外部端口的 `Host` 请求头；长连接需配置足够的读取超时。
+- 握手返回 `403`：检查 `CORS_ALLOWED_ORIGINS` 是否包含实际前端来源（协议、域名、端口均须匹配），尤其是 HTTPS 反向代理或显式配置 `VITE_API_BASE_URL` 的跨域部署。不要通过允许所有来源来绕过检查。
+- 握手成功但语音识别未就绪：检查后端与 DashScope 的握手、API Key 和模型配置。当前设置页的 ASR 连接测试仅检查 TCP 端口连通性，通过不代表语音鉴权和识别已成功。
+
 ### Q: 语音面试无法识别或没有声音？
 
 语音面试的 ASR/TTS 默认也使用 `AI_BAILIAN_API_KEY`。请检查浏览器麦克风权限、后端日志中的 DashScope WebSocket 连接状态，以及设置页里的 ASR/TTS 测试结果。无耳机时可能触发回声录入，建议先使用手动提交模式或佩戴耳机测试。

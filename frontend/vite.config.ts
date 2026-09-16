@@ -29,6 +29,11 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 5173,
       proxy: {
+        '/ws': {
+          target: apiProxyTarget,
+          ws: true,
+          changeOrigin: false,
+        },
         '/api': {
           target: apiProxyTarget,
           // 保留浏览器的 Host，与 Origin 一致，避免同源上传被后端误判为跨域。

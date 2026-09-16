@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "test:e2e": "playwright test",
+    "test:voice-url": "node --test src/utils/voiceWebSocketUrl.test.ts",
+    "test:e2e:voice": "playwright test e2e/voice-interview.spec.ts e2e/voice-connection.spec.ts",
     "test:interview-history": "node --test src/pages/interviewHistoryStats.test.ts",
     "test:question-generation": "node --test src/pages/questionGenerationStatus.test.ts",
     "test:interview-capacity": "node --test src/components/knowledgebaseInterview/interviewCapacity.test.ts",

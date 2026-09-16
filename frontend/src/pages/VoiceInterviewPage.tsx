@@ -515,11 +515,11 @@ export default function VoiceInterviewPage() {
     setSubmitting,
   ]);
 
-  const connectWithHandlers = useCallback((sessionId: number, wsUrl: string) => {
+  const connectWithHandlers = useCallback((sessionId: number) => {
     setIsAsrReady(false);
     setTimeout(() => {
       try {
-        wsRef.current = connectWebSocket(sessionId, wsUrl, createWebSocketHandlers());
+        wsRef.current = connectWebSocket(sessionId, createWebSocketHandlers());
       } catch (error) {
         setError('无法建立 WebSocket 连接: ' + (error instanceof Error ? error.message : '未知错误'));
         setConnectionStatus('disconnected');
@@ -558,8 +558,7 @@ export default function VoiceInterviewPage() {
       setSessionId(session.sessionId);
       setCurrentPhase(session.currentPhase);
 
-      const wsUrl = session.webSocketUrl || `ws://localhost:8080/ws/voice-interview/${session.sessionId}`;
-      connectWithHandlers(session.sessionId, wsUrl);
+      connectWithHandlers(session.sessionId);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : '创建面试会话失败，请重试';
       setError(errorMessage);
@@ -619,8 +618,7 @@ export default function VoiceInterviewPage() {
       }
       setMessages(restored);
 
-      const wsUrl = session.webSocketUrl || `ws://localhost:8080/ws/voice-interview/${session.sessionId}`;
-      connectWithHandlers(session.sessionId, wsUrl);
+      connectWithHandlers(session.sessionId);
     } catch (error) {
       setError(error instanceof Error ? error.message : '恢复会话失败');
       setConnectionStatus('disconnected');
