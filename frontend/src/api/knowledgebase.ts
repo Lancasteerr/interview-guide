@@ -223,8 +223,8 @@ export const knowledgeBaseApi = {
   /**
    * 获取知识库详情
    */
-  async getKnowledgeBase(id: number): Promise<KnowledgeBaseItem> {
-    return request.get<KnowledgeBaseItem>(`/api/knowledgebase/${id}`);
+  async getKnowledgeBase(id: number, signal?: AbortSignal): Promise<KnowledgeBaseItem> {
+    return request.get<KnowledgeBaseItem>(`/api/knowledgebase/${id}`, { signal });
   },
 
   /**

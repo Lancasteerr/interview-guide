@@ -33,7 +33,7 @@ export default function KnowledgeBaseUploadDropzone({
     <>
       <label
         htmlFor="knowledge-base-files"
-        className={`block rounded-2xl border-2 border-dashed p-10 text-center transition-colors ${
+        className={`relative block rounded-2xl border-2 border-dashed p-10 text-center transition-colors focus-within:ring-2 focus-within:ring-primary-500 focus-within:ring-offset-2 ${
           full
             ? 'cursor-not-allowed border-slate-200 bg-slate-50 opacity-70 dark:border-slate-700 dark:bg-slate-800/60'
             : dragOver
@@ -52,7 +52,8 @@ export default function KnowledgeBaseUploadDropzone({
       >
         <input
           id="knowledge-base-files"
-          className="hidden"
+          className="sr-only"
+          aria-label="选择知识库文件"
           type="file"
           accept=".pdf,.doc,.docx,.txt,.md"
           multiple

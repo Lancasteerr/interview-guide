@@ -72,3 +72,9 @@ jobs:
 
       - name: Build frontend
         run: pnpm run build
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Test knowledge base batch upload in browser
+        run: pnpm run test:e2e:knowledge-base-upload

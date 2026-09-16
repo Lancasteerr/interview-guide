@@ -1,4 +1,4 @@
-import type { VectorStatus } from '../api/knowledgebase';
+import type { UploadKnowledgeBaseResponse, VectorStatus } from '../api/knowledgebase';
 
 export const MAX_BATCH_FILES = 10;
 export const MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -28,6 +28,8 @@ export interface BatchUploadItem {
   duplicate?: boolean;
   error?: string;
   retryAvailableAt?: number;
+  /** 上传响应未包含失败详情时，补查一次。 */
+  needsStatusRefresh?: boolean;
 }
 
 interface QueuedUploadTask {
@@ -98,6 +100,20 @@ export function selectKnowledgeBaseFiles(
 
 export function toBatchUploadStatus(status: VectorStatus): BatchUploadStatus {
   return status === 'FAILED' ? 'VECTOR_FAILED' : status;
+}
+
+export function getUploadOutcome(result: UploadKnowledgeBaseResponse): Pick<
+  BatchUploadItem, 'status' | 'error' | 'needsStatusRefresh'
+> {
+  const enqueueFailed = result.enqueueAccepted === false;
+  const status = enqueueFailed ? 'FAILED' : result.knowledgeBase.vectorStatus ?? 'PENDING';
+  return {
+    status: toBatchUploadStatus(status),
+    error: status === 'FAILED'
+      ? (enqueueFailed && result.message) || '向量化失败，请重试'
+      : undefined,
+    needsStatusRefresh: status === 'FAILED' && !enqueueFailed,
+  };
 }
 
 export function isVectorizationActive(status: BatchUploadStatus): boolean {

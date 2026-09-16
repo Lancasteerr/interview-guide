@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { knowledgeBaseApi } from '../api/knowledgebase';
+import { knowledgeBaseApi, type KnowledgeBaseItem } from '../api/knowledgebase';
 import { getErrorMessage } from '../api/request';
+import { useKnowledgeBaseVectorPolling } from './useKnowledgeBaseVectorPolling';
 import {
   canRetryUpload,
+  getUploadOutcome,
   isVectorizationActive,
   MAX_CONCURRENT_UPLOADS,
   RateLimitedUploadQueue,
@@ -11,7 +13,6 @@ import {
   toBatchUploadStatus,
   UPLOAD_RETRY_COOLDOWN_MS,
   UPLOAD_START_INTERVAL_MS,
-  VECTOR_STATUS_POLL_INTERVAL_MS,
   type BatchUploadItem,
 } from '../pages/knowledgeBaseBatchUpload';
 
@@ -23,7 +24,6 @@ export function useKnowledgeBaseBatchUpload() {
   const revectorizingRef = useRef<number | null>(null);
   const [items, setItems] = useState<BatchUploadItem[]>([]);
   const [selectionNotice, setSelectionNotice] = useState('');
-  const [pollError, setPollError] = useState('');
   const [revectorizingId, setRevectorizingId] = useState<number | null>(null);
 
   const getQueue = useCallback(() => {
@@ -86,8 +86,7 @@ export function useKnowledgeBaseBatchUpload() {
         ...current,
         knowledgeBaseId: result.knowledgeBase.id,
         duplicate: result.duplicate,
-        status: 'PENDING',
-        error: undefined,
+        ...getUploadOutcome(result),
       }));
     } catch (error: unknown) {
       if (!mountedRef.current) return;
@@ -140,77 +139,59 @@ export function useKnowledgeBaseBatchUpload() {
     enqueueItem(clientId);
   }, [enqueueItem]);
 
+  const trackedIdsKey = useMemo(() => [...new Set(items
+    .filter(item => item.knowledgeBaseId && (isVectorizationActive(item.status) || item.needsStatusRefresh))
+    .map(item => item.knowledgeBaseId!))]
+    .sort((a, b) => a - b)
+    .join(','), [items]);
+
+  const applyVectorStatus = useCallback((knowledgeBase: KnowledgeBaseItem) => {
+    updateItems(current => current.map(item => {
+      if (item.knowledgeBaseId !== knowledgeBase.id
+        || (!isVectorizationActive(item.status) && !item.needsStatusRefresh)) return item;
+      return {
+        ...item,
+        status: toBatchUploadStatus(knowledgeBase.vectorStatus),
+        needsStatusRefresh: false,
+        error: knowledgeBase.vectorStatus === 'FAILED'
+          ? knowledgeBase.vectorError || '向量化失败，请重试'
+          : undefined,
+      };
+    }));
+  }, [updateItems]);
+  const { error: pollError, pause: pausePolling, resume: resumePolling } =
+    useKnowledgeBaseVectorPolling(trackedIdsKey, applyVectorStatus);
+
   const revectorize = useCallback(async (clientId: string) => {
     const item = itemsRef.current.find(current => current.clientId === clientId);
     if (!item?.knowledgeBaseId || revectorizingRef.current !== null) return;
 
     const knowledgeBaseId = item.knowledgeBaseId;
+    pausePolling(knowledgeBaseId);
     revectorizingRef.current = knowledgeBaseId;
     setRevectorizingId(knowledgeBaseId);
     try {
       await knowledgeBaseApi.revectorize(knowledgeBaseId);
+      if (!mountedRef.current) return;
       updateItems(current => current.map(currentItem => (
         currentItem.knowledgeBaseId === knowledgeBaseId
-          ? { ...currentItem, status: 'PENDING', error: undefined }
+          ? { ...currentItem, status: 'PENDING', error: undefined, needsStatusRefresh: false }
           : currentItem
       )));
     } catch (error: unknown) {
+      if (!mountedRef.current) return;
       updateItem(clientId, current => ({
         ...current,
         error: getErrorMessage(error) || '重新向量化失败，请重试',
       }));
     } finally {
       revectorizingRef.current = null;
-      if (mountedRef.current) setRevectorizingId(null);
+      if (mountedRef.current) {
+        resumePolling(knowledgeBaseId);
+        setRevectorizingId(null);
+      }
     }
-  }, [updateItem, updateItems]);
-
-  const trackedIdsKey = useMemo(() => [...new Set(items
-    .filter(item => item.knowledgeBaseId && isVectorizationActive(item.status))
-    .map(item => item.knowledgeBaseId!))]
-    .sort((a, b) => a - b)
-    .join(','), [items]);
-
-  useEffect(() => {
-    if (!trackedIdsKey) {
-      setPollError('');
-      return undefined;
-    }
-
-    const ids = trackedIdsKey.split(',').map(Number);
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const refreshStatuses = async () => {
-      const results = await Promise.allSettled(ids.map(id => knowledgeBaseApi.getKnowledgeBase(id)));
-      if (cancelled) return;
-
-      const statusById = new Map(results.flatMap(result => (
-        result.status === 'fulfilled' ? [[result.value.id, result.value] as const] : []
-      )));
-      updateItems(current => current.map(item => {
-        if (!item.knowledgeBaseId || !isVectorizationActive(item.status)) return item;
-        const knowledgeBase = statusById.get(item.knowledgeBaseId);
-        if (!knowledgeBase) return item;
-        return {
-          ...item,
-          status: toBatchUploadStatus(knowledgeBase.vectorStatus),
-          error: knowledgeBase.vectorStatus === 'FAILED'
-            ? knowledgeBase.vectorError || '向量化失败，请重试'
-            : undefined,
-        };
-      }));
-      setPollError(results.some(result => result.status === 'rejected')
-        ? '部分向量化状态暂时无法刷新，将自动重试'
-        : '');
-      if (!cancelled) timer = setTimeout(refreshStatuses, VECTOR_STATUS_POLL_INTERVAL_MS);
-    };
-
-    void refreshStatuses();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [trackedIdsKey, updateItems]);
+  }, [pausePolling, resumePolling, updateItem, updateItems]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -231,7 +212,6 @@ export function useKnowledgeBaseBatchUpload() {
     retryTimersRef.current.clear();
     updateItems(() => []);
     setSelectionNotice('');
-    setPollError('');
   };
 
   return {
