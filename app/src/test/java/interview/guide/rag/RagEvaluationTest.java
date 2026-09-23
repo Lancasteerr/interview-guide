@@ -404,7 +404,7 @@ class RagEvaluationTest {
     for (String prompt : List.of("knowledgebase-query-system.st", "knowledgebase-query-user.st",
         "knowledgebase-query-rewrite.st")) {
       env.put("promptSha256:" + prompt,
-          sha256(new ClassPathResource("prompts/" + prompt).getInputStream().readAllBytes()));
+          sha256(new ClassPathResource("prompts/knowledgebase/" + prompt).getInputStream().readAllBytes()));
     }
     env.put("rewriteEnabled", System.getenv("APP_AI_RAG_REWRITE_ENABLED") == null
         ? "false(rag-eval Profile 默认)" : System.getenv("APP_AI_RAG_REWRITE_ENABLED"));

@@ -16,9 +16,9 @@ public class KnowledgeBaseQueryProperties {
     private Rewrite rewrite = new Rewrite();
     private Search search = new Search();
     private History history = new History();
-    private String systemPromptPath = "classpath:prompts/knowledgebase-query-system.st";
-    private String userPromptPath = "classpath:prompts/knowledgebase-query-user.st";
-    private String rewritePromptPath = "classpath:prompts/knowledgebase-query-rewrite.st";
+    private String systemPromptPath = "classpath:prompts/knowledgebase/knowledgebase-query-system.st";
+    private String userPromptPath = "classpath:prompts/knowledgebase/knowledgebase-query-user.st";
+    private String rewritePromptPath = "classpath:prompts/knowledgebase/knowledgebase-query-rewrite.st";
 
     @Data
     public static class Rewrite {

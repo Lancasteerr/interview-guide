@@ -115,8 +115,8 @@ class QuestionGenerationAsyncTest {
     );
 
     // 注入 @Value 字段
-    Resource systemResource = new ClassPathResource("prompts/knowledgebase-question-generation-system.st");
-    Resource userResource = new ClassPathResource("prompts/knowledgebase-question-generation-user.st");
+    Resource systemResource = new ClassPathResource("prompts/knowledgebase/knowledgebase-question-generation-system.st");
+    Resource userResource = new ClassPathResource("prompts/knowledgebase/knowledgebase-question-generation-user.st");
     setField(KnowledgeBaseQuestionGenerationService.class, "systemPromptResource", systemResource);
     setField(KnowledgeBaseQuestionGenerationService.class, "userPromptResource", userResource);
 

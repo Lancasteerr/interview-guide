@@ -293,7 +293,7 @@ public class VoiceContextCompressor {
     private static PromptTemplate loadTemplate(ResourceLoader resourceLoader) {
         try {
             String template = resourceLoader
-                .getResource("classpath:prompts/voice-interview-context-summary.st")
+                .getResource("classpath:prompts/voice-interview/voice-interview-context-summary.st")
                 .getContentAsString(StandardCharsets.UTF_8);
             return new PromptTemplate(template);
         } catch (IOException e) {

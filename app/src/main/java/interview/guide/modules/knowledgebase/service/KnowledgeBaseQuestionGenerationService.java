@@ -63,10 +63,10 @@ public class KnowledgeBaseQuestionGenerationService {
   private final QuestionGenerationStateService stateService;
   private final ObjectMapper objectMapper;
 
-  @Value("classpath:prompts/knowledgebase-question-generation-system.st")
+  @Value("classpath:prompts/knowledgebase/knowledgebase-question-generation-system.st")
   private Resource systemPromptResource;
 
-  @Value("classpath:prompts/knowledgebase-question-generation-user.st")
+  @Value("classpath:prompts/knowledgebase/knowledgebase-question-generation-user.st")
   private Resource userPromptResource;
 
   private final BeanOutputConverter<QuestionListDTO> outputConverter =

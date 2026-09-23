@@ -51,7 +51,7 @@ public class InterviewSkillService {
     private static final Pattern FRONT_MATTER_PATTERN = Pattern.compile("(?s)^---\\s*\\n(.*?)\\n---\\s*\\n?(.*)$");
     private static final Pattern SKILL_ID_PATTERN = Pattern.compile(".*/skills/([^/]+)/SKILL\\.md$");
     private static final String SKILL_META_FILE = "skill.meta.yml";
-    private static final String JD_PARSE_SYSTEM_PROMPT_PATH = "classpath:prompts/jd-parse-system.st";
+    private static final String JD_PARSE_SYSTEM_PROMPT_PATH = "classpath:prompts/interview/jd-parse-system.st";
 
     private static final int MAX_REFERENCE_SECTION_CHARS = 12000;
     private static final int MAX_EVALUATION_REFERENCE_SECTION_CHARS = 6000;
