@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.transformer.splitter.TextSplitter;
-import interview.guide.modules.knowledgebase.service.KnowledgeBaseVectorProperties;
+import interview.guide.modules.knowledgebase.config.KnowledgeBaseVectorProperties;
 import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;

@@ -3,6 +3,7 @@ package interview.guide.modules.knowledgebase.service;
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.rerank.RerankResult;
 import interview.guide.common.ai.rerank.RerankedDocument;
+import interview.guide.modules.knowledgebase.config.KnowledgeBaseQueryProperties;
 import interview.guide.modules.knowledgebase.metrics.RagMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import ch.qos.logback.classic.Level;

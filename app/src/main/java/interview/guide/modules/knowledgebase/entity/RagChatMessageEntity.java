@@ -1,4 +1,4 @@
-package interview.guide.modules.knowledgebase.model;
+package interview.guide.modules.knowledgebase.entity;
 
 import jakarta.persistence.*;
 import lombok.Getter;

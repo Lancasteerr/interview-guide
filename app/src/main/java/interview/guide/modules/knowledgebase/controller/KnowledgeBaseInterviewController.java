@@ -1,17 +1,17 @@
-package interview.guide.modules.knowledgebase;
+package interview.guide.modules.knowledgebase.controller;
 
 import interview.guide.common.annotation.RateLimit;
 import interview.guide.common.result.Result;
 import interview.guide.modules.interview.dto.InterviewSessionDTO;
-import interview.guide.modules.knowledgebase.model.CreateKnowledgeBaseInterviewRequest;
-import interview.guide.modules.knowledgebase.model.CreateKnowledgeBaseQuestionRequest;
-import interview.guide.modules.knowledgebase.model.GenerateKnowledgeBaseQuestionsRequest;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseInterviewCapacityResponse;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionDTO;
+import interview.guide.modules.knowledgebase.dto.CreateKnowledgeBaseInterviewRequest;
+import interview.guide.modules.knowledgebase.dto.CreateKnowledgeBaseQuestionRequest;
+import interview.guide.modules.knowledgebase.dto.GenerateKnowledgeBaseQuestionsRequest;
+import interview.guide.modules.knowledgebase.dto.KnowledgeBaseInterviewCapacityResponse;
+import interview.guide.modules.knowledgebase.dto.KnowledgeBaseQuestionDTO;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionStatus;
-import interview.guide.modules.knowledgebase.model.QuestionGenStatusResponse;
-import interview.guide.modules.knowledgebase.model.UpdateKnowledgeBaseQuestionRequest;
-import interview.guide.modules.knowledgebase.model.UpdateKnowledgeBaseQuestionStatusRequest;
+import interview.guide.modules.knowledgebase.dto.QuestionGenStatusResponse;
+import interview.guide.modules.knowledgebase.dto.UpdateKnowledgeBaseQuestionRequest;
+import interview.guide.modules.knowledgebase.dto.UpdateKnowledgeBaseQuestionStatusRequest;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseQuestionRepository.CategoryCount;
 import interview.guide.modules.knowledgebase.service.KnowledgeBaseInterviewService;
 import interview.guide.modules.knowledgebase.service.KnowledgeBaseQuestionService;

@@ -1,4 +1,4 @@
-package interview.guide.modules.knowledgebase.service;
+package interview.guide.modules.knowledgebase.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;

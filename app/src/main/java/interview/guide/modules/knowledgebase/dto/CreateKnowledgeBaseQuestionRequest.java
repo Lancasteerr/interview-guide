@@ -1,11 +1,17 @@
-package interview.guide.modules.knowledgebase.model;
+package interview.guide.modules.knowledgebase.dto;
+
+import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionStatus;
+
+import jakarta.validation.constraints.NotBlank;
 
 import java.util.List;
 
-public record UpdateKnowledgeBaseQuestionRequest(
+public record CreateKnowledgeBaseQuestionRequest(
     String difficulty,
     String type,
+    @NotBlank(message = "面试方向不能为空")
     String category,
+    @NotBlank(message = "题干不能为空")
     String question,
     String topicSummary,
     String referenceAnswer,

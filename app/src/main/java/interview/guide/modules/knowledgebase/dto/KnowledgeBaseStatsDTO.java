@@ -1,4 +1,4 @@
-package interview.guide.modules.knowledgebase.model;
+package interview.guide.modules.knowledgebase.dto;
 
 /**
  * 知识库统计信息DTO

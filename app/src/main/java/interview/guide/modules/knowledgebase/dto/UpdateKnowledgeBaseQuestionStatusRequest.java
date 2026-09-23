@@ -1,4 +1,6 @@
-package interview.guide.modules.knowledgebase.model;
+package interview.guide.modules.knowledgebase.dto;
+
+import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionStatus;
 
 import jakarta.validation.constraints.NotNull;
 

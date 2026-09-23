@@ -1,13 +1,13 @@
-package interview.guide.infrastructure.mapper;
+package interview.guide.modules.knowledgebase.mapper;
 
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseListItemDTO;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.MessageDTO;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.SessionDTO;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.SessionDetailDTO;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.SessionListItemDTO;
-import interview.guide.modules.knowledgebase.model.RagChatMessageEntity;
-import interview.guide.modules.knowledgebase.model.RagChatSessionEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
+import interview.guide.modules.knowledgebase.dto.KnowledgeBaseListItemDTO;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.MessageDTO;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.SessionDTO;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.SessionDetailDTO;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.SessionListItemDTO;
+import interview.guide.modules.knowledgebase.entity.RagChatMessageEntity;
+import interview.guide.modules.knowledgebase.entity.RagChatSessionEntity;
 import org.mapstruct.*;
 
 import java.util.Collection;

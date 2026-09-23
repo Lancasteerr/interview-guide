@@ -8,7 +8,7 @@ import interview.guide.modules.knowledgebase.model.VectorStatus;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.log.ErrorLogSanitizer;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
 import interview.guide.common.async.recovery.VectorizeRecoveryProperties;
 import interview.guide.modules.knowledgebase.service.KnowledgeBaseParseService;

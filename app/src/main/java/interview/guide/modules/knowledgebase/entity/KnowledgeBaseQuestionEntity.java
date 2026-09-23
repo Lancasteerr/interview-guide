@@ -1,4 +1,6 @@
-package interview.guide.modules.knowledgebase.model;
+package interview.guide.modules.knowledgebase.entity;
+
+import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionStatus;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

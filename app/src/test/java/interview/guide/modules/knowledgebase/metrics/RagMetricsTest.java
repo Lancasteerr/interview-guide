@@ -1,6 +1,6 @@
 package interview.guide.modules.knowledgebase.metrics;
 
-import interview.guide.modules.knowledgebase.service.KnowledgeBaseQueryProperties;
+import interview.guide.modules.knowledgebase.config.KnowledgeBaseQueryProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;

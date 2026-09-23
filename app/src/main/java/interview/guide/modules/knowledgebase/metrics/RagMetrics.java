@@ -3,7 +3,7 @@ package interview.guide.modules.knowledgebase.metrics;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import interview.guide.modules.knowledgebase.service.KnowledgeBaseQueryProperties;
+import interview.guide.modules.knowledgebase.config.KnowledgeBaseQueryProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 

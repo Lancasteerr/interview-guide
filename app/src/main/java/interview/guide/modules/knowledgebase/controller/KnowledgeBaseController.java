@@ -1,11 +1,11 @@
-package interview.guide.modules.knowledgebase;
+package interview.guide.modules.knowledgebase.controller;
 
 import interview.guide.common.annotation.RateLimit;
 import interview.guide.common.result.Result;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseListItemDTO;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseStatsDTO;
-import interview.guide.modules.knowledgebase.model.QueryRequest;
-import interview.guide.modules.knowledgebase.model.QueryResponse;
+import interview.guide.modules.knowledgebase.dto.KnowledgeBaseListItemDTO;
+import interview.guide.modules.knowledgebase.dto.KnowledgeBaseStatsDTO;
+import interview.guide.modules.knowledgebase.dto.QueryRequest;
+import interview.guide.modules.knowledgebase.dto.QueryResponse;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
 import interview.guide.modules.knowledgebase.service.KnowledgeBaseDeleteService;
 import interview.guide.modules.knowledgebase.service.KnowledgeBaseListService;

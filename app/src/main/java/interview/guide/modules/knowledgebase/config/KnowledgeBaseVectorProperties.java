@@ -1,4 +1,4 @@
-package interview.guide.modules.knowledgebase.service;
+package interview.guide.modules.knowledgebase.config;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;

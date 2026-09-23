@@ -1,4 +1,7 @@
-package interview.guide.modules.knowledgebase.model;
+package interview.guide.modules.knowledgebase.entity;
+
+import interview.guide.modules.knowledgebase.model.QuestionGenStatus;
+import interview.guide.modules.knowledgebase.model.VectorStatus;
 
 import jakarta.persistence.*;
 

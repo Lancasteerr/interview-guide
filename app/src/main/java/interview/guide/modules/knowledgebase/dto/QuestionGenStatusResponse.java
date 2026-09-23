@@ -1,4 +1,7 @@
-package interview.guide.modules.knowledgebase.model;
+package interview.guide.modules.knowledgebase.dto;
+
+import interview.guide.modules.knowledgebase.model.QuestionGenerationConfig;
+import interview.guide.modules.knowledgebase.model.QuestionGenStatus;
 
 import java.time.LocalDateTime;
 

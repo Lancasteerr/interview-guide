@@ -1,4 +1,4 @@
-package interview.guide.modules.knowledgebase.model;
+package interview.guide.modules.knowledgebase.dto;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;

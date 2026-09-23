@@ -1,13 +1,13 @@
-package interview.guide.modules.knowledgebase;
+package interview.guide.modules.knowledgebase.controller;
 
 import interview.guide.common.result.Result;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.CreateSessionRequest;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.SendMessageRequest;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.SessionDTO;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.SessionDetailDTO;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.SessionListItemDTO;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.UpdateKnowledgeBasesRequest;
-import interview.guide.modules.knowledgebase.model.RagChatDTO.UpdateTitleRequest;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.CreateSessionRequest;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.SendMessageRequest;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.SessionDTO;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.SessionDetailDTO;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.SessionListItemDTO;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.UpdateKnowledgeBasesRequest;
+import interview.guide.modules.knowledgebase.dto.RagChatDTO.UpdateTitleRequest;
 import interview.guide.modules.knowledgebase.service.RagChatSessionService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
