@@ -2,6 +2,8 @@ package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.PromptSecurityConstants;
+import interview.guide.common.ai.rerank.RerankResult;
+import interview.guide.common.ai.rerank.RerankedDocument;
 import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.knowledgebase.metrics.RagMetrics;
 import interview.guide.common.exception.BusinessException;
@@ -135,8 +137,11 @@ public class KnowledgeBaseQueryService {
 
             queryContext = buildQueryContext(question, List.of());
             long retrievalStart = System.nanoTime();
-            List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
+            List<Document> retrievedDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
             retrievalNanos = System.nanoTime() - retrievalStart;
+            RerankResult rerankResult = rerankDocuments(
+                queryContext.candidateQueries().getFirst(), retrievedDocs);
+            List<Document> relevantDocs = documentsOf(rerankResult);
 
             if (!hasEffectiveHit(relevantDocs)) {
                 ragMetrics.recordRequest("sync", "reject");
@@ -276,21 +281,24 @@ public class KnowledgeBaseQueryService {
             countService.updateQuestionCounts(knowledgeBaseIds);
 
             // 2. Query rewrite + 动态参数检索
-            long rewriteStart = System.nanoTime();
             List<Message> effectiveHistory = sanitizeHistory(history);
             QueryContext queryContext = buildQueryContext(question, effectiveHistory);
             List<String> attemptedQueries = new ArrayList<>();
-            List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds, attemptedQueries);
-            long rewriteAndRetrievalMs = (System.nanoTime() - rewriteStart) / 1_000_000;
+            long retrievalStart = System.nanoTime();
+            List<Document> retrievedDocs = retrieveRelevantDocs(
+                queryContext, knowledgeBaseIds, attemptedQueries);
+            long retrievalMs = (System.nanoTime() - retrievalStart) / 1_000_000;
+            RerankResult rerankResult = rerankDocuments(
+                queryContext.candidateQueries().getFirst(), retrievedDocs);
+            List<Document> relevantDocs = documentsOf(rerankResult);
 
             if (!hasEffectiveHit(relevantDocs)) {
-                emitTrace(trace, question, queryContext, attemptedQueries, relevantDocs,
-                    rewriteAndRetrievalMs, 0, NO_RESULT_RESPONSE, "NO_RESULT");
+                emitTrace(trace, question, queryContext, attemptedQueries, rerankResult,
+                    retrievalMs, 0, NO_RESULT_RESPONSE, "NO_RESULT");
                 ragMetrics.recordRequest("stream", "reject");
                 ragMetrics.recordRefusal("no_hit");
                 ragMetrics.recordStageDuration("rewrite", "reject", queryContext.rewriteDurationMs() * 1_000_000L);
-                ragMetrics.recordStageDuration("retrieve", "reject",
-                    Math.max(0, rewriteAndRetrievalMs - queryContext.rewriteDurationMs()) * 1_000_000L);
+                ragMetrics.recordStageDuration("retrieve", "reject", retrievalMs * 1_000_000L);
                 ragMetrics.recordStageDuration("total", "reject", System.nanoTime() - totalStart);
                 return Flux.just(NO_RESULT_RESPONSE);
             }
@@ -334,12 +342,11 @@ public class KnowledgeBaseQueryService {
                         ragMetrics.recordRefusal("no_hit");
                     }
                     ragMetrics.recordStageDuration("rewrite", result, queryContext.rewriteDurationMs() * 1_000_000L);
-                    ragMetrics.recordStageDuration("retrieve", result,
-                        Math.max(0, rewriteAndRetrievalMs - queryContext.rewriteDurationMs()) * 1_000_000L);
+                    ragMetrics.recordStageDuration("retrieve", result, retrievalMs * 1_000_000L);
                     ragMetrics.recordStageDuration("generate", result, generationNanos);
                     ragMetrics.recordStageDuration("total", result, System.nanoTime() - totalStart);
-                    emitTrace(trace, question, queryContext, attemptedQueries, relevantDocs,
-                        rewriteAndRetrievalMs, generationNanos / 1_000_000, collectedAnswer.toString(),
+                    emitTrace(trace, question, queryContext, attemptedQueries, rerankResult,
+                        retrievalMs, generationNanos / 1_000_000, collectedAnswer.toString(),
                         rejected ? "NO_RESULT" : "ANSWERED");
                     log.info("流式输出完成: kbIds={}", knowledgeBaseIds);
                 })
@@ -351,8 +358,8 @@ public class KnowledgeBaseQueryService {
                         ragMetrics.recordStageDuration("generate", "error", System.nanoTime() - generationStart);
                         ragMetrics.recordStageDuration("total", "error", System.nanoTime() - totalStart);
                     }
-                    emitTrace(trace, question, queryContext, attemptedQueries, List.of(),
-                        rewriteAndRetrievalMs, (System.nanoTime() - generationStart) / 1_000_000,
+                    emitTrace(trace, question, queryContext, attemptedQueries, rerankResult,
+                        retrievalMs, (System.nanoTime() - generationStart) / 1_000_000,
                         "【错误】知识库查询失败", "ERROR");
                     return Flux.just("【错误】知识库查询失败：AI服务暂时不可用，请稍后重试。");
                 })
@@ -373,7 +380,7 @@ public class KnowledgeBaseQueryService {
                 ragMetrics.recordStageDuration("total", "error", System.nanoTime() - totalStart);
             }
             emitTrace(trace, normalizeQuestion(question), null, List.of(),
-                List.of(), 0, 0, "【错误】知识库查询失败", "ERROR");
+                RerankResult.disabled(List.of()), 0, 0, "【错误】知识库查询失败", "ERROR");
             return Flux.just("【错误】知识库查询失败：AI服务暂时不可用，请稍后重试。");
         }
     }
@@ -383,17 +390,18 @@ public class KnowledgeBaseQueryService {
      */
     private void emitTrace(java.util.function.Consumer<RagQueryExecution> trace,
                            String originalQuestion, QueryContext queryContext,
-                           List<String> attemptedQueries, List<Document> chosenDocs,
-                           long rewriteAndRetrievalMs, long generationMs,
+                           List<String> attemptedQueries, RerankResult rerankResult,
+                           long retrievalMs, long generationMs,
                            String answer, String outcome) {
         if (trace == null) {
             return;
         }
         List<RagQueryExecution.RetrievedDoc> docs = new ArrayList<>();
-        for (int i = 0; i < chosenDocs.size(); i++) {
-            Document doc = chosenDocs.get(i);
+        for (int i = 0; i < rerankResult.documents().size(); i++) {
+            RerankedDocument reranked = rerankResult.documents().get(i);
+            Document doc = reranked.document();
             docs.add(new RagQueryExecution.RetrievedDoc(
-                i + 1, doc.getText(), extractScore(doc), doc.getMetadata()));
+                i + 1, doc.getText(), extractScore(doc), reranked.rerankScore(), doc.getMetadata()));
         }
         SearchParams params = queryContext != null ? queryContext.searchParams()
             : new SearchParams(topkLong, minScoreDefault);
@@ -407,7 +415,10 @@ public class KnowledgeBaseQueryService {
             params.minScore(),
             List.copyOf(docs),
             rewriteMs,
-            Math.max(0, rewriteAndRetrievalMs - rewriteMs),
+            retrievalMs,
+            rerankResult.durationMs(),
+            rerankResult.status().name(),
+            rerankResult.reason().metricValue(),
             generationMs,
             answer,
             outcome));
@@ -422,6 +433,19 @@ public class KnowledgeBaseQueryService {
         return distance != null && distance instanceof Number number ? number.doubleValue() : null;
     }
 
+    private RerankResult rerankDocuments(String query, List<Document> candidates) {
+        RerankResult result = llmProviderRegistry.rerankDocuments(query, candidates);
+        ragMetrics.recordStageDuration(
+            "rerank", result.status().name().toLowerCase(), result.durationMs() * 1_000_000L);
+        ragMetrics.recordRerankRequest(
+            result.status().name().toLowerCase(), result.reason().metricValue());
+        return result;
+    }
+
+    private List<Document> documentsOf(RerankResult result) {
+        return result.documents().stream().map(RerankedDocument::document).toList();
+    }
+
 
     /**
      * 仅执行检索链路（改写 + 候选检索），不做 LLM 生成。
@@ -431,34 +455,53 @@ public class KnowledgeBaseQueryService {
         String normalized = normalizeQuestion(question);
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalized.isBlank()) {
             return new RagQueryExecution(normalized, normalized, List.of(normalized),
-                topkLong, minScoreDefault, List.of(), 0, 0, 0, NO_RESULT_RESPONSE, "NO_RESULT");
+                topkLong, minScoreDefault, List.of(), 0, 0, 0,
+                "DISABLED", "disabled", 0, NO_RESULT_RESPONSE, "NO_RESULT");
         }
-        long start = System.nanoTime();
         List<Message> effectiveHistory = sanitizeHistory(history);
         QueryContext queryContext = buildQueryContext(question, effectiveHistory);
         List<String> attemptedQueries = new ArrayList<>();
-        List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds, attemptedQueries);
-        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+        long retrievalStart = System.nanoTime();
+        List<Document> retrievedDocs = retrieveRelevantDocs(
+            queryContext, knowledgeBaseIds, attemptedQueries);
+        long retrievalMs = (System.nanoTime() - retrievalStart) / 1_000_000;
+        RerankResult rerankResult = rerankDocuments(
+            queryContext.candidateQueries().getFirst(), retrievedDocs);
+        List<Document> relevantDocs = documentsOf(rerankResult);
         boolean hit = hasEffectiveHit(relevantDocs);
         String stageResult = hit ? "success" : "reject";
         ragMetrics.recordStageDuration("rewrite", stageResult, queryContext.rewriteDurationMs() * 1_000_000L);
-        ragMetrics.recordStageDuration("retrieve", stageResult,
-            Math.max(0, elapsedMs - queryContext.rewriteDurationMs()) * 1_000_000L);
+        ragMetrics.recordStageDuration("retrieve", stageResult, retrievalMs * 1_000_000L);
         return new RagQueryExecution(
             normalized,
             queryContext.candidateQueries().getFirst(),
             List.copyOf(attemptedQueries),
             queryContext.searchParams().topK(),
             queryContext.searchParams().minScore(),
-            relevantDocs.stream()
-                .map(doc -> new RagQueryExecution.RetrievedDoc(
-                    relevantDocs.indexOf(doc) + 1, doc.getText(), extractScore(doc), doc.getMetadata()))
-                .toList(),
+            toRetrievedDocs(rerankResult),
             queryContext.rewriteDurationMs(),
-            Math.max(0, elapsedMs - queryContext.rewriteDurationMs()),
+            retrievalMs,
+            rerankResult.durationMs(),
+            rerankResult.status().name(),
+            rerankResult.reason().metricValue(),
             0,
             null,
             hit ? "RETRIEVED" : "NO_RESULT");
+    }
+
+    private List<RagQueryExecution.RetrievedDoc> toRetrievedDocs(RerankResult rerankResult) {
+        List<RagQueryExecution.RetrievedDoc> docs = new ArrayList<>();
+        for (int i = 0; i < rerankResult.documents().size(); i++) {
+            RerankedDocument reranked = rerankResult.documents().get(i);
+            Document document = reranked.document();
+            docs.add(new RagQueryExecution.RetrievedDoc(
+                i + 1,
+                document.getText(),
+                extractScore(document),
+                reranked.rerankScore(),
+                document.getMetadata()));
+        }
+        return List.copyOf(docs);
     }
 
     private QueryContext buildQueryContext(String originalQuestion, List<Message> history) {

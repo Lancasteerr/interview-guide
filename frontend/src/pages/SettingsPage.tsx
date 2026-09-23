@@ -1209,7 +1209,7 @@ export default function SettingsPage() {
                             Rerank 排序模型
                           </p>
                           <p className="mt-1 text-xs text-slate-400">
-                            当前阶段只保存配置，连接测试暂不验证 Rerank
+                            连接测试不验证 Rerank；知识库调用还受后端灰度开关控制，当前仅支持 qwen3.7-text-rerank
                           </p>
                         </div>
                         <label className="inline-flex items-center gap-2 whitespace-nowrap text-xs font-medium text-slate-600 dark:text-slate-300">

@@ -14,6 +14,16 @@ RUN_RAG_EVAL=true ./gradlew :app:ragEvaluation --no-daemon
 RUN_RAG_EVAL=true APP_AI_RAG_REWRITE_ENABLED=true ./gradlew :app:ragEvaluation --no-daemon
 ```
 
+Rerank A/B 必须在同一 Git SHA 与相同检索参数下分别执行：
+
+```bash
+RUN_RAG_EVAL=true APP_AI_RAG_RERANK_ENABLED=false ./gradlew :app:ragEvaluation --no-daemon
+RUN_RAG_EVAL=true APP_AI_RAG_RERANK_ENABLED=true ./gradlew :app:ragEvaluation --no-daemon
+```
+
+报告会额外记录 Rerank 状态、原因、分数与 P50/P95；环境快照只保存模型和 instruction hash，
+不会保存 API Key、Workspace ID 或完整调用地址。
+
 - `RUN_RAG_EVAL`：双保险开关之一（另一层是 `rag-eval` 标签，普通 `:app:test` 不会运行本测评）。
 - Redis 隔离：`rag-eval` Profile 默认使用 database 1（可用 `REDIS_DATABASE` 覆盖），显式设为 0 会被测评启动守卫拒绝；task 会自动加载根目录 `.env`（含 `APP_AI_CONFIG_ENCRYPTION_KEY` 等）。
 - 普通测试命令 `./gradlew :app:test` 通过 `excludeTags 'rag-eval'` 排除本测评，不产生付费调用。

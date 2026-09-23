@@ -169,6 +169,11 @@ app:
     rag:
       # RAG 业务指标（app.rag.*）开关
       metrics-enabled: ${APP_AI_RAG_METRICS_ENABLED:true}
+      rerank:
+        enabled: ${APP_AI_RAG_RERANK_ENABLED:false}
+        connect-timeout: ${APP_AI_RAG_RERANK_CONNECT_TIMEOUT:2s}
+        read-timeout: ${APP_AI_RAG_RERANK_READ_TIMEOUT:5s}
+        instruction: ${APP_AI_RAG_RERANK_INSTRUCTION:Given a web search query, retrieve relevant passages that answer the query.}
       rewrite:
         enabled: ${APP_AI_RAG_REWRITE_ENABLED:true}
       search:

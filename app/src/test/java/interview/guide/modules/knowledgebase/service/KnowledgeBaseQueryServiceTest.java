@@ -1,6 +1,8 @@
 package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
+import interview.guide.common.ai.rerank.RerankResult;
+import interview.guide.common.ai.rerank.RerankedDocument;
 import interview.guide.modules.knowledgebase.metrics.RagMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import ch.qos.logback.classic.Level;
@@ -35,6 +37,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -65,6 +68,8 @@ class KnowledgeBaseQueryServiceTest {
   void setUp() throws Exception {
     when(resourceLoader.getResource(anyString()))
         .thenAnswer(invocation -> new ByteArrayResource("模板".getBytes(StandardCharsets.UTF_8)));
+    lenient().when(llmProviderRegistry.rerankDocuments(anyString(), anyList()))
+        .thenAnswer(invocation -> RerankResult.disabled(invocation.getArgument(1)));
   }
 
   private KnowledgeBaseQueryService buildService(boolean rewriteEnabled) throws Exception {
@@ -152,6 +157,60 @@ class KnowledgeBaseQueryServiceTest {
     assertThat(execution.rewriteDurationMs()).isGreaterThanOrEqualTo(0);
     assertThat(execution.retrievalDurationMs()).isGreaterThanOrEqualTo(0);
     assertThat(execution.generationDurationMs()).isGreaterThanOrEqualTo(0);
+  }
+
+  @Nested
+  @DisplayName("Rerank 后处理")
+  class RerankPostProcessing {
+
+    @Test
+    @DisplayName("retrieveOnly 输出 Rerank 顺序且保留向量分")
+    void retrieveOnlyUsesRerankedOrderAndKeepsVectorScore() throws Exception {
+      service = buildService(false);
+      Document first = Document.builder().id("first").text("第一段").score(0.9).build();
+      Document second = Document.builder().id("second").text("第二段").score(0.7).build();
+      when(vectorService.similaritySearch(anyString(), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(first, second));
+      when(llmProviderRegistry.rerankDocuments(eq("原始问题"), anyList()))
+          .thenReturn(RerankResult.success(List.of(
+              new RerankedDocument(second, 0.95),
+              new RerankedDocument(first, 0.25)), 12));
+
+      RagQueryExecution execution = service.retrieveOnly(List.of(1L), "原始问题", List.of());
+
+      assertThat(execution.rerankStatus()).isEqualTo("SUCCESS");
+      assertThat(execution.rerankDurationMs()).isEqualTo(12);
+      assertThat(execution.retrievedDocs()).extracting(RagQueryExecution.RetrievedDoc::text)
+          .containsExactly("第二段", "第一段");
+      assertThat(execution.retrievedDocs()).extracting(RagQueryExecution.RetrievedDoc::score)
+          .containsExactly(0.7, 0.9);
+      assertThat(execution.retrievedDocs()).extracting(RagQueryExecution.RetrievedDoc::rerankScore)
+          .containsExactly(0.95, 0.25);
+    }
+
+    @Test
+    @DisplayName("Rerank 回退时保持原向量顺序")
+    void fallbackKeepsVectorOrder() throws Exception {
+      service = buildService(false);
+      Document first = Document.builder().id("first").text("第一段").score(0.9).build();
+      Document second = Document.builder().id("second").text("第二段").score(0.7).build();
+      when(vectorService.similaritySearch(anyString(), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(first, second));
+      when(llmProviderRegistry.rerankDocuments(anyString(), anyList()))
+          .thenReturn(RerankResult.fallback(
+              List.of(first, second),
+              interview.guide.common.ai.rerank.RerankReason.TIMEOUT,
+              5));
+
+      RagQueryExecution execution = service.retrieveOnly(List.of(1L), "原始问题", List.of());
+
+      assertThat(execution.rerankStatus()).isEqualTo("FALLBACK");
+      assertThat(execution.rerankReason()).isEqualTo("timeout");
+      assertThat(execution.retrievedDocs()).extracting(RagQueryExecution.RetrievedDoc::text)
+          .containsExactly("第一段", "第二段");
+      assertThat(execution.retrievedDocs()).extracting(RagQueryExecution.RetrievedDoc::rerankScore)
+          .containsOnlyNulls();
+    }
   }
 
   @Nested
@@ -370,7 +429,8 @@ class KnowledgeBaseQueryServiceTest {
 
       meterRegistry.getMeters().forEach(meter ->
           assertThat(meter.getId().getTags()).allSatisfy(tag ->
-              assertThat(tag.getKey()).isIn("mode", "result", "stage", "variant", "reason")));
+              assertThat(tag.getKey()).isIn(
+                  "mode", "result", "stage", "variant", "reason", "status")));
     }
   }
 
@@ -430,6 +490,8 @@ class KnowledgeBaseQueryServiceTest {
       answerCollect(service, "什么是 HashMap");
 
       verify(vectorService, times(2)).similaritySearch(anyString(), anyList(), anyInt(), anyDouble());
+      verify(llmProviderRegistry, times(1))
+          .rerankDocuments(eq("改写后的 HashMap 原理问题"), anyList());
     }
 
     @Test

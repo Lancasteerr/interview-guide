@@ -44,16 +44,19 @@ class RagMetricsTest {
     metrics.recordRetrievalHits("single", 8);
     metrics.recordRewriteFallback("disabled");
     metrics.recordRefusal("no_hit");
+    metrics.recordRerankRequest("success", "none");
 
     assertThat(registry.get(RagMetrics.REQUESTS).counter().count()).isEqualTo(1.0);
     assertThat(registry.get(RagMetrics.STAGE_DURATION).timer().count()).isEqualTo(1L);
     assertThat(registry.get(RagMetrics.RETRIEVAL_HITS).summary().count()).isEqualTo(1L);
     assertThat(registry.get(RagMetrics.REWRITE_FALLBACKS).counter().count()).isEqualTo(1.0);
     assertThat(registry.get(RagMetrics.REFUSALS).counter().count()).isEqualTo(1.0);
+    assertThat(registry.get(RagMetrics.RERANK_REQUESTS).counter().count()).isEqualTo(1.0);
 
     registry.getMeters().forEach(meter ->
         assertThat(meter.getId().getTags()).allSatisfy(tag ->
-            assertThat(tag.getKey()).isIn("mode", "result", "stage", "variant", "reason")));
+            assertThat(tag.getKey()).isIn(
+                "mode", "result", "stage", "variant", "reason", "status")));
   }
 
   @Test
@@ -66,6 +69,7 @@ class RagMetricsTest {
     metrics.recordRetrievalHits("single", 1);
     metrics.recordRewriteFallback("error");
     metrics.recordRefusal("invalid_request");
+    metrics.recordRerankRequest("disabled", "disabled");
 
     assertThat(registry.getMeters()).isEmpty();
   }

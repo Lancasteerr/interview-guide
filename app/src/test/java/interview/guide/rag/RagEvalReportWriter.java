@@ -86,13 +86,14 @@ public final class RagEvalReportWriter {
     }
     sb.append("## 逐样本明细\n\n");
     List<Map<String, Object>> samples = (List<Map<String, Object>>) report.getOrDefault("samples", List.of());
-    sb.append("| id | split | tags | outcome | hit | firstRank | evidenceRecall | totalMs |\n");
-    sb.append("|---|---|---|---|---|---|---|---|\n");
+    sb.append("| id | split | tags | outcome | rerank | hit | firstRank | evidenceRecall | totalMs |\n");
+    sb.append("|---|---|---|---|---|---|---|---|---|\n");
     for (Map<String, Object> s : samples) {
       sb.append("| ").append(s.get("id"))
           .append(" | ").append(s.get("split"))
           .append(" | ").append(s.get("tags"))
           .append(" | ").append(s.get("outcome"))
+          .append(" | ").append(s.get("rerankStatus"))
           .append(" | ").append(s.get("hit"))
           .append(" | ").append(s.get("firstHitRank"))
           .append(" | ").append(s.get("evidenceRecall"))

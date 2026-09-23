@@ -1,5 +1,6 @@
 package interview.guide.rag;
 
+import interview.guide.common.config.RerankProperties;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
@@ -71,6 +72,8 @@ class RagEvaluationTest {
   private KnowledgeBaseVectorService vectorService;
   @Autowired
   private KnowledgeBaseQueryService queryService;
+  @Autowired
+  private RerankProperties rerankProperties;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final Map<String, Long> fixtureKbIds = new HashMap<>();
@@ -227,7 +230,8 @@ class RagEvaluationTest {
             .blockLast();
         execution = trace.isEmpty()
             ? new RagQueryExecution(sample.question(), sample.question(), List.of(), 0, 0,
-                List.of(), 0, 0, 0, String.join("", chunks), "NO_RESULT")
+                List.of(), 0, 0, 0, "DISABLED", "disabled", 0,
+                String.join("", chunks), "NO_RESULT")
             : trace.getFirst();
       } else {
         execution = queryService.retrieveOnly(List.of(kbId), sample.question(), history);
@@ -266,12 +270,7 @@ class RagEvaluationTest {
       result.put("resolvedMinScore", execution.resolvedMinScore());
       result.put("answer", execution.answer());
       result.put("retrievedDocs", execution.retrievedDocs().stream()
-          .map(d -> Map.of(
-              "rank", d.rank(),
-              "score", d.score() != null ? d.score() : -1.0,
-              "excerpt", d.text() != null && d.text().length() > 200
-                  ? d.text().substring(0, 200) : d.text(),
-              "contentHash", sha256Quiet(d.text())))
+          .map(this::retrievedDocEntry)
           .toList());
       result.put("hit", hit);
       result.put("hitEvidenceIds", hitEvidenceIds);
@@ -280,6 +279,9 @@ class RagEvaluationTest {
       result.put("predictedReject", predictedReject);
       result.put("rewriteMs", execution.rewriteDurationMs());
       result.put("retrievalMs", execution.retrievalDurationMs());
+      result.put("rerankMs", execution.rerankDurationMs());
+      result.put("rerankStatus", execution.rerankStatus());
+      result.put("rerankReason", execution.rerankReason());
       result.put("generationMs", execution.generationDurationMs());
       result.put("totalMs", (System.nanoTime() - totalStart) / 1_000_000);
 
@@ -293,6 +295,17 @@ class RagEvaluationTest {
           e.getClass().getSimpleName() + ": " + e.getMessage(), result));
       return result;
     }
+  }
+
+  private Map<String, Object> retrievedDocEntry(RagQueryExecution.RetrievedDoc doc) {
+    Map<String, Object> entry = new LinkedHashMap<>();
+    entry.put("rank", doc.rank());
+    entry.put("score", doc.score() != null ? doc.score() : -1.0);
+    entry.put("rerankScore", doc.rerankScore());
+    entry.put("excerpt", doc.text() != null && doc.text().length() > 200
+        ? doc.text().substring(0, 200) : doc.text());
+    entry.put("contentHash", sha256Quiet(doc.text()));
+    return entry;
   }
 
   private void collectBadCase(RagEvalSample sample, Map<String, Object> result, Integer firstHitRank,
@@ -397,6 +410,8 @@ class RagEvaluationTest {
         ? "false(rag-eval Profile 默认)" : System.getenv("APP_AI_RAG_REWRITE_ENABLED"));
     env.put("mergeOriginalQuery", System.getenv("APP_AI_RAG_MERGE_ORIGINAL_QUERY") == null
         ? "false(默认)" : System.getenv("APP_AI_RAG_MERGE_ORIGINAL_QUERY"));
+    env.put("rerankEnabled", rerankProperties.isEnabled());
+    env.put("rerankInstructionSha256", sha256Quiet(rerankProperties.getInstruction()));
     env.put("chunkSize", System.getenv("APP_AI_RAG_VECTORIZATION_CHUNK_SIZE") == null
         ? "800(默认)" : System.getenv("APP_AI_RAG_VECTORIZATION_CHUNK_SIZE"));
     env.put("redisDatabase", System.getenv().getOrDefault("REDIS_DATABASE", "1(rag-eval Profile 默认)"));
@@ -417,13 +432,17 @@ class RagEvaluationTest {
         env("POSTGRES_USER", "postgres"), env("POSTGRES_PASSWORD", "123456"));
         var stmt = conn.createStatement();
         var rs = stmt.executeQuery(
-            "SELECT id, model, embedding_model, temperature FROM llm_provider_config"
+            "SELECT id, model, embedding_model, rerank_model, supports_rerank, temperature"
+                + " FROM llm_provider_config"
                 + " WHERE id IN (SELECT default_chat_provider_id FROM llm_global_setting"
-                + "   UNION SELECT default_embedding_provider_id FROM llm_global_setting)")) {
+                + "   UNION SELECT default_embedding_provider_id FROM llm_global_setting)"
+                + " OR id = 'dashscope'")) {
       while (rs.next()) {
         String id = rs.getString("id");
         snapshot.put("provider:" + id + ".model", rs.getString("model"));
         snapshot.put("provider:" + id + ".embeddingModel", rs.getString("embedding_model"));
+        snapshot.put("provider:" + id + ".rerankModel", rs.getString("rerank_model"));
+        snapshot.put("provider:" + id + ".supportsRerank", rs.getBoolean("supports_rerank"));
         snapshot.put("provider:" + id + ".temperature", rs.getObject("temperature"));
       }
     }
