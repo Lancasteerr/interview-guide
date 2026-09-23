@@ -2,9 +2,9 @@ package interview.guide.modules.interview.service;
 
 import interview.guide.common.evaluation.EvaluationReport;
 import interview.guide.common.evaluation.UnifiedEvaluationService;
-import interview.guide.modules.interview.model.InterviewQuestionDTO;
-import interview.guide.modules.interview.model.InterviewReportDTO;
-import interview.guide.modules.interview.skill.InterviewSkillService;
+import interview.guide.modules.interview.dto.InterviewQuestionDTO;
+import interview.guide.modules.interview.dto.InterviewReportDTO;
+import interview.guide.modules.interview.service.InterviewSkillService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

@@ -1,6 +1,7 @@
 package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.exception.BusinessException;
+import interview.guide.modules.knowledgebase.config.KnowledgeBaseVectorProperties;
 import interview.guide.modules.knowledgebase.repository.VectorRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

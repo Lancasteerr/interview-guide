@@ -1,7 +1,7 @@
 package interview.guide.modules.knowledgebase.repository;
 
-import interview.guide.modules.knowledgebase.model.RagChatMessageEntity;
-import interview.guide.modules.knowledgebase.model.RagChatMessageEntity.MessageType;
+import interview.guide.modules.knowledgebase.entity.RagChatMessageEntity;
+import interview.guide.modules.knowledgebase.entity.RagChatMessageEntity.MessageType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

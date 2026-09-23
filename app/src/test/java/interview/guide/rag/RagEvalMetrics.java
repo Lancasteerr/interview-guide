@@ -54,6 +54,7 @@ public final class RagEvalMetrics {
           .average().orElse(0)));
     }
     putStagePercentiles(m, "retrievalMsP50", "retrievalMsP95", valid, "retrievalMs");
+    putStagePercentiles(m, "rerankMsP50", "rerankMsP95", valid, "rerankMs");
     putStagePercentiles(m, "rewriteMsP50", "rewriteMsP95", valid, "rewriteMs");
     List<Map<String, Object>> generation = valid.stream()
         .filter(r -> Boolean.TRUE.equals(r.get("evaluateGeneration"))).toList();

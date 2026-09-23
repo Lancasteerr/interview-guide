@@ -8,9 +8,9 @@ import interview.guide.common.constant.CommonConstants.InterviewDefaults;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.log.ErrorLogSanitizer;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionEntity;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionFollowUpDTO;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseQuestionEntity;
+import interview.guide.modules.knowledgebase.dto.KnowledgeBaseQuestionFollowUpDTO;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionStatus;
 import interview.guide.modules.knowledgebase.model.QuestionGenerationConfig;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseQuestionRepository;
@@ -63,10 +63,10 @@ public class KnowledgeBaseQuestionGenerationService {
   private final QuestionGenerationStateService stateService;
   private final ObjectMapper objectMapper;
 
-  @Value("classpath:prompts/knowledgebase-question-generation-system.st")
+  @Value("classpath:prompts/knowledgebase/knowledgebase-question-generation-system.st")
   private Resource systemPromptResource;
 
-  @Value("classpath:prompts/knowledgebase-question-generation-user.st")
+  @Value("classpath:prompts/knowledgebase/knowledgebase-question-generation-user.st")
   private Resource userPromptResource;
 
   private final BeanOutputConverter<QuestionListDTO> outputConverter =

@@ -1,6 +1,7 @@
 package interview.guide.modules.interview.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
+import interview.guide.modules.interview.config.InterviewQuestionProperties;
 import interview.guide.common.ai.PromptSanitizer;
 import interview.guide.common.ai.PromptSecurityConstants;
 import interview.guide.common.ai.StructuredOutputInvoker;
@@ -9,11 +10,11 @@ import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.interview.model.HistoricalQuestion;
-import interview.guide.modules.interview.model.InterviewQuestionDTO;
-import interview.guide.modules.interview.skill.InterviewSkillService;
-import interview.guide.modules.interview.skill.InterviewSkillService.CategoryDTO;
-import interview.guide.modules.interview.skill.InterviewSkillService.SkillDTO;
-import interview.guide.modules.interview.skill.InterviewSkillService.SkillCategoryDTO;
+import interview.guide.modules.interview.dto.InterviewQuestionDTO;
+import interview.guide.modules.interview.service.InterviewSkillService;
+import interview.guide.modules.interview.service.InterviewSkillService.CategoryDTO;
+import interview.guide.modules.interview.service.InterviewSkillService.SkillDTO;
+import interview.guide.modules.interview.service.InterviewSkillService.SkillCategoryDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;

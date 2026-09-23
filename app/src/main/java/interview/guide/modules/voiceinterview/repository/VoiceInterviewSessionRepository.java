@@ -1,7 +1,7 @@
 package interview.guide.modules.voiceinterview.repository;
 
-import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionEntity;
-import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionEntity.InterviewPhase;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewSessionEntity;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewSessionEntity.InterviewPhase;
 import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;

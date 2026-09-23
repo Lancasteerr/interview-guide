@@ -1,8 +1,8 @@
 package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.exception.BusinessException;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseQuestionEntity;
 import interview.guide.modules.knowledgebase.model.QuestionGenStatus;
 import interview.guide.modules.knowledgebase.model.QuestionGenerationConfig;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseQuestionRepository;

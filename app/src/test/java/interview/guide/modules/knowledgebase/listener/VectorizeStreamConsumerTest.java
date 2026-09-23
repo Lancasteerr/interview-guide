@@ -2,7 +2,7 @@ package interview.guide.modules.knowledgebase.listener;
 
 import interview.guide.common.exception.BusinessException;
 import interview.guide.infrastructure.redis.RedisService;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
 import interview.guide.modules.knowledgebase.service.KnowledgeBaseParseService;
 import interview.guide.common.async.recovery.VectorizeRecoveryProperties;

@@ -1,9 +1,9 @@
 package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.modules.knowledgebase.listener.QuestionGenStreamProducer;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionDTO;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
+import interview.guide.modules.knowledgebase.dto.KnowledgeBaseQuestionDTO;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseQuestionEntity;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionStatus;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseQuestionRepository;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;

@@ -1,6 +1,6 @@
 package interview.guide.modules.knowledgebase.repository;
 
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.model.QuestionGenStatus;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
 import org.springframework.data.domain.Pageable;

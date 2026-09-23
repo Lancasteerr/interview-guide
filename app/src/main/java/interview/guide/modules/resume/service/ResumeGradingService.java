@@ -1,13 +1,14 @@
 package interview.guide.modules.resume.service;
 
+import interview.guide.modules.resume.config.ResumeAnalysisProperties;
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.StructuredOutputInvoker;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.log.ErrorLogSanitizer;
-import interview.guide.modules.interview.model.ResumeAnalysisResponse;
-import interview.guide.modules.interview.model.ResumeAnalysisResponse.ScoreDetail;
-import interview.guide.modules.interview.model.ResumeAnalysisResponse.Suggestion;
+import interview.guide.modules.interview.dto.ResumeAnalysisResponse;
+import interview.guide.modules.interview.dto.ResumeAnalysisResponse.ScoreDetail;
+import interview.guide.modules.interview.dto.ResumeAnalysisResponse.Suggestion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;

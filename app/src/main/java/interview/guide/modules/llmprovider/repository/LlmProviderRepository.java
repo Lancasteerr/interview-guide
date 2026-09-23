@@ -1,6 +1,6 @@
 package interview.guide.modules.llmprovider.repository;
 
-import interview.guide.modules.llmprovider.model.LlmProviderEntity;
+import interview.guide.modules.llmprovider.entity.LlmProviderEntity;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 

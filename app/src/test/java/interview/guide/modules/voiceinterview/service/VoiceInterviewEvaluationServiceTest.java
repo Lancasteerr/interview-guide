@@ -2,9 +2,9 @@ package interview.guide.modules.voiceinterview.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.evaluation.UnifiedEvaluationService;
-import interview.guide.modules.interview.skill.InterviewSkillService;
-import interview.guide.modules.voiceinterview.model.VoiceInterviewEvaluationEntity;
-import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionEntity;
+import interview.guide.modules.interview.service.InterviewSkillService;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewEvaluationEntity;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewSessionEntity;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewEvaluationRepository;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewMessageRepository;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewSessionRepository;

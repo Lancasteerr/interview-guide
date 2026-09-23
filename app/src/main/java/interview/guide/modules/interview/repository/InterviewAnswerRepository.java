@@ -1,7 +1,7 @@
 package interview.guide.modules.interview.repository;
 
-import interview.guide.modules.interview.model.InterviewAnswerEntity;
-import interview.guide.modules.interview.model.InterviewSessionEntity;
+import interview.guide.modules.interview.entity.InterviewAnswerEntity;
+import interview.guide.modules.interview.entity.InterviewSessionEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

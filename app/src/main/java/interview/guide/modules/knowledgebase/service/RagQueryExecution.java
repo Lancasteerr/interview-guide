@@ -17,6 +17,9 @@ import java.util.Map;
  * @param retrievedDocs      最终采用的检索片段，按排名排列
  * @param rewriteDurationMs  Query 改写耗时
  * @param retrievalDurationMs 检索耗时（含全部候选 Query）
+ * @param rerankDurationMs   Rerank 耗时
+ * @param rerankStatus       DISABLED / SKIPPED / SUCCESS / FALLBACK
+ * @param rerankReason       低基数 Rerank 原因
  * @param generationDurationMs 生成耗时
  * @param answer             最终答案（含流式归一化后的拒答模板）
  * @param outcome            ANSWERED / NO_RESULT / ERROR
@@ -30,6 +33,9 @@ public record RagQueryExecution(
     List<RetrievedDoc> retrievedDocs,
     long rewriteDurationMs,
     long retrievalDurationMs,
+    long rerankDurationMs,
+    String rerankStatus,
+    String rerankReason,
     long generationDurationMs,
     String answer,
     String outcome
@@ -41,8 +47,14 @@ public record RagQueryExecution(
    * @param rank     片段排名（1 起）
    * @param text     片段全文
    * @param score    相似度分数（来自向量库 metadata，可能为 null）
+   * @param rerankScore Rerank 相关度分数（未执行或回退时为 null）
    * @param metadata 片段 metadata（含 kb_id 等）
    */
-  public record RetrievedDoc(int rank, String text, Double score, Map<String, Object> metadata) {
+  public record RetrievedDoc(
+      int rank,
+      String text,
+      Double score,
+      Double rerankScore,
+      Map<String, Object> metadata) {
   }
 }

@@ -1,7 +1,7 @@
 package interview.guide.modules.knowledgebase.listener;
 
 import interview.guide.common.async.recovery.VectorizeRecoveryProperties;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
 import lombok.extern.slf4j.Slf4j;

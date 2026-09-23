@@ -6,12 +6,12 @@ import interview.guide.common.ai.StructuredOutputInvoker;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.modules.knowledgebase.listener.QuestionGenStreamConsumer;
 import interview.guide.modules.knowledgebase.listener.QuestionGenStreamProducer;
-import interview.guide.modules.knowledgebase.model.GenerateKnowledgeBaseQuestionsRequest;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionEntity;
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionFollowUpDTO;
+import interview.guide.modules.knowledgebase.dto.GenerateKnowledgeBaseQuestionsRequest;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseQuestionEntity;
+import interview.guide.modules.knowledgebase.dto.KnowledgeBaseQuestionFollowUpDTO;
 import interview.guide.modules.knowledgebase.model.QuestionGenStatus;
-import interview.guide.modules.knowledgebase.model.QuestionGenStatusResponse;
+import interview.guide.modules.knowledgebase.dto.QuestionGenStatusResponse;
 import interview.guide.modules.knowledgebase.model.QuestionGenerationConfig;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseQuestionRepository;
@@ -115,8 +115,8 @@ class QuestionGenerationAsyncTest {
     );
 
     // 注入 @Value 字段
-    Resource systemResource = new ClassPathResource("prompts/knowledgebase-question-generation-system.st");
-    Resource userResource = new ClassPathResource("prompts/knowledgebase-question-generation-user.st");
+    Resource systemResource = new ClassPathResource("prompts/knowledgebase/knowledgebase-question-generation-system.st");
+    Resource userResource = new ClassPathResource("prompts/knowledgebase/knowledgebase-question-generation-user.st");
     setField(KnowledgeBaseQuestionGenerationService.class, "systemPromptResource", systemResource);
     setField(KnowledgeBaseQuestionGenerationService.class, "userPromptResource", userResource);
 

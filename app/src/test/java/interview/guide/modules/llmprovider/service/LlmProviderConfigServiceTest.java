@@ -234,6 +234,140 @@ class LlmProviderConfigServiceTest {
                 service.updateProvider("dashscope",
                     new UpdateProviderRequest(null, "  ", null, null, null)));
         }
+
+        @Test
+        @DisplayName("DashScope Provider 可以保存并读取 Rerank 配置")
+        void dashscopeProviderPersistsRerankConfig() {
+            Map<String, LlmProviderProperties.ProviderConfig> providers = new LinkedHashMap<>();
+            when(properties.getProviders()).thenReturn(providers);
+
+            service.createProvider(new CreateProviderRequest(
+                "dashscope",
+                "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "secret",
+                "qwen3.5-flash",
+                "text-embedding-v3",
+                1024,
+                true,
+                " qwen3.7-text-rerank ",
+                " workspace-123 ",
+                true,
+                0.2
+            ));
+
+            LlmProviderProperties.ProviderConfig config = providers.get("dashscope");
+            assertTrue(Boolean.TRUE.equals(config.getSupportsRerank()));
+            assertEquals("qwen3.7-text-rerank", config.getRerankModel());
+            assertEquals("workspace-123", config.getRerankWorkspaceId());
+            assertTrue(service.getProvider("dashscope").supportsRerank());
+            assertEquals("workspace-123", service.getProvider("dashscope").rerankWorkspaceId());
+        }
+
+        @Test
+        @DisplayName("启用 Rerank 时模型和 Workspace ID 都必填")
+        void rerankRequiresModelAndWorkspaceId() {
+            Map<String, LlmProviderProperties.ProviderConfig> providers = new LinkedHashMap<>();
+            when(properties.getProviders()).thenReturn(providers);
+
+            assertThrows(BusinessException.class, () -> service.createProvider(
+                rerankRequest("dashscope", "", "workspace-123", true)));
+            assertThrows(BusinessException.class, () -> service.createProvider(
+                rerankRequest("dashscope", "qwen3.7-text-rerank", "   ", true)));
+        }
+
+        @Test
+        @DisplayName("非 DashScope Provider 不能配置 Rerank")
+        void nonDashscopeProviderRejectsRerankConfig() {
+            when(properties.getProviders()).thenReturn(new LinkedHashMap<>());
+
+            BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.createProvider(
+                    rerankRequest("glm", "qwen3.7-text-rerank", "workspace-123", true)));
+
+            assertEquals(ErrorCode.BAD_REQUEST.getCode(), exception.getCode());
+        }
+
+        @Test
+        @DisplayName("关闭 Rerank 时不能提交模型或 Workspace ID")
+        void disabledRerankRejectsDependentFields() {
+            when(properties.getProviders()).thenReturn(new LinkedHashMap<>());
+
+            BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.createProvider(
+                    rerankRequest("dashscope", "qwen3.7-text-rerank", null, false)));
+
+            assertEquals(ErrorCode.BAD_REQUEST.getCode(), exception.getCode());
+        }
+
+        @Test
+        @DisplayName("Rerank 配置超过 128 字符时在服务层拒绝")
+        void rerankConfigRejectsOversizedValues() {
+            when(properties.getProviders()).thenReturn(new LinkedHashMap<>());
+
+            BusinessException modelException = assertThrows(BusinessException.class,
+                () -> service.createProvider(
+                    rerankRequest("dashscope", "m".repeat(129), "workspace-123", true)));
+            BusinessException workspaceException = assertThrows(BusinessException.class,
+                () -> service.createProvider(
+                    rerankRequest("dashscope", "qwen3.7-text-rerank", "w".repeat(129), true)));
+
+            assertEquals(ErrorCode.BAD_REQUEST.getCode(), modelException.getCode());
+            assertEquals(ErrorCode.BAD_REQUEST.getCode(), workspaceException.getCode());
+        }
+
+        @Test
+        @DisplayName("已启用时可独立更新模型或 Workspace ID")
+        void updatesRerankFieldsIndependently() {
+            Map<String, LlmProviderProperties.ProviderConfig> providers = new LinkedHashMap<>();
+            LlmProviderProperties.ProviderConfig config = createProviderConfig(
+                "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "secret",
+                "qwen3.5-flash",
+                "text-embedding-v3"
+            );
+            config.setSupportsRerank(true);
+            config.setRerankModel("qwen3.7-text-rerank");
+            config.setRerankWorkspaceId("workspace-123");
+            providers.put("dashscope", config);
+            when(properties.getProviders()).thenReturn(providers);
+
+            service.updateProvider("dashscope", new UpdateProviderRequest(
+                null, null, null, null, null, null,
+                "custom-rerank", null, null, null));
+            assertEquals("custom-rerank", config.getRerankModel());
+            assertEquals("workspace-123", config.getRerankWorkspaceId());
+
+            service.updateProvider("dashscope", new UpdateProviderRequest(
+                null, null, null, null, null, null,
+                null, "workspace-456", null, null));
+            assertEquals("custom-rerank", config.getRerankModel());
+            assertEquals("workspace-456", config.getRerankWorkspaceId());
+        }
+
+        @Test
+        @DisplayName("关闭 Rerank 时清空模型和 Workspace ID")
+        void disablingRerankClearsDependentFields() {
+            Map<String, LlmProviderProperties.ProviderConfig> providers = new LinkedHashMap<>();
+            LlmProviderProperties.ProviderConfig config = createProviderConfig(
+                "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                "secret",
+                "qwen3.5-flash",
+                "text-embedding-v3"
+            );
+            config.setSupportsRerank(true);
+            config.setRerankModel("qwen3.7-text-rerank");
+            config.setRerankWorkspaceId("workspace-123");
+            providers.put("dashscope", config);
+            when(properties.getProviders()).thenReturn(providers);
+
+            service.updateProvider("dashscope", new UpdateProviderRequest(
+                null, null, null, null, null, null,
+                null, null, false, null));
+
+            assertFalse(Boolean.TRUE.equals(config.getSupportsRerank()));
+            assertNull(config.getRerankModel());
+            assertNull(config.getRerankWorkspaceId());
+        }
     }
 
     @Nested
@@ -420,6 +554,57 @@ class LlmProviderConfigServiceTest {
             assertDoesNotThrow(() -> nullYamlService.createProvider(
                 new CreateProviderRequest("test", "http://localhost", "key", "model", null, null)));
         }
+
+        @Test
+        @DisplayName("YAML 写入并在关闭时移除 Rerank 明细")
+        void writesAndClearsRerankYaml(@TempDir Path tempDir) throws IOException {
+            Path yamlFile = tempDir.resolve("providers.yml");
+            Files.writeString(yamlFile, "app:\n  ai:\n    providers: {}\n");
+            when(properties.getConfigYamlPath()).thenReturn(yamlFile.toString());
+            when(properties.getConfigEnvPath()).thenReturn(null);
+            Map<String, LlmProviderProperties.ProviderConfig> providers = new LinkedHashMap<>();
+            when(properties.getProviders()).thenReturn(providers);
+            LlmProviderConfigService yamlService = new LlmProviderConfigService(
+                properties, registry, voiceProperties, asrService, ttsService);
+
+            yamlService.createProvider(
+                rerankRequest("dashscope", "qwen3.7-text-rerank", "workspace-123", true));
+
+            String enabled = Files.readString(yamlFile, StandardCharsets.UTF_8);
+            assertTrue(enabled.contains("supports-rerank: true"));
+            assertTrue(enabled.contains("rerank-model: qwen3.7-text-rerank"));
+            assertTrue(enabled.contains("rerank-workspace-id: workspace-123"));
+
+            yamlService.updateProvider("dashscope", new UpdateProviderRequest(
+                null, null, null, null, null, null,
+                null, null, false, null));
+
+            String disabled = Files.readString(yamlFile, StandardCharsets.UTF_8);
+            assertTrue(disabled.contains("supports-rerank: false"));
+            assertFalse(disabled.contains("rerank-model:"));
+            assertFalse(disabled.contains("rerank-workspace-id:"));
+        }
+    }
+
+    private CreateProviderRequest rerankRequest(
+        String id,
+        String rerankModel,
+        String rerankWorkspaceId,
+        boolean supportsRerank
+    ) {
+        return new CreateProviderRequest(
+            id,
+            "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            "secret",
+            "qwen3.5-flash",
+            null,
+            null,
+            false,
+            rerankModel,
+            rerankWorkspaceId,
+            supportsRerank,
+            null
+        );
     }
 
     private LlmProviderProperties.ProviderConfig createProviderConfig(

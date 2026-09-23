@@ -1,7 +1,7 @@
 package interview.guide.modules.knowledgebase.repository;
 
-import interview.guide.modules.knowledgebase.model.RagChatSessionEntity;
-import interview.guide.modules.knowledgebase.model.RagChatSessionEntity.SessionStatus;
+import interview.guide.modules.knowledgebase.entity.RagChatSessionEntity;
+import interview.guide.modules.knowledgebase.entity.RagChatSessionEntity.SessionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

@@ -4,10 +4,15 @@ import com.openai.client.OpenAIClient;
 import interview.guide.common.config.LlmProviderProperties;
 import interview.guide.common.config.LlmProviderProperties.AdvisorConfig;
 import interview.guide.common.config.LlmProviderProperties.ProviderConfig;
+import interview.guide.common.config.RerankProperties;
+import interview.guide.common.ai.rerank.DashScopeDocumentReranker;
+import interview.guide.common.ai.rerank.DocumentReranker;
+import interview.guide.common.ai.rerank.RerankReason;
+import interview.guide.common.ai.rerank.RerankResult;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
-import interview.guide.modules.llmprovider.model.LlmGlobalSettingEntity;
-import interview.guide.modules.llmprovider.model.LlmProviderEntity;
+import interview.guide.modules.llmprovider.entity.LlmGlobalSettingEntity;
+import interview.guide.modules.llmprovider.entity.LlmProviderEntity;
 import interview.guide.modules.llmprovider.repository.LlmGlobalSettingRepository;
 import interview.guide.modules.llmprovider.repository.LlmProviderRepository;
 import interview.guide.modules.llmprovider.service.ApiKeyEncryptionService;
@@ -21,6 +26,7 @@ import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.document.MetadataMode;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.openai.OpenAiChatModel;
@@ -50,9 +56,11 @@ public class LlmProviderRegistry {
     private final Map<String, ChatClient> clientCache = new ConcurrentHashMap<>();
     private final Map<String, OpenAiChatModel> chatModelCache = new ConcurrentHashMap<>();
     private final Map<String, EmbeddingModel> embeddingModelCache = new ConcurrentHashMap<>();
+    private final Map<String, RerankerResolution> rerankerCache = new ConcurrentHashMap<>();
     private final LlmProviderRepository providerRepository;
     private final LlmGlobalSettingRepository globalSettingRepository;
     private final ApiKeyEncryptionService encryptionService;
+    private final RerankProperties rerankProperties;
 
     private final ToolCallingManager toolCallingManager;
     private final ObservationRegistry observationRegistry;
@@ -71,6 +79,7 @@ public class LlmProviderRegistry {
             LlmProviderRepository providerRepository,
             LlmGlobalSettingRepository globalSettingRepository,
             ApiKeyEncryptionService encryptionService,
+            RerankProperties rerankProperties,
             @Autowired(required = false) ToolCallingManager toolCallingManager,
             @Autowired(required = false) ObservationRegistry observationRegistry,
             @Autowired(required = false) @Qualifier("interviewSkillsToolCallback") ToolCallback interviewSkillsToolCallback) {
@@ -78,6 +87,7 @@ public class LlmProviderRegistry {
         this.providerRepository = providerRepository;
         this.globalSettingRepository = globalSettingRepository;
         this.encryptionService = encryptionService;
+        this.rerankProperties = rerankProperties;
         this.toolCallingManager = toolCallingManager;
         this.observationRegistry = observationRegistry;
         this.interviewSkillsToolCallback = interviewSkillsToolCallback;
@@ -88,7 +98,8 @@ public class LlmProviderRegistry {
             ToolCallingManager toolCallingManager,
             ObservationRegistry observationRegistry,
             ToolCallback interviewSkillsToolCallback) {
-        this(properties, null, null, null, toolCallingManager, observationRegistry, interviewSkillsToolCallback);
+        this(properties, null, null, null, new RerankProperties(), toolCallingManager,
+            observationRegistry, interviewSkillsToolCallback);
     }
 
     /**
@@ -153,10 +164,12 @@ public class LlmProviderRegistry {
      * 清空缓存，重新加载所有 provider。
      */
     public void reload() {
-        int size = clientCache.size() + chatModelCache.size() + embeddingModelCache.size();
+        int size = clientCache.size() + chatModelCache.size() + embeddingModelCache.size()
+            + rerankerCache.size();
         clientCache.clear();
         chatModelCache.clear();
         embeddingModelCache.clear();
+        rerankerCache.clear();
         log.info("[LlmProviderRegistry] Cache cleared ({} entries). Next access will re-create clients.", size);
     }
 
@@ -169,6 +182,65 @@ public class LlmProviderRegistry {
 
     public EmbeddingModel getDefaultEmbeddingModel() {
         return getEmbeddingModel(resolveDefaultEmbeddingProviderId());
+    }
+
+    /**
+     * 使用固定的 DashScope Provider 对召回文档重排序。
+     * 全局开关、Provider 能力和模型支持范围都在此处统一判定。
+     */
+    public RerankResult rerankDocuments(String query, List<Document> candidates) {
+        if (!rerankProperties.isEnabled()) {
+            return RerankResult.disabled(candidates);
+        }
+        if (candidates.size() < 2) {
+            return RerankResult.skipped(candidates, RerankReason.INSUFFICIENT_CANDIDATES);
+        }
+        RerankerResolution resolution = rerankerCache.computeIfAbsent(
+            "dashscope", this::resolveReranker);
+        if (resolution.reranker() == null) {
+            return RerankResult.skipped(candidates, resolution.reason());
+        }
+        try {
+            return resolution.reranker().rerank(query, candidates);
+        } catch (Exception e) {
+            log.warn("RAG Rerank 回退: model={}, candidates={}, status=fallback, reason={}, durationMs={}",
+                DashScopeDocumentReranker.SUPPORTED_MODEL, candidates.size(),
+                RerankReason.CLIENT_ERROR.metricValue(), 0);
+            return RerankResult.fallback(candidates, RerankReason.CLIENT_ERROR, 0);
+        }
+    }
+
+    private RerankerResolution resolveReranker(String providerId) {
+        ProviderSnapshot config;
+        try {
+            config = loadProviderOrThrow(providerId);
+        } catch (Exception e) {
+            log.warn("[LlmProviderRegistry] Reranker skipped: provider={}, reason={}",
+                providerId, RerankReason.NOT_CONFIGURED.metricValue());
+            return new RerankerResolution(null, RerankReason.NOT_CONFIGURED);
+        }
+        if (!config.supportsRerank() || isBlank(config.rerankModel())
+            || isBlank(config.rerankWorkspaceId()) || isBlank(config.apiKey())) {
+            log.warn("[LlmProviderRegistry] Reranker skipped: provider={}, reason={}",
+                providerId, RerankReason.NOT_CONFIGURED.metricValue());
+            return new RerankerResolution(null, RerankReason.NOT_CONFIGURED);
+        }
+        if (!DashScopeDocumentReranker.SUPPORTED_MODEL.equals(config.rerankModel())) {
+            log.warn("[LlmProviderRegistry] Reranker skipped: provider={}, model={}, reason={}",
+                providerId, config.rerankModel(), RerankReason.UNSUPPORTED_MODEL.metricValue());
+            return new RerankerResolution(null, RerankReason.UNSUPPORTED_MODEL);
+        }
+        try {
+            DocumentReranker reranker = DashScopeDocumentReranker.create(
+                config.apiKey(), config.rerankWorkspaceId(), config.rerankModel(), rerankProperties);
+            log.info("[LlmProviderRegistry] Reranker created: provider={}, model={}",
+                providerId, config.rerankModel());
+            return new RerankerResolution(reranker, RerankReason.NONE);
+        } catch (IllegalArgumentException e) {
+            log.warn("[LlmProviderRegistry] Reranker skipped: provider={}, model={}, reason={}",
+                providerId, config.rerankModel(), RerankReason.NOT_CONFIGURED.metricValue());
+            return new RerankerResolution(null, RerankReason.NOT_CONFIGURED);
+        }
     }
 
     private ChatClient createChatClient(String providerId) {
@@ -247,15 +319,15 @@ public class LlmProviderRegistry {
             throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
                 "Provider '" + providerId + "' 未配置可用的 Embedding 模型，无法执行知识库向量化");
         }
-        if (looksLikeChatModel(config.embeddingModel())) {
-            String recommendation = RECOMMENDED_EMBEDDING_MODELS.get(providerId.toLowerCase());
-            String suffix = recommendation != null
-                ? "，推荐填写 " + recommendation
-                : "，请填写该厂商真实的 Embedding 模型名";
-            throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
-                "Provider '" + providerId + "' 的 Embedding Model 配成了聊天模型 '"
-                    + config.embeddingModel() + "'" + suffix);
-        }
+//        if (looksLikeChatModel(config.embeddingModel())) {
+//            String recommendation = RECOMMENDED_EMBEDDING_MODELS.get(providerId.toLowerCase());
+//            String suffix = recommendation != null
+//                ? "，推荐填写 " + recommendation
+//                : "，请填写该厂商真实的 Embedding 模型名";
+//            throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
+//                "Provider '" + providerId + "' 的 Embedding Model 配成了聊天模型 '"
+//                    + config.embeddingModel() + "'" + suffix);
+//        }
         log.info("[LlmProviderRegistry] Building EmbeddingModel - Provider: {}, BaseUrl: {}, Model: {}",
             providerId, config.baseUrl(), config.embeddingModel());
 
@@ -374,6 +446,9 @@ public class LlmProviderRegistry {
             entity.getEmbeddingModel(),
             entity.getEmbeddingDimensions(),
             entity.isSupportsEmbedding(),
+            entity.getRerankModel(),
+            entity.getRerankWorkspaceId(),
+            entity.isSupportsRerank(),
             entity.getTemperature()
         );
     }
@@ -394,6 +469,9 @@ public class LlmProviderRegistry {
             config.getEmbeddingModel(),
             config.getEmbeddingDimensions(),
             supportsEmbedding,
+            config.getRerankModel(),
+            config.getRerankWorkspaceId(),
+            Boolean.TRUE.equals(config.getSupportsRerank()),
             config.getTemperature()
         );
     }
@@ -427,7 +505,13 @@ public class LlmProviderRegistry {
         String embeddingModel,
         Integer embeddingDimensions,
         boolean supportsEmbedding,
+        String rerankModel,
+        String rerankWorkspaceId,
+        boolean supportsRerank,
         Double temperature
     ) {
+    }
+
+    private record RerankerResolution(DocumentReranker reranker, RerankReason reason) {
     }
 }

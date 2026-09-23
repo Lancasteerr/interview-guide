@@ -28,6 +28,9 @@ public class LlmProviderProperties {
         private String embeddingModel;
         private Integer embeddingDimensions;
         private Boolean supportsEmbedding;
+        private String rerankModel;
+        private String rerankWorkspaceId;
+        private Boolean supportsRerank;
         private Double temperature;
     }
 

@@ -22,8 +22,8 @@ public class InterviewEvaluationProperties {
      * 可二分拆分的最小组数；小于该值按不可拆处理（整段再试一次）。
      */
     private int fallbackMinGroups = 2;
-    private String systemPromptPath = "classpath:prompts/interview-evaluation-system.st";
-    private String userPromptPath = "classpath:prompts/interview-evaluation-user.st";
-    private String summarySystemPromptPath = "classpath:prompts/interview-evaluation-summary-system.st";
-    private String summaryUserPromptPath = "classpath:prompts/interview-evaluation-summary-user.st";
+    private String systemPromptPath = "classpath:prompts/interview/interview-evaluation-system.st";
+    private String userPromptPath = "classpath:prompts/interview/interview-evaluation-user.st";
+    private String summarySystemPromptPath = "classpath:prompts/interview/interview-evaluation-summary-system.st";
+    private String summaryUserPromptPath = "classpath:prompts/interview/interview-evaluation-summary-user.st";
 }

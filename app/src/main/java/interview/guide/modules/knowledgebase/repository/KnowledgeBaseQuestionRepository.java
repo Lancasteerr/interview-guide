@@ -1,6 +1,6 @@
 package interview.guide.modules.knowledgebase.repository;
 
-import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionEntity;
+import interview.guide.modules.knowledgebase.entity.KnowledgeBaseQuestionEntity;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseQuestionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;

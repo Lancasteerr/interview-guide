@@ -2,7 +2,7 @@ package interview.guide.modules.resume.listener;
 
 import interview.guide.common.async.recovery.ResumeAnalysisRecoveryProperties;
 import interview.guide.common.model.AsyncTaskStatus;
-import interview.guide.modules.resume.model.ResumeEntity;
+import interview.guide.modules.resume.entity.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;

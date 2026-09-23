@@ -4,6 +4,7 @@ import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.common.transaction.TransactionalExecutor;
+import interview.guide.modules.knowledgebase.config.KnowledgeBaseVectorProperties;
 import jakarta.annotation.PostConstruct;
 import interview.guide.modules.knowledgebase.repository.VectorRepository;
 import lombok.extern.slf4j.Slf4j;

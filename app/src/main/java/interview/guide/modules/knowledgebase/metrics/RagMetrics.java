@@ -3,7 +3,7 @@ package interview.guide.modules.knowledgebase.metrics;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
-import interview.guide.modules.knowledgebase.service.KnowledgeBaseQueryProperties;
+import interview.guide.modules.knowledgebase.config.KnowledgeBaseQueryProperties;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  * RAG 业务指标统一封装（P1-04）。
  *
  * <p>固定 Meter 名称与有限标签，Service 不直接接触 MeterRegistry。
- * 标签只允许 mode/result/stage/variant/reason 五个低基数键，
+ * 标签只允许 mode/result/stage/variant/reason/status 六个低基数键，
  * 禁止用户 ID、会话 ID、知识库 ID、问题文本、异常消息与 Provider URL。
  *
  * <p>关闭开关（app.ai.rag.metrics-enabled=false）或 Registry 缺失时全部 no-op。
@@ -25,6 +25,7 @@ public class RagMetrics {
   public static final String RETRIEVAL_HITS = "app.rag.retrieval.hits";
   public static final String REWRITE_FALLBACKS = "app.rag.rewrite.fallbacks";
   public static final String REFUSALS = "app.rag.refusals";
+  public static final String RERANK_REQUESTS = "app.rag.rerank.requests";
 
   private final MeterRegistry registry;
   private final boolean enabled;
@@ -46,7 +47,7 @@ public class RagMetrics {
     }
   }
 
-  /** 阶段耗时：stage=rewrite|retrieve|generate|total */
+  /** 阶段耗时：stage=rewrite|retrieve|rerank|generate|total */
   public void recordStageDuration(String stage, String result, long durationNanos) {
     if (enabled) {
       Timer.builder(STAGE_DURATION)
@@ -78,6 +79,13 @@ public class RagMetrics {
   public void recordRefusal(String reason) {
     if (enabled) {
       registry.counter(REFUSALS, "reason", reason).increment();
+    }
+  }
+
+  /** Rerank 结果：status=disabled|skipped|success|fallback，reason 为固定低基数枚举。 */
+  public void recordRerankRequest(String status, String reason) {
+    if (enabled) {
+      registry.counter(RERANK_REQUESTS, "status", status, "reason", reason).increment();
     }
   }
 }

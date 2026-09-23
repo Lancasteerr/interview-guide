@@ -26,6 +26,7 @@ class RagEvalMetricsTest {
     m.put("evidenceRecall", evidenceRecall);
     m.put("predictedReject", predictedReject);
     m.put("retrievalMs", 100L);
+    m.put("rerankMs", 20L);
     m.put("rewriteMs", 50L);
     m.put("generationMs", 5000L);
     m.put("totalMs", 5200L);
@@ -91,7 +92,8 @@ class RagEvalMetricsTest {
     Map<String, Object> metrics = RagEvalMetrics.metricsOf(results);
 
     // 检索耗时在两个样本上都输出；生成与端到端只在生成子集上输出
-    assertThat(metrics).containsKeys("retrievalMsP50", "retrievalMsP95", "rewriteMsP50");
+    assertThat(metrics).containsKeys(
+        "retrievalMsP50", "retrievalMsP95", "rerankMsP50", "rerankMsP95", "rewriteMsP50");
     assertThat(metrics).containsKeys("generationMsP50", "endToEndMsP50");
   }
 }

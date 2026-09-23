@@ -3,7 +3,7 @@ package interview.guide.modules.voiceinterview.context;
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
-import interview.guide.modules.voiceinterview.model.VoiceInterviewMessageEntity;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewMessageEntity;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.core.io.ResourceLoader;
@@ -293,7 +293,7 @@ public class VoiceContextCompressor {
     private static PromptTemplate loadTemplate(ResourceLoader resourceLoader) {
         try {
             String template = resourceLoader
-                .getResource("classpath:prompts/voice-interview-context-summary.st")
+                .getResource("classpath:prompts/voice-interview/voice-interview-context-summary.st")
                 .getContentAsString(StandardCharsets.UTF_8);
             return new PromptTemplate(template);
         } catch (IOException e) {

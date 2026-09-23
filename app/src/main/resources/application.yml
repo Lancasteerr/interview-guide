@@ -64,7 +64,7 @@ spring:
       enabled: true
       max-file-size: 50MB  # 支持知识库上传（简历限制在业务层检查）
       max-request-size: 50MB
-  
+
 
   # Redisson配置 (使用 spring.redis.redisson，参考官方文档)
   redis:
@@ -77,7 +77,7 @@ spring:
           connectionPoolSize: 64
           subscriptionConnectionMinimumIdleSize: 1
           subscriptionConnectionPoolSize: 50
-  
+
   # Spring AI 配置（chat + embedding 统一由 app.ai.providers 驱动，不使用自动配置）
   ai:
     # 禁用自动重试机制，让异常立即返回
@@ -117,6 +117,7 @@ app:
         embedding-model: text-embedding-v3
         embedding-dimensions: 1024
         supports-embedding: true
+        supports-rerank: false
       lmstudio:
         base-url: http://localhost:1234
         api-key: ${PROVIDER_LMSTUDIO_API_KEY:lm-studio}
@@ -168,6 +169,11 @@ app:
     rag:
       # RAG 业务指标（app.rag.*）开关
       metrics-enabled: ${APP_AI_RAG_METRICS_ENABLED:true}
+      rerank:
+        enabled: ${APP_AI_RAG_RERANK_ENABLED:false}
+        connect-timeout: ${APP_AI_RAG_RERANK_CONNECT_TIMEOUT:2s}
+        read-timeout: ${APP_AI_RAG_RERANK_READ_TIMEOUT:5s}
+        instruction: ${APP_AI_RAG_RERANK_INSTRUCTION:Given a web search query, retrieve relevant passages that answer the query.}
       rewrite:
         enabled: ${APP_AI_RAG_REWRITE_ENABLED:true}
       search:
@@ -221,7 +227,7 @@ app:
     timeout: ${APP_DOCUMENT_PARSE_TIMEOUT:2m}
     pool-size: ${APP_DOCUMENT_PARSE_POOL_SIZE:2}
     queue-capacity: ${APP_DOCUMENT_PARSE_QUEUE_CAPACITY:20}
-  
+
   # 卡住任务恢复调度（P1-07）：pending 阈值必须大于正常排队时间（消费者单线程）
   async:
     recovery:
