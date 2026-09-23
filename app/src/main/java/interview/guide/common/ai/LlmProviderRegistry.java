@@ -247,15 +247,15 @@ public class LlmProviderRegistry {
             throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
                 "Provider '" + providerId + "' 未配置可用的 Embedding 模型，无法执行知识库向量化");
         }
-        if (looksLikeChatModel(config.embeddingModel())) {
-            String recommendation = RECOMMENDED_EMBEDDING_MODELS.get(providerId.toLowerCase());
-            String suffix = recommendation != null
-                ? "，推荐填写 " + recommendation
-                : "，请填写该厂商真实的 Embedding 模型名";
-            throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
-                "Provider '" + providerId + "' 的 Embedding Model 配成了聊天模型 '"
-                    + config.embeddingModel() + "'" + suffix);
-        }
+//        if (looksLikeChatModel(config.embeddingModel())) {
+//            String recommendation = RECOMMENDED_EMBEDDING_MODELS.get(providerId.toLowerCase());
+//            String suffix = recommendation != null
+//                ? "，推荐填写 " + recommendation
+//                : "，请填写该厂商真实的 Embedding 模型名";
+//            throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
+//                "Provider '" + providerId + "' 的 Embedding Model 配成了聊天模型 '"
+//                    + config.embeddingModel() + "'" + suffix);
+//        }
         log.info("[LlmProviderRegistry] Building EmbeddingModel - Provider: {}, BaseUrl: {}, Model: {}",
             providerId, config.baseUrl(), config.embeddingModel());
 
