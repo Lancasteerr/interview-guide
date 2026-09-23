@@ -1,4 +1,4 @@
-package interview.guide.modules.interview.model;
+package interview.guide.modules.interview.entity;
 
 import interview.guide.common.model.AsyncTaskStatus;
 import interview.guide.modules.resume.model.ResumeEntity;

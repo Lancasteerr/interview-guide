@@ -1,5 +1,6 @@
-package interview.guide.modules.interview.skill;
+package interview.guide.modules.interview.controller;
 
+import interview.guide.modules.interview.service.InterviewSkillService;
 import interview.guide.common.annotation.RateLimit;
 import interview.guide.common.result.Result;
 import jakarta.validation.Valid;

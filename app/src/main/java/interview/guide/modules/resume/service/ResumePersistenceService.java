@@ -4,7 +4,7 @@ import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.infrastructure.file.FileHashService;
 import interview.guide.infrastructure.mapper.ResumeMapper;
-import interview.guide.modules.interview.model.ResumeAnalysisResponse;
+import interview.guide.modules.interview.dto.ResumeAnalysisResponse;
 import interview.guide.modules.resume.model.ResumeAnalysisEntity;
 import interview.guide.modules.resume.model.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeAnalysisRepository;

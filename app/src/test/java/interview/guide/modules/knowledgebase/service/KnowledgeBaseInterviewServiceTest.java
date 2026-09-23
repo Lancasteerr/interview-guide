@@ -2,9 +2,9 @@ package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
-import interview.guide.modules.interview.model.InterviewQuestionDTO;
-import interview.guide.modules.interview.model.InterviewSessionDTO;
-import interview.guide.modules.interview.model.InterviewSessionDTO.SessionStatus;
+import interview.guide.modules.interview.dto.InterviewQuestionDTO;
+import interview.guide.modules.interview.dto.InterviewSessionDTO;
+import interview.guide.modules.interview.dto.InterviewSessionDTO.SessionStatus;
 import interview.guide.modules.interview.service.InterviewSessionService;
 import interview.guide.modules.knowledgebase.model.CreateKnowledgeBaseInterviewRequest;
 import interview.guide.modules.knowledgebase.model.KnowledgeBaseEntity;

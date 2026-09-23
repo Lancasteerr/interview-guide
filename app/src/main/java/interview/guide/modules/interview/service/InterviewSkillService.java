@@ -1,6 +1,7 @@
-package interview.guide.modules.interview.skill;
+package interview.guide.modules.interview.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
+import interview.guide.modules.interview.config.InterviewSkillProperties;
 import interview.guide.common.ai.PromptSanitizer;
 import interview.guide.common.ai.PromptSecurityConstants;
 import interview.guide.common.ai.StructuredOutputInvoker;

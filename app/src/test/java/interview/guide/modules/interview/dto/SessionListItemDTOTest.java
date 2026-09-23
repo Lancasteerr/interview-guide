@@ -1,5 +1,6 @@
-package interview.guide.modules.interview.model;
+package interview.guide.modules.interview.dto;
 
+import interview.guide.modules.interview.entity.InterviewSessionEntity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

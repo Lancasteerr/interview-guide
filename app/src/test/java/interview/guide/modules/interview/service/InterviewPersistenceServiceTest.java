@@ -1,6 +1,6 @@
 package interview.guide.modules.interview.service;
 
-import interview.guide.modules.interview.model.InterviewSessionEntity;
+import interview.guide.modules.interview.entity.InterviewSessionEntity;
 import interview.guide.modules.interview.repository.InterviewAnswerRepository;
 import interview.guide.modules.interview.repository.InterviewSessionRepository;
 import interview.guide.modules.resume.repository.ResumeRepository;

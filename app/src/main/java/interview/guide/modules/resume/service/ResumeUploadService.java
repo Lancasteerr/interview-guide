@@ -7,7 +7,7 @@ import interview.guide.common.model.AsyncTaskStatus;
 import interview.guide.common.transaction.TransactionalExecutor;
 import interview.guide.infrastructure.file.FileStorageService;
 import interview.guide.infrastructure.file.FileValidationService;
-import interview.guide.modules.interview.model.ResumeAnalysisResponse;
+import interview.guide.modules.interview.dto.ResumeAnalysisResponse;
 import interview.guide.modules.resume.listener.AnalyzeStreamProducer;
 import interview.guide.modules.resume.model.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeRepository;

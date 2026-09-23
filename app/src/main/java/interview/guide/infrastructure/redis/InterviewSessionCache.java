@@ -2,8 +2,8 @@ package interview.guide.infrastructure.redis;
 
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
-import interview.guide.modules.interview.model.InterviewQuestionDTO;
-import interview.guide.modules.interview.model.InterviewSessionDTO.SessionStatus;
+import interview.guide.modules.interview.dto.InterviewQuestionDTO;
+import interview.guide.modules.interview.dto.InterviewSessionDTO.SessionStatus;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

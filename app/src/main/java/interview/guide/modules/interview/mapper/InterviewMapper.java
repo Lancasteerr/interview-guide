@@ -1,10 +1,10 @@
-package interview.guide.infrastructure.mapper;
+package interview.guide.modules.interview.mapper;
 
-import interview.guide.modules.interview.model.InterviewAnswerEntity;
-import interview.guide.modules.interview.model.InterviewDetailDTO;
-import interview.guide.modules.interview.model.InterviewHistoryItemDTO;
-import interview.guide.modules.interview.model.InterviewReportDTO;
-import interview.guide.modules.interview.model.InterviewSessionEntity;
+import interview.guide.modules.interview.entity.InterviewAnswerEntity;
+import interview.guide.modules.interview.dto.InterviewDetailDTO;
+import interview.guide.modules.interview.dto.InterviewHistoryItemDTO;
+import interview.guide.modules.interview.dto.InterviewReportDTO;
+import interview.guide.modules.interview.entity.InterviewSessionEntity;
 import org.mapstruct.*;
 
 import java.util.List;

@@ -1,6 +1,6 @@
-package interview.guide.modules.interview.model;
+package interview.guide.modules.interview.dto;
 
-import interview.guide.modules.interview.skill.InterviewSkillService.CategoryDTO;
+import interview.guide.modules.interview.service.InterviewSkillService.CategoryDTO;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;

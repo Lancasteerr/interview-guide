@@ -1,4 +1,4 @@
-package interview.guide.modules.interview.model;
+package interview.guide.modules.interview.dto;
 
 import interview.guide.common.model.AsyncTaskStatus;
 

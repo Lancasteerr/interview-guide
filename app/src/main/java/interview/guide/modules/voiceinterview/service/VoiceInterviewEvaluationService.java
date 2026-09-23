@@ -6,7 +6,7 @@ import interview.guide.common.evaluation.QaRecord;
 import interview.guide.common.evaluation.UnifiedEvaluationService;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
-import interview.guide.modules.interview.skill.InterviewSkillService;
+import interview.guide.modules.interview.service.InterviewSkillService;
 import interview.guide.modules.voiceinterview.dto.VoiceEvaluationDetailDTO;
 import interview.guide.modules.voiceinterview.dto.VoiceEvaluationDetailDTO.AnswerDetail;
 import interview.guide.modules.voiceinterview.model.VoiceInterviewEvaluationEntity;

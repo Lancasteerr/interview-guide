@@ -7,7 +7,7 @@ import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.common.model.AsyncTaskStatus;
 import interview.guide.infrastructure.redis.RedisService;
-import interview.guide.modules.interview.model.ResumeAnalysisResponse;
+import interview.guide.modules.interview.dto.ResumeAnalysisResponse;
 import interview.guide.modules.resume.model.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeRepository;
 import interview.guide.modules.resume.service.ResumeGradingService;

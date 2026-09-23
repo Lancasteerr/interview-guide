@@ -1,4 +1,4 @@
-package interview.guide.modules.interview.model;
+package interview.guide.modules.interview.dto;
 
 /**
  * 提交答案响应

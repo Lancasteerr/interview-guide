@@ -1,7 +1,7 @@
 package interview.guide.modules.resume.model;
 
 import interview.guide.common.model.AsyncTaskStatus;
-import interview.guide.modules.interview.model.InterviewHistoryItemDTO;
+import interview.guide.modules.interview.dto.InterviewHistoryItemDTO;
 
 import java.time.LocalDateTime;
 import java.util.List;

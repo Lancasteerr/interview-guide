@@ -1,4 +1,4 @@
-package interview.guide.modules.interview.model;
+package interview.guide.modules.interview.dto;
 
 import java.time.LocalDateTime;
 import java.util.List;

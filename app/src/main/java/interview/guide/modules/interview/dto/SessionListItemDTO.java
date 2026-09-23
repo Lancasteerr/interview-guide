@@ -1,7 +1,8 @@
-package interview.guide.modules.interview.model;
+package interview.guide.modules.interview.dto;
 
 import interview.guide.common.model.AsyncTaskStatus;
-import interview.guide.modules.interview.model.InterviewSessionEntity.SessionStatus;
+import interview.guide.modules.interview.entity.InterviewSessionEntity;
+import interview.guide.modules.interview.entity.InterviewSessionEntity.SessionStatus;
 
 import java.time.LocalDateTime;
 

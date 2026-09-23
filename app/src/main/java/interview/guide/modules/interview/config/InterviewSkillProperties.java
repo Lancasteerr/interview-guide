@@ -1,4 +1,4 @@
-package interview.guide.modules.interview.skill;
+package interview.guide.modules.interview.config;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

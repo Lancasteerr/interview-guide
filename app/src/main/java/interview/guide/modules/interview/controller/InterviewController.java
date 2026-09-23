@@ -1,14 +1,14 @@
-package interview.guide.modules.interview;
+package interview.guide.modules.interview.controller;
 
 import interview.guide.common.annotation.RateLimit;
 import interview.guide.common.result.Result;
-import interview.guide.modules.interview.model.CreateInterviewRequest;
-import interview.guide.modules.interview.model.InterviewDetailDTO;
-import interview.guide.modules.interview.model.InterviewReportDTO;
-import interview.guide.modules.interview.model.InterviewSessionDTO;
-import interview.guide.modules.interview.model.SessionListItemDTO;
-import interview.guide.modules.interview.model.SubmitAnswerRequest;
-import interview.guide.modules.interview.model.SubmitAnswerResponse;
+import interview.guide.modules.interview.dto.CreateInterviewRequest;
+import interview.guide.modules.interview.dto.InterviewDetailDTO;
+import interview.guide.modules.interview.dto.InterviewReportDTO;
+import interview.guide.modules.interview.dto.InterviewSessionDTO;
+import interview.guide.modules.interview.dto.SessionListItemDTO;
+import interview.guide.modules.interview.dto.SubmitAnswerRequest;
+import interview.guide.modules.interview.dto.SubmitAnswerResponse;
 import interview.guide.modules.interview.service.InterviewHistoryService;
 import interview.guide.modules.interview.service.InterviewPersistenceService;
 import interview.guide.modules.interview.service.InterviewSessionService;

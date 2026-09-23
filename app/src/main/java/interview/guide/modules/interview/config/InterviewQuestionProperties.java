@@ -1,4 +1,4 @@
-package interview.guide.modules.interview.service;
+package interview.guide.modules.interview.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;

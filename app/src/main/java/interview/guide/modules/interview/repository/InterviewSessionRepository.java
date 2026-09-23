@@ -1,7 +1,7 @@
 package interview.guide.modules.interview.repository;
 
-import interview.guide.modules.interview.model.InterviewSessionEntity;
-import interview.guide.modules.interview.model.InterviewSessionEntity.SessionStatus;
+import interview.guide.modules.interview.entity.InterviewSessionEntity;
+import interview.guide.modules.interview.entity.InterviewSessionEntity.SessionStatus;
 import interview.guide.modules.resume.model.ResumeEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

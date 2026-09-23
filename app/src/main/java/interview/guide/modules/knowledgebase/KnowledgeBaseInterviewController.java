@@ -2,7 +2,7 @@ package interview.guide.modules.knowledgebase;
 
 import interview.guide.common.annotation.RateLimit;
 import interview.guide.common.result.Result;
-import interview.guide.modules.interview.model.InterviewSessionDTO;
+import interview.guide.modules.interview.dto.InterviewSessionDTO;
 import interview.guide.modules.knowledgebase.model.CreateKnowledgeBaseInterviewRequest;
 import interview.guide.modules.knowledgebase.model.CreateKnowledgeBaseQuestionRequest;
 import interview.guide.modules.knowledgebase.model.GenerateKnowledgeBaseQuestionsRequest;

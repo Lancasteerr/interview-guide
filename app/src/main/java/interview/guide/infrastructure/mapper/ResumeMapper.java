@@ -1,6 +1,6 @@
 package interview.guide.infrastructure.mapper;
 
-import interview.guide.modules.interview.model.ResumeAnalysisResponse;
+import interview.guide.modules.interview.dto.ResumeAnalysisResponse;
 import interview.guide.modules.resume.model.ResumeAnalysisEntity;
 import interview.guide.modules.resume.model.ResumeDetailDTO;
 import interview.guide.modules.resume.model.ResumeEntity;
