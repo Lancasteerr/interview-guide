@@ -1,5 +1,6 @@
 package interview.guide.modules.resume.service;
 
+import interview.guide.modules.resume.config.ResumeAnalysisProperties;
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.StructuredOutputInvoker;
 import interview.guide.common.exception.BusinessException;

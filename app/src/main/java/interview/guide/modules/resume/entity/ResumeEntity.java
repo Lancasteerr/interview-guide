@@ -1,4 +1,4 @@
-package interview.guide.modules.resume.model;
+package interview.guide.modules.resume.entity;
 
 import interview.guide.common.model.AsyncTaskStatus;
 import jakarta.persistence.*;

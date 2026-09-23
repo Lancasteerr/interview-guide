@@ -1,7 +1,7 @@
 package interview.guide.modules.interview.entity;
 
 import interview.guide.common.model.AsyncTaskStatus;
-import interview.guide.modules.resume.model.ResumeEntity;
+import interview.guide.modules.resume.entity.ResumeEntity;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;

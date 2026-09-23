@@ -4,7 +4,7 @@ import interview.guide.common.exception.BusinessException;
 import interview.guide.common.transaction.TransactionalExecutor;
 import interview.guide.infrastructure.redis.RedisService;
 import interview.guide.modules.interview.dto.ResumeAnalysisResponse;
-import interview.guide.modules.resume.model.ResumeEntity;
+import interview.guide.modules.resume.entity.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeRepository;
 import interview.guide.modules.resume.service.ResumeGradingService;
 import interview.guide.modules.resume.service.ResumeParseService;

@@ -1,9 +1,9 @@
-package interview.guide.modules.resume;
+package interview.guide.modules.resume.controller;
 
 import interview.guide.common.annotation.RateLimit;
 import interview.guide.common.result.Result;
-import interview.guide.modules.resume.model.ResumeDetailDTO;
-import interview.guide.modules.resume.model.ResumeListItemDTO;
+import interview.guide.modules.resume.dto.ResumeDetailDTO;
+import interview.guide.modules.resume.dto.ResumeListItemDTO;
 import interview.guide.modules.resume.service.ResumeDeleteService;
 import interview.guide.modules.resume.service.ResumeHistoryService;
 import interview.guide.modules.resume.service.ResumeUploadService;

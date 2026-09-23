@@ -1,6 +1,6 @@
 package interview.guide.modules.resume.repository;
 
-import interview.guide.modules.resume.model.ResumeEntity;
+import interview.guide.modules.resume.entity.ResumeEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import java.util.List;

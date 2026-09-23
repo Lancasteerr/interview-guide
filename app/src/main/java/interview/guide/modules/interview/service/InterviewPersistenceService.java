@@ -11,7 +11,7 @@ import interview.guide.modules.interview.dto.InterviewReportDTO;
 import interview.guide.modules.interview.entity.InterviewSessionEntity;
 import interview.guide.modules.interview.repository.InterviewAnswerRepository;
 import interview.guide.modules.interview.repository.InterviewSessionRepository;
-import interview.guide.modules.resume.model.ResumeEntity;
+import interview.guide.modules.resume.entity.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

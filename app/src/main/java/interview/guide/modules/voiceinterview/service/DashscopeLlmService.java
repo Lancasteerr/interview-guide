@@ -3,7 +3,7 @@ package interview.guide.modules.voiceinterview.service;
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.PromptSanitizer;
 import interview.guide.common.log.ErrorLogSanitizer;
-import interview.guide.modules.resume.model.ResumeEntity;
+import interview.guide.modules.resume.entity.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeRepository;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
 import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionEntity;

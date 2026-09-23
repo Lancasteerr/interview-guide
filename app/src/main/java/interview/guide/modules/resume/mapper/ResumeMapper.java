@@ -1,10 +1,10 @@
-package interview.guide.infrastructure.mapper;
+package interview.guide.modules.resume.mapper;
 
 import interview.guide.modules.interview.dto.ResumeAnalysisResponse;
-import interview.guide.modules.resume.model.ResumeAnalysisEntity;
-import interview.guide.modules.resume.model.ResumeDetailDTO;
-import interview.guide.modules.resume.model.ResumeEntity;
-import interview.guide.modules.resume.model.ResumeListItemDTO;
+import interview.guide.modules.resume.dto.ResumeDetailDTO;
+import interview.guide.modules.resume.dto.ResumeListItemDTO;
+import interview.guide.modules.resume.entity.ResumeAnalysisEntity;
+import interview.guide.modules.resume.entity.ResumeEntity;
 import org.mapstruct.*;
 
 import java.time.LocalDateTime;

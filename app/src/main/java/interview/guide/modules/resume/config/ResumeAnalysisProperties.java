@@ -1,4 +1,4 @@
-package interview.guide.modules.resume.service;
+package interview.guide.modules.resume.config;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
