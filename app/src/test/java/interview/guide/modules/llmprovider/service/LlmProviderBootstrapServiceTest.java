@@ -1,8 +1,8 @@
 package interview.guide.modules.llmprovider.service;
 
 import interview.guide.common.config.LlmProviderProperties;
-import interview.guide.modules.llmprovider.model.LlmGlobalSettingEntity;
-import interview.guide.modules.llmprovider.model.LlmProviderEntity;
+import interview.guide.modules.llmprovider.entity.LlmGlobalSettingEntity;
+import interview.guide.modules.llmprovider.entity.LlmProviderEntity;
 import interview.guide.modules.llmprovider.repository.LlmGlobalSettingRepository;
 import interview.guide.modules.llmprovider.repository.LlmProviderRepository;
 import java.util.Map;

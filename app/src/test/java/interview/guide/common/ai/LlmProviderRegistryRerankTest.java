@@ -5,7 +5,7 @@ import interview.guide.common.ai.rerank.RerankStatus;
 import interview.guide.common.config.LlmProviderProperties;
 import interview.guide.common.config.LlmProviderProperties.ProviderConfig;
 import interview.guide.common.config.RerankProperties;
-import interview.guide.modules.llmprovider.model.LlmProviderEntity;
+import interview.guide.modules.llmprovider.entity.LlmProviderEntity;
 import interview.guide.modules.llmprovider.repository.LlmGlobalSettingRepository;
 import interview.guide.modules.llmprovider.repository.LlmProviderRepository;
 import interview.guide.modules.llmprovider.service.ApiKeyEncryptionService;

@@ -1,4 +1,4 @@
-package interview.guide.modules.llmprovider.model;
+package interview.guide.modules.llmprovider.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
