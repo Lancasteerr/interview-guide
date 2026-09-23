@@ -1,7 +1,7 @@
 package interview.guide.modules.voiceinterview.context;
 
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
-import interview.guide.modules.voiceinterview.model.VoiceInterviewMessageEntity;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewMessageEntity;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewMessageRepository;
 import interview.guide.modules.voiceinterview.service.VoiceInterviewService;
 import org.junit.jupiter.api.BeforeEach;

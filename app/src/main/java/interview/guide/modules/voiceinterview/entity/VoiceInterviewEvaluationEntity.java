@@ -1,4 +1,4 @@
-package interview.guide.modules.voiceinterview.model;
+package interview.guide.modules.voiceinterview.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

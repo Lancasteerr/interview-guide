@@ -3,7 +3,7 @@ package interview.guide.modules.voiceinterview.integration;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
 import interview.guide.modules.voiceinterview.dto.CreateSessionRequest;
 import interview.guide.modules.voiceinterview.dto.SessionResponseDTO;
-import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionEntity;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewSessionEntity;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewSessionRepository;
 import interview.guide.modules.voiceinterview.service.VoiceInterviewService;
 import org.junit.jupiter.api.*;

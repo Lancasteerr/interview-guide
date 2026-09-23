@@ -2,7 +2,7 @@ package interview.guide.modules.voiceinterview.context;
 
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
-import interview.guide.modules.voiceinterview.model.VoiceInterviewMessageEntity;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewMessageEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;

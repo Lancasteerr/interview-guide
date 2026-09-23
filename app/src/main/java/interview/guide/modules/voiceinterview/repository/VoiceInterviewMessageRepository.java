@@ -1,6 +1,6 @@
 package interview.guide.modules.voiceinterview.repository;
 
-import interview.guide.modules.voiceinterview.model.VoiceInterviewMessageEntity;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewMessageEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;

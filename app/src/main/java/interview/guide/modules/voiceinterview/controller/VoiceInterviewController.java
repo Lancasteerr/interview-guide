@@ -11,7 +11,7 @@ import interview.guide.modules.voiceinterview.dto.VoiceEvaluationDetailDTO;
 import interview.guide.modules.voiceinterview.dto.VoiceEvaluationStatusDTO;
 import interview.guide.modules.voiceinterview.listener.VoiceEvaluateStreamProducer;
 import interview.guide.modules.voiceinterview.dto.VoiceInterviewMessageDTO;
-import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionEntity;
+import interview.guide.modules.voiceinterview.entity.VoiceInterviewSessionEntity;
 import interview.guide.modules.voiceinterview.service.VoiceInterviewEvaluationService;
 import interview.guide.modules.voiceinterview.service.VoiceInterviewService;
 import jakarta.validation.Valid;

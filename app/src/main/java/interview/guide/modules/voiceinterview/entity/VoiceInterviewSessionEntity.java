@@ -1,4 +1,6 @@
-package interview.guide.modules.voiceinterview.model;
+package interview.guide.modules.voiceinterview.entity;
+
+import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionStatus;
 
 import interview.guide.common.model.AsyncTaskStatus;
 import jakarta.persistence.*;
