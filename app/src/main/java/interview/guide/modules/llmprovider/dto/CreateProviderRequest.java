@@ -10,6 +10,9 @@ public record CreateProviderRequest(
     String embeddingModel,
     Integer embeddingDimensions,
     Boolean supportsEmbedding,
+    String rerankModel,
+    String rerankWorkspaceId,
+    Boolean supportsRerank,
     Double temperature
 ) {
     public CreateProviderRequest(
@@ -18,8 +21,23 @@ public record CreateProviderRequest(
         String apiKey,
         String model,
         String embeddingModel,
+        Integer embeddingDimensions,
+        Boolean supportsEmbedding,
         Double temperature
     ) {
-        this(id, baseUrl, apiKey, model, embeddingModel, null, null, temperature);
+        this(id, baseUrl, apiKey, model, embeddingModel, embeddingDimensions, supportsEmbedding,
+            null, null, null, temperature);
+    }
+
+    public CreateProviderRequest(
+        String id,
+        String baseUrl,
+        String apiKey,
+        String model,
+        String embeddingModel,
+        Double temperature
+    ) {
+        this(id, baseUrl, apiKey, model, embeddingModel, null, null, null, null, null,
+            temperature);
     }
 }

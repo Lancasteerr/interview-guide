@@ -45,6 +45,15 @@ public class LlmProviderEntity {
   @Column(name = "supports_embedding", nullable = false)
   private boolean supportsEmbedding;
 
+  @Column(name = "rerank_model", length = 128)
+  private String rerankModel;
+
+  @Column(name = "rerank_workspace_id", length = 128)
+  private String rerankWorkspaceId;
+
+  @Column(name = "supports_rerank", nullable = false)
+  private boolean supportsRerank;
+
   private Double temperature;
 
   @Column(nullable = false)

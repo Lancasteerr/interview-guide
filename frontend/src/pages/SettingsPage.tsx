@@ -17,6 +17,7 @@ const PROVIDER_PRESETS: Record<string, {
   baseUrl: string;
   models: { value: string; label: string }[];
   embeddingModels?: { value: string; label: string }[];
+  rerankModels?: { value: string; label: string }[];
   embeddingDimensions?: number;
   supportsEmbedding: boolean;
 }> = {
@@ -34,6 +35,9 @@ const PROVIDER_PRESETS: Record<string, {
     ],
     embeddingModels: [
       { value: 'text-embedding-v3', label: 'text-embedding-v3 — 推荐' },
+    ],
+    rerankModels: [
+      { value: 'qwen3.7-text-rerank', label: 'qwen3.7-text-rerank — 推荐' },
     ],
     embeddingDimensions: 1024,
     supportsEmbedding: true,
@@ -156,16 +160,21 @@ export default function SettingsPage() {
   const [formEmbeddingModel, setFormEmbeddingModel] = useState('');
   const [formEmbeddingDimensions, setFormEmbeddingDimensions] = useState('1024');
   const [formSupportsEmbedding, setFormSupportsEmbedding] = useState(false);
+  const [formRerankModel, setFormRerankModel] = useState('');
+  const [formRerankWorkspaceId, setFormRerankWorkspaceId] = useState('');
+  const [formSupportsRerank, setFormSupportsRerank] = useState(false);
   const [formTemperature, setFormTemperature] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showEmbeddingDropdown, setShowEmbeddingDropdown] = useState(false);
+  const [showRerankModelDropdown, setShowRerankModelDropdown] = useState(false);
 
   // 当前表单 Provider ID 匹配的预设
   const currentPreset = useMemo(
     () => PROVIDER_PRESETS[formId.toLowerCase()],
     [formId],
   );
+  const isDashscopeForm = formId.trim().toLowerCase() === 'dashscope';
 
   // Test state
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -247,6 +256,10 @@ export default function SettingsPage() {
     setFormEmbeddingModel('');
     setFormEmbeddingDimensions('1024');
     setFormSupportsEmbedding(false);
+    setFormRerankModel('');
+    setFormRerankWorkspaceId('');
+    setFormSupportsRerank(false);
+    setFormTemperature('');
     setShowApiKey(false);
     setShowModal(true);
   };
@@ -260,6 +273,9 @@ export default function SettingsPage() {
     setFormEmbeddingModel(provider.embeddingModel || '');
     setFormEmbeddingDimensions(provider.embeddingDimensions != null ? String(provider.embeddingDimensions) : '1024');
     setFormSupportsEmbedding(provider.supportsEmbedding);
+    setFormRerankModel(provider.rerankModel || '');
+    setFormRerankWorkspaceId(provider.rerankWorkspaceId || '');
+    setFormSupportsRerank(provider.supportsRerank);
     setFormTemperature(provider.temperature != null ? String(provider.temperature) : '');
     setShowApiKey(false);
     setShowModal(true);
@@ -268,6 +284,10 @@ export default function SettingsPage() {
   const closeModal = () => {
     setShowModal(false);
     setEditingProvider(null);
+    setFormRerankModel('');
+    setFormRerankWorkspaceId('');
+    setFormSupportsRerank(false);
+    setShowRerankModelDropdown(false);
   };
 
   // --- CRUD handlers ---
@@ -278,6 +298,14 @@ export default function SettingsPage() {
     }
     if (formSupportsEmbedding && !formEmbeddingModel.trim()) {
       showToast('支持向量化时需要填写向量模型，例如 GLM 填 embedding-3', 'error');
+      return;
+    }
+    if (isDashscopeForm && formSupportsRerank && !formRerankModel.trim()) {
+      showToast('启用 Rerank 时需要填写 Rerank 模型', 'error');
+      return;
+    }
+    if (isDashscopeForm && formSupportsRerank && !formRerankWorkspaceId.trim()) {
+      showToast('启用 Rerank 时需要填写 DashScope Workspace ID', 'error');
       return;
     }
     const embeddingDimensions = parseInt(formEmbeddingDimensions.trim(), 10);
@@ -297,6 +325,13 @@ export default function SettingsPage() {
       if (formEmbeddingModel.trim()) {
         data.embeddingModel = formEmbeddingModel.trim();
         data.embeddingDimensions = embeddingDimensions;
+      }
+      if (isDashscopeForm) {
+        data.supportsRerank = formSupportsRerank;
+        if (formSupportsRerank) {
+          data.rerankModel = formRerankModel.trim();
+          data.rerankWorkspaceId = formRerankWorkspaceId.trim();
+        }
       }
       if (formTemperature.trim()) {
         const temp = parseFloat(formTemperature.trim());
@@ -324,6 +359,14 @@ export default function SettingsPage() {
       showToast('支持向量化时需要填写向量模型，例如 GLM 填 embedding-3', 'error');
       return;
     }
+    if (isDashscopeForm && formSupportsRerank && !formRerankModel.trim()) {
+      showToast('启用 Rerank 时需要填写 Rerank 模型', 'error');
+      return;
+    }
+    if (isDashscopeForm && formSupportsRerank && !formRerankWorkspaceId.trim()) {
+      showToast('启用 Rerank 时需要填写 DashScope Workspace ID', 'error');
+      return;
+    }
     const embeddingDimensions = parseInt(formEmbeddingDimensions.trim(), 10);
     if (formSupportsEmbedding && (!Number.isFinite(embeddingDimensions) || embeddingDimensions <= 0)) {
       showToast('向量维度必须为正整数，当前 pgvector 表为 1024 维', 'error');
@@ -339,6 +382,13 @@ export default function SettingsPage() {
       };
       if (formSupportsEmbedding) {
         data.embeddingDimensions = embeddingDimensions;
+      }
+      if (isDashscopeForm) {
+        data.supportsRerank = formSupportsRerank;
+        if (formSupportsRerank) {
+          data.rerankModel = formRerankModel.trim();
+          data.rerankWorkspaceId = formRerankWorkspaceId.trim();
+        }
       }
       if (formApiKey.trim()) {
         data.apiKey = formApiKey.trim();
@@ -599,6 +649,11 @@ export default function SettingsPage() {
                     const isGlobalDefault = isGlobalDefaultProvider(provider.id);
                     const isEmbeddingDefault = isDefaultEmbeddingProvider(provider.id);
                     const canUseEmbedding = provider.supportsEmbedding && !!provider.embeddingModel;
+                    const isDashscopeProvider = provider.id.toLowerCase() === 'dashscope';
+                    const canUseRerank = isDashscopeProvider
+                      && provider.supportsRerank
+                      && !!provider.rerankModel
+                      && !!provider.rerankWorkspaceId;
 
                     return (
                     <motion.div
@@ -618,7 +673,9 @@ export default function SettingsPage() {
                             <h3 className="truncate text-sm font-semibold text-slate-800 dark:text-white">
                               {provider.id}
                             </h3>
-                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">聊天/向量 Provider</p>
+                            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                              {isDashscopeProvider ? '聊天/向量/排序 Provider' : '聊天/向量 Provider'}
+                            </p>
                           </div>
                         </div>
                         <div className="flex flex-col items-end gap-1">
@@ -645,6 +702,19 @@ export default function SettingsPage() {
                         )}
                         {canUseEmbedding && (
                           <ConfigRow label="向量维度" value={`${provider.embeddingDimensions ?? 1024} 维`} emphasis={isEmbeddingDefault} />
+                        )}
+                        {isDashscopeProvider && (
+                          <ConfigRow
+                            label="排序能力"
+                            value={canUseRerank ? '支持' : '不支持'}
+                            title={canUseRerank ? provider.rerankModel ?? '' : '尚未配置 DashScope Rerank'}
+                          />
+                        )}
+                        {canUseRerank && (
+                          <ConfigRow label="Rerank 模型" value={provider.rerankModel} title={provider.rerankModel ?? ''} emphasis />
+                        )}
+                        {canUseRerank && (
+                          <ConfigRow label="Workspace ID" value={provider.rerankWorkspaceId} title={provider.rerankWorkspaceId ?? ''} />
                         )}
                         {provider.temperature != null && (
                           <ConfigRow label="温度" value={provider.temperature} />
@@ -885,7 +955,7 @@ export default function SettingsPage() {
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6"
+                className="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 max-h-[85vh] overflow-y-auto"
               >
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-5">
                   {editingProvider ? '编辑 Provider' : '新增 Provider'}
@@ -903,6 +973,9 @@ export default function SettingsPage() {
                       onChange={(e) => {
                         const newId = e.target.value;
                         setFormId(newId);
+                        setFormSupportsRerank(false);
+                        setFormRerankModel('');
+                        setFormRerankWorkspaceId('');
                         // 新建时自动填充已知 Provider 的 Base URL
                         if (!editingProvider) {
                           const preset = PROVIDER_PRESETS[newId.toLowerCase()];
@@ -1125,6 +1198,123 @@ export default function SettingsPage() {
                           placeholder:text-slate-400 focus:outline-none focus:ring-2
                           focus:ring-primary-500/50 focus:border-primary-400 transition-shadow"
                       />
+                    </div>
+                  )}
+
+                  {isDashscopeForm && (
+                    <div className="space-y-3 rounded-xl border border-slate-200 p-4 dark:border-slate-600">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                            Rerank 排序模型
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            当前阶段只保存配置，连接测试暂不验证 Rerank
+                          </p>
+                        </div>
+                        <label className="inline-flex items-center gap-2 whitespace-nowrap text-xs font-medium text-slate-600 dark:text-slate-300">
+                          <input
+                            type="checkbox"
+                            checked={formSupportsRerank}
+                            onChange={(e) => {
+                              const enabled = e.target.checked;
+                              setFormSupportsRerank(enabled);
+                              if (enabled && !formRerankModel.trim()) {
+                                setFormRerankModel(currentPreset?.rerankModels?.[0]?.value ?? 'qwen3.7-text-rerank');
+                              }
+                              if (!enabled) {
+                                setFormRerankModel('');
+                                setFormRerankWorkspaceId('');
+                                setShowRerankModelDropdown(false);
+                              }
+                            }}
+                            className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                          />
+                          支持 Rerank
+                        </label>
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                          Rerank 模型
+                          <span className="ml-1 text-slate-400 font-normal">(默认 qwen3.7-text-rerank)</span>
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={formRerankModel}
+                            onChange={(e) => {
+                              setFormRerankModel(e.target.value);
+                              setShowRerankModelDropdown(false);
+                            }}
+                            onFocus={() => formSupportsRerank && setShowRerankModelDropdown(true)}
+                            onBlur={() => setTimeout(() => setShowRerankModelDropdown(false), 150)}
+                            disabled={!formSupportsRerank}
+                            placeholder={formSupportsRerank
+                              ? '选择或输入 DashScope Rerank 模型名'
+                              : '请先启用 Rerank'}
+                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600
+                              bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white
+                              placeholder:text-slate-400 focus:outline-none focus:ring-2
+                              focus:ring-primary-500/50 focus:border-primary-400 transition-shadow
+                              disabled:cursor-not-allowed disabled:opacity-60"
+                          />
+                          {formSupportsRerank && currentPreset?.rerankModels && (
+                            <button
+                              type="button"
+                              onClick={() => setShowRerankModelDropdown(!showRerankModelDropdown)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400
+                                hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                            >
+                              <ChevronDown className="w-4 h-4" />
+                            </button>
+                          )}
+                          {formSupportsRerank && showRerankModelDropdown && currentPreset?.rerankModels && (
+                            <div className="absolute z-10 mt-1 w-full overflow-auto rounded-xl border
+                              border-slate-200 bg-white shadow-lg dark:border-slate-600 dark:bg-slate-700">
+                              {currentPreset.rerankModels.map((model) => (
+                                <button
+                                  key={model.value}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormRerankModel(model.value);
+                                    setShowRerankModelDropdown(false);
+                                  }}
+                                  className={`flex w-full items-center justify-between px-4 py-2.5 text-left text-sm
+                                    transition-colors hover:bg-primary-50 dark:hover:bg-slate-600 ${
+                                    formRerankModel === model.value
+                                      ? 'bg-primary-50 font-medium text-primary-600 dark:bg-slate-600 dark:text-primary-400'
+                                      : 'text-slate-700 dark:text-slate-200'
+                                  }`}
+                                >
+                                  <span className="font-mono">{model.value}</span>
+                                  <span className="ml-2 whitespace-nowrap text-xs text-slate-400">{model.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
+                          Workspace ID
+                          <span className="ml-1 text-slate-400 font-normal">(用于 Workspace 专属 Rerank 地址)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={formRerankWorkspaceId}
+                          onChange={(e) => setFormRerankWorkspaceId(e.target.value)}
+                          disabled={!formSupportsRerank}
+                          autoComplete="off"
+                          placeholder={formSupportsRerank ? '输入 DashScope Workspace ID' : '请先启用 Rerank'}
+                          className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600
+                            bg-white dark:bg-slate-700 text-sm text-slate-900 dark:text-white
+                            placeholder:text-slate-400 focus:outline-none focus:ring-2
+                            focus:ring-primary-500/50 focus:border-primary-400 transition-shadow
+                            disabled:cursor-not-allowed disabled:opacity-60"
+                        />
+                      </div>
                     </div>
                   )}
 

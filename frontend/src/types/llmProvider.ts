@@ -6,6 +6,9 @@ export interface ProviderItem {
   embeddingModel: string | null;
   embeddingDimensions: number | null;
   supportsEmbedding: boolean;
+  rerankModel: string | null;
+  rerankWorkspaceId: string | null;
+  supportsRerank: boolean;
   temperature: number | null;
   defaultChatProvider: boolean;
   defaultEmbeddingProvider: boolean;
@@ -19,6 +22,9 @@ export interface CreateProviderRequest {
   embeddingModel?: string;
   embeddingDimensions?: number;
   supportsEmbedding?: boolean;
+  rerankModel?: string;
+  rerankWorkspaceId?: string;
+  supportsRerank?: boolean;
   temperature?: number;
 }
 
@@ -29,6 +35,9 @@ export interface UpdateProviderRequest {
   embeddingModel?: string;
   embeddingDimensions?: number;
   supportsEmbedding?: boolean;
+  rerankModel?: string;
+  rerankWorkspaceId?: string;
+  supportsRerank?: boolean;
   temperature?: number;
 }
 

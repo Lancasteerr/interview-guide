@@ -2,6 +2,8 @@ package interview.guide.modules.llmprovider.service;
 
 import interview.guide.common.config.LlmProviderProperties;
 import interview.guide.common.config.LlmProviderProperties.ProviderConfig;
+import interview.guide.common.exception.BusinessException;
+import interview.guide.common.exception.ErrorCode;
 import interview.guide.modules.llmprovider.model.LlmGlobalSettingEntity;
 import interview.guide.modules.llmprovider.model.LlmProviderEntity;
 import interview.guide.modules.llmprovider.repository.LlmGlobalSettingRepository;
@@ -17,6 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class LlmProviderBootstrapService {
+
+  private static final String DASHSCOPE_PROVIDER_ID = "dashscope";
+  private static final int MAX_RERANK_CONFIG_LENGTH = 128;
 
   private final LlmProviderProperties properties;
   private final LlmProviderRepository providerRepository;
@@ -48,6 +53,11 @@ public class LlmProviderBootstrapService {
           encryptionService.encrypt(config.getApiKey() != null ? config.getApiKey() : "");
       boolean supportsEmbedding = Boolean.TRUE.equals(config.getSupportsEmbedding())
           || !isBlank(config.getEmbeddingModel());
+      boolean supportsRerank = Boolean.TRUE.equals(config.getSupportsRerank());
+      String rerankModel = supportsRerank ? trimOrNull(config.getRerankModel()) : null;
+      String rerankWorkspaceId = supportsRerank
+          ? trimOrNull(config.getRerankWorkspaceId()) : null;
+      validateRerankSeed(id, config, supportsRerank, rerankModel, rerankWorkspaceId);
 
       LlmProviderEntity entity = LlmProviderEntity.builder()
           .id(id)
@@ -58,6 +68,9 @@ public class LlmProviderBootstrapService {
           .embeddingModel(trimOrNull(config.getEmbeddingModel()))
           .embeddingDimensions(resolveEmbeddingDimensions(config.getEmbeddingDimensions()))
           .supportsEmbedding(supportsEmbedding)
+          .rerankModel(rerankModel)
+          .rerankWorkspaceId(rerankWorkspaceId)
+          .supportsRerank(supportsRerank)
           .temperature(config.getTemperature())
           .enabled(true)
           .builtin(true)
@@ -118,6 +131,35 @@ public class LlmProviderBootstrapService {
       return configuredDimensions;
     }
     return properties.getEmbeddingDimensions();
+  }
+
+  private void validateRerankSeed(String providerId, ProviderConfig config,
+                                  boolean supportsRerank, String rerankModel,
+                                  String rerankWorkspaceId) {
+    boolean hasRerankConfig = supportsRerank
+        || !isBlank(config.getRerankModel())
+        || !isBlank(config.getRerankWorkspaceId());
+    if (!DASHSCOPE_PROVIDER_ID.equalsIgnoreCase(providerId) && hasRerankConfig) {
+      throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
+          "当前仅 DashScope Provider 支持配置 Rerank");
+    }
+    if (!supportsRerank && hasRerankConfig) {
+      throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
+          "启用 Rerank 后才能配置模型和 Workspace ID");
+    }
+    if (supportsRerank && (rerankModel == null || rerankWorkspaceId == null)) {
+      throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
+          "DashScope Rerank 配置必须同时包含模型和 Workspace ID");
+    }
+    if (rerankModel != null && rerankModel.length() > MAX_RERANK_CONFIG_LENGTH) {
+      throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
+          "rerankModel 长度不能超过 " + MAX_RERANK_CONFIG_LENGTH);
+    }
+    if (rerankWorkspaceId != null
+        && rerankWorkspaceId.length() > MAX_RERANK_CONFIG_LENGTH) {
+      throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
+          "rerankWorkspaceId 长度不能超过 " + MAX_RERANK_CONFIG_LENGTH);
+    }
   }
 
   private String trimOrNull(String value) {

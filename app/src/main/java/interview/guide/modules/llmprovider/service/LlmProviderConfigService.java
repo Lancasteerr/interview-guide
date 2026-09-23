@@ -57,6 +57,9 @@ import java.util.regex.Pattern;
 @Slf4j
 public class LlmProviderConfigService {
 
+  private static final String DASHSCOPE_PROVIDER_ID = "dashscope";
+  private static final int MAX_RERANK_CONFIG_LENGTH = 128;
+
   private final LlmProviderProperties properties;
   private final LlmProviderRegistry registry;
   private final LlmProviderRepository providerRepository;
@@ -154,6 +157,9 @@ public class LlmProviderConfigService {
                 .embeddingDimensions(resolveEmbeddingDimensions(e.getValue().getEmbeddingDimensions()))
                 .supportsEmbedding(Boolean.TRUE.equals(e.getValue().getSupportsEmbedding())
                     || trimOrNull(e.getValue().getEmbeddingModel()) != null)
+                .rerankModel(e.getValue().getRerankModel())
+                .rerankWorkspaceId(e.getValue().getRerankWorkspaceId())
+                .supportsRerank(Boolean.TRUE.equals(e.getValue().getSupportsRerank()))
                 .temperature(e.getValue().getTemperature())
                 .defaultChatProvider(e.getKey().equals(properties.getDefaultProvider()))
                 .defaultEmbeddingProvider(e.getKey().equals(properties.getDefaultEmbeddingProvider()))
@@ -170,6 +176,9 @@ public class LlmProviderConfigService {
               .embeddingModel(provider.getEmbeddingModel())
               .embeddingDimensions(resolveEmbeddingDimensions(provider.getEmbeddingDimensions()))
               .supportsEmbedding(provider.isSupportsEmbedding())
+              .rerankModel(provider.getRerankModel())
+              .rerankWorkspaceId(provider.getRerankWorkspaceId())
+              .supportsRerank(provider.isSupportsRerank())
               .temperature(provider.getTemperature())
               .defaultChatProvider(provider.getId().equals(setting.getDefaultChatProviderId()))
               .defaultEmbeddingProvider(provider.getId().equals(setting.getDefaultEmbeddingProviderId()))
@@ -194,6 +203,9 @@ public class LlmProviderConfigService {
             .embeddingDimensions(resolveEmbeddingDimensions(config.getEmbeddingDimensions()))
             .supportsEmbedding(Boolean.TRUE.equals(config.getSupportsEmbedding())
                 || trimOrNull(config.getEmbeddingModel()) != null)
+            .rerankModel(config.getRerankModel())
+            .rerankWorkspaceId(config.getRerankWorkspaceId())
+            .supportsRerank(Boolean.TRUE.equals(config.getSupportsRerank()))
             .temperature(config.getTemperature())
             .defaultChatProvider(id.equals(properties.getDefaultProvider()))
             .defaultEmbeddingProvider(id.equals(properties.getDefaultEmbeddingProvider()))
@@ -209,6 +221,9 @@ public class LlmProviderConfigService {
           .embeddingModel(provider.getEmbeddingModel())
           .embeddingDimensions(resolveEmbeddingDimensions(provider.getEmbeddingDimensions()))
           .supportsEmbedding(provider.isSupportsEmbedding())
+          .rerankModel(provider.getRerankModel())
+          .rerankWorkspaceId(provider.getRerankWorkspaceId())
+          .supportsRerank(provider.isSupportsRerank())
           .temperature(provider.getTemperature())
           .defaultChatProvider(id.equals(setting.getDefaultChatProviderId()))
           .defaultEmbeddingProvider(id.equals(setting.getDefaultEmbeddingProviderId()))
@@ -339,6 +354,10 @@ public class LlmProviderConfigService {
           ? request.supportsEmbedding()
           : embeddingModel != null;
       validateEmbeddingConfig(providerId, supportsEmbedding, embeddingModel, embeddingDimensions);
+      String rerankModel = trimOrNull(request.rerankModel());
+      String rerankWorkspaceId = trimOrNull(request.rerankWorkspaceId());
+      boolean supportsRerank = Boolean.TRUE.equals(request.supportsRerank());
+      validateRerankConfig(providerId, supportsRerank, rerankModel, rerankWorkspaceId);
 
       ApiKeyEncryptionService.EncryptedValue encrypted = encryptionService.encrypt(apiKey);
       providerRepository.save(LlmProviderEntity.builder()
@@ -350,6 +369,9 @@ public class LlmProviderConfigService {
           .embeddingModel(embeddingModel)
           .embeddingDimensions(embeddingDimensions)
           .supportsEmbedding(supportsEmbedding)
+          .rerankModel(supportsRerank ? rerankModel : null)
+          .rerankWorkspaceId(supportsRerank ? rerankWorkspaceId : null)
+          .supportsRerank(supportsRerank)
           .temperature(request.temperature())
           .enabled(true)
           .builtin(false)
@@ -400,6 +422,20 @@ public class LlmProviderConfigService {
           provider.isSupportsEmbedding(),
           provider.getEmbeddingModel(),
           resolveEmbeddingDimensions(provider.getEmbeddingDimensions()));
+      boolean targetSupportsRerank = request.supportsRerank() != null
+          ? request.supportsRerank() : provider.isSupportsRerank();
+      boolean disablingRerank = Boolean.FALSE.equals(request.supportsRerank());
+      String targetRerankModel = request.rerankModel() != null
+          ? trimOrNull(request.rerankModel())
+          : disablingRerank ? null : provider.getRerankModel();
+      String targetRerankWorkspaceId = request.rerankWorkspaceId() != null
+          ? trimOrNull(request.rerankWorkspaceId())
+          : disablingRerank ? null : provider.getRerankWorkspaceId();
+      validateRerankConfig(
+          id, targetSupportsRerank, targetRerankModel, targetRerankWorkspaceId);
+      provider.setSupportsRerank(targetSupportsRerank);
+      provider.setRerankModel(targetSupportsRerank ? targetRerankModel : null);
+      provider.setRerankWorkspaceId(targetSupportsRerank ? targetRerankWorkspaceId : null);
       if (request.temperature() != null) {
         provider.setTemperature(request.temperature());
       }
@@ -596,6 +632,13 @@ public class LlmProviderConfigService {
     config.setEmbeddingModel(request.embeddingModel());
     config.setEmbeddingDimensions(request.embeddingDimensions());
     config.setSupportsEmbedding(request.supportsEmbedding());
+    String rerankModel = trimOrNull(request.rerankModel());
+    String rerankWorkspaceId = trimOrNull(request.rerankWorkspaceId());
+    boolean supportsRerank = Boolean.TRUE.equals(request.supportsRerank());
+    validateRerankConfig(request.id(), supportsRerank, rerankModel, rerankWorkspaceId);
+    config.setSupportsRerank(supportsRerank);
+    config.setRerankModel(supportsRerank ? rerankModel : null);
+    config.setRerankWorkspaceId(supportsRerank ? rerankWorkspaceId : null);
     config.setTemperature(request.temperature());
     providers.put(request.id(), config);
 
@@ -631,6 +674,20 @@ public class LlmProviderConfigService {
     if (request.supportsEmbedding() != null) {
       config.setSupportsEmbedding(request.supportsEmbedding());
     }
+    boolean targetSupportsRerank = request.supportsRerank() != null
+        ? request.supportsRerank() : Boolean.TRUE.equals(config.getSupportsRerank());
+    boolean disablingRerank = Boolean.FALSE.equals(request.supportsRerank());
+    String targetRerankModel = request.rerankModel() != null
+        ? trimOrNull(request.rerankModel())
+        : disablingRerank ? null : config.getRerankModel();
+    String targetRerankWorkspaceId = request.rerankWorkspaceId() != null
+        ? trimOrNull(request.rerankWorkspaceId())
+        : disablingRerank ? null : config.getRerankWorkspaceId();
+    validateRerankConfig(
+        id, targetSupportsRerank, targetRerankModel, targetRerankWorkspaceId);
+    config.setSupportsRerank(targetSupportsRerank);
+    config.setRerankModel(targetSupportsRerank ? targetRerankModel : null);
+    config.setRerankWorkspaceId(targetSupportsRerank ? targetRerankWorkspaceId : null);
     if (request.temperature() != null) {
       config.setTemperature(request.temperature());
     }
@@ -778,16 +835,55 @@ public class LlmProviderConfigService {
       throw new BusinessException(ErrorCode.BAD_REQUEST,
           "支持 Embedding 的 Provider 必须填写 embeddingModel");
     }
-    if (looksLikeChatModel(normalizedModel)) {
-      String recommendation = RECOMMENDED_EMBEDDING_MODELS.get(providerId.toLowerCase());
-      String suffix = recommendation != null
-          ? "，推荐填写 " + recommendation
-          : "，请填写该厂商真实的 Embedding 模型名";
-      throw new BusinessException(ErrorCode.BAD_REQUEST,
-          "Embedding Model 不能填写聊天模型 '" + normalizedModel + "'" + suffix);
-    }
+//    if (looksLikeChatModel(normalizedModel)) {
+//      String recommendation = RECOMMENDED_EMBEDDING_MODELS.get(providerId.toLowerCase());
+//      String suffix = recommendation != null
+//          ? "，推荐填写 " + recommendation
+//          : "，请填写该厂商真实的 Embedding 模型名";
+//      throw new BusinessException(ErrorCode.BAD_REQUEST,
+//          "Embedding Model 不能填写聊天模型 '" + normalizedModel + "'" + suffix);
+//    }
     if (embeddingDimensions == null || embeddingDimensions <= 0) {
       throw new BusinessException(ErrorCode.BAD_REQUEST, "向量维度必须为正整数");
+    }
+  }
+
+  private void validateRerankConfig(
+      String providerId,
+      boolean supportsRerank,
+      String rerankModel,
+      String rerankWorkspaceId) {
+    String normalizedModel = trimOrNull(rerankModel);
+    String normalizedWorkspaceId = trimOrNull(rerankWorkspaceId);
+    boolean hasRerankConfig = supportsRerank
+        || normalizedModel != null
+        || normalizedWorkspaceId != null;
+    if (!DASHSCOPE_PROVIDER_ID.equalsIgnoreCase(providerId) && hasRerankConfig) {
+      throw new BusinessException(ErrorCode.BAD_REQUEST,
+          "当前仅 DashScope Provider 支持配置 Rerank");
+    }
+    if (!supportsRerank) {
+      if (normalizedModel != null || normalizedWorkspaceId != null) {
+        throw new BusinessException(ErrorCode.BAD_REQUEST,
+            "配置 Rerank 模型或 Workspace ID 前必须启用 Rerank");
+      }
+      return;
+    }
+    if (normalizedModel == null) {
+      throw new BusinessException(ErrorCode.BAD_REQUEST,
+          "支持 Rerank 的 DashScope Provider 必须填写 rerankModel");
+    }
+    if (normalizedWorkspaceId == null) {
+      throw new BusinessException(ErrorCode.BAD_REQUEST,
+          "支持 Rerank 的 DashScope Provider 必须填写 rerankWorkspaceId");
+    }
+    if (normalizedModel.length() > MAX_RERANK_CONFIG_LENGTH) {
+      throw new BusinessException(ErrorCode.BAD_REQUEST,
+          "rerankModel 长度不能超过 " + MAX_RERANK_CONFIG_LENGTH);
+    }
+    if (normalizedWorkspaceId.length() > MAX_RERANK_CONFIG_LENGTH) {
+      throw new BusinessException(ErrorCode.BAD_REQUEST,
+          "rerankWorkspaceId 长度不能超过 " + MAX_RERANK_CONFIG_LENGTH);
     }
   }
 
@@ -914,10 +1010,22 @@ public class LlmProviderConfigService {
       if (config.getEmbeddingDimensions() != null) {
         values.put("embedding-dimensions", config.getEmbeddingDimensions());
       }
+      values.put("supports-rerank", Boolean.TRUE.equals(config.getSupportsRerank()));
+      if (Boolean.TRUE.equals(config.getSupportsRerank())) {
+        values.put("rerank-model", config.getRerankModel());
+        values.put("rerank-workspace-id", config.getRerankWorkspaceId());
+      }
       if (config.getTemperature() != null) {
         values.put("temperature", config.getTemperature());
       }
       editor.setBlock(new String[]{"app", "ai", "providers"}, id, values);
+      if (!Boolean.TRUE.equals(config.getSupportsRerank())) {
+        editor.removeBlockKeys(
+            new String[]{"app", "ai", "providers"},
+            id,
+            "rerank-model",
+            "rerank-workspace-id");
+      }
     });
   }
 
@@ -1114,6 +1222,30 @@ public class LlmProviderConfigService {
 
       for (int i = endLine - 1; i >= sectionLine; i--) {
         lines.remove(i);
+      }
+    }
+
+    void removeBlockKeys(String[] parentPath, String blockKey, String... keys) {
+      int parentSearchFrom = navigateTo(parentPath);
+      if (parentSearchFrom < 0) return;
+
+      int blockIndent = parentPath.length * 2;
+      int valueIndent = blockIndent + 2;
+      int blockLine = findKey(blockKey, blockIndent, parentSearchFrom);
+      if (blockLine < 0) return;
+
+      int blockEnd = findSectionEnd(blockLine + 1, blockIndent);
+      Set<String> keysToRemove = Set.of(keys);
+      for (int i = blockEnd - 1; i > blockLine; i--) {
+        String line = lines.get(i);
+        if (line.isBlank() || line.trim().startsWith("#") || indentOf(line) != valueIndent) {
+          continue;
+        }
+        String trimmed = line.trim();
+        int separator = trimmed.indexOf(':');
+        if (separator > 0 && keysToRemove.contains(trimmed.substring(0, separator))) {
+          lines.remove(i);
+        }
       }
     }
 

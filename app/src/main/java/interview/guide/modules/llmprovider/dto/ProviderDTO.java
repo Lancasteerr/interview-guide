@@ -11,6 +11,9 @@ public record ProviderDTO(
     String embeddingModel,
     Integer embeddingDimensions,
     boolean supportsEmbedding,
+    String rerankModel,
+    String rerankWorkspaceId,
+    boolean supportsRerank,
     Double temperature,
     boolean defaultChatProvider,
     boolean defaultEmbeddingProvider
