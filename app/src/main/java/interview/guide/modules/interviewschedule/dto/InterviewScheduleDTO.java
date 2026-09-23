@@ -1,5 +1,6 @@
-package interview.guide.modules.interviewschedule.model;
+package interview.guide.modules.interviewschedule.dto;
 
+import interview.guide.modules.interviewschedule.model.InterviewStatus;
 import lombok.Data;
 import java.time.LocalDateTime;
 

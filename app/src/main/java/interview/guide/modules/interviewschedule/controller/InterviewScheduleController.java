@@ -1,11 +1,11 @@
-package interview.guide.modules.interviewschedule;
+package interview.guide.modules.interviewschedule.controller;
 
 import interview.guide.common.result.Result;
-import interview.guide.modules.interviewschedule.model.CreateInterviewRequest;
-import interview.guide.modules.interviewschedule.model.InterviewScheduleDTO;
+import interview.guide.modules.interviewschedule.dto.CreateInterviewRequest;
+import interview.guide.modules.interviewschedule.dto.InterviewScheduleDTO;
 import interview.guide.modules.interviewschedule.model.InterviewStatus;
-import interview.guide.modules.interviewschedule.model.ParseRequest;
-import interview.guide.modules.interviewschedule.model.ParseResponse;
+import interview.guide.modules.interviewschedule.dto.ParseRequest;
+import interview.guide.modules.interviewschedule.dto.ParseResponse;
 import interview.guide.modules.interviewschedule.service.InterviewParseService;
 import interview.guide.modules.interviewschedule.service.InterviewScheduleService;
 import jakarta.validation.Valid;

@@ -1,6 +1,6 @@
 package interview.guide.modules.interviewschedule.repository;
 
-import interview.guide.modules.interviewschedule.model.InterviewScheduleEntity;
+import interview.guide.modules.interviewschedule.entity.InterviewScheduleEntity;
 import interview.guide.modules.interviewschedule.model.InterviewStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;

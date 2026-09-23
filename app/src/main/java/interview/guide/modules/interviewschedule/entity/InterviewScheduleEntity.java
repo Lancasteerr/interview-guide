@@ -1,5 +1,6 @@
-package interview.guide.modules.interviewschedule.model;
+package interview.guide.modules.interviewschedule.entity;
 
+import interview.guide.modules.interviewschedule.model.InterviewStatus;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;

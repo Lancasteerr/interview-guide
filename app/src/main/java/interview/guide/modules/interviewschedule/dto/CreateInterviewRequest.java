@@ -1,4 +1,4 @@
-package interview.guide.modules.interviewschedule.model;
+package interview.guide.modules.interviewschedule.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
