@@ -4,25 +4,23 @@ import interview.guide.common.constant.CommonConstants.InterviewDefaults;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.model.AsyncTaskStatus;
-import interview.guide.modules.interview.model.HistoricalQuestion;
 import interview.guide.modules.interview.entity.InterviewAnswerEntity;
 import interview.guide.modules.interview.dto.InterviewQuestionDTO;
 import interview.guide.modules.interview.dto.InterviewReportDTO;
 import interview.guide.modules.interview.entity.InterviewSessionEntity;
+import interview.guide.modules.interview.model.HistoricalQuestion;
 import interview.guide.modules.interview.repository.InterviewAnswerRepository;
 import interview.guide.modules.interview.repository.InterviewSessionRepository;
 import interview.guide.modules.resume.entity.ResumeEntity;
 import interview.guide.modules.resume.repository.ResumeRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.LocalDateTime;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -32,13 +30,41 @@ import java.util.Optional;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class InterviewPersistenceService {
     
     private final InterviewSessionRepository sessionRepository;
     private final InterviewAnswerRepository answerRepository;
     private final ResumeRepository resumeRepository;
     private final ObjectMapper objectMapper;
+    private final InterviewReportPersistenceService reportPersistenceService;
+    private final InterviewHistoryQuestionService historyQuestionService;
+
+    @Autowired
+    public InterviewPersistenceService(InterviewSessionRepository sessionRepository,
+                                       InterviewAnswerRepository answerRepository,
+                                       ResumeRepository resumeRepository,
+                                       ObjectMapper objectMapper,
+                                       InterviewReportPersistenceService reportPersistenceService,
+                                       InterviewHistoryQuestionService historyQuestionService) {
+        this.sessionRepository = sessionRepository;
+        this.answerRepository = answerRepository;
+        this.resumeRepository = resumeRepository;
+        this.objectMapper = objectMapper;
+        this.reportPersistenceService = reportPersistenceService;
+        this.historyQuestionService = historyQuestionService;
+    }
+
+    /**
+     * 保留测试和旧代码使用的四参数构造方式。
+     */
+    public InterviewPersistenceService(InterviewSessionRepository sessionRepository,
+                                       InterviewAnswerRepository answerRepository,
+                                       ResumeRepository resumeRepository,
+                                       ObjectMapper objectMapper) {
+        this(sessionRepository, answerRepository, resumeRepository, objectMapper,
+            new InterviewReportPersistenceService(sessionRepository, answerRepository, objectMapper),
+            new InterviewHistoryQuestionService(sessionRepository, objectMapper));
+    }
     
     /**
      * 保存新的面试会话（支持可选简历）
@@ -211,81 +237,7 @@ public class InterviewPersistenceService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void saveReport(String sessionId, InterviewReportDTO report) {
-        try {
-            Optional<InterviewSessionEntity> sessionOpt = sessionRepository.findBySessionId(sessionId);
-            if (sessionOpt.isEmpty()) {
-                log.warn("会话不存在: {}", sessionId);
-                return;
-            }
-
-            InterviewSessionEntity session = sessionOpt.get();
-            session.setOverallScore(report.overallScore());
-            session.setOverallFeedback(report.overallFeedback());
-            session.setStrengthsJson(objectMapper.writeValueAsString(report.strengths()));
-            session.setImprovementsJson(objectMapper.writeValueAsString(report.improvements()));
-            session.setReferenceAnswersJson(objectMapper.writeValueAsString(report.referenceAnswers()));
-            session.setStatus(InterviewSessionEntity.SessionStatus.EVALUATED);
-            session.setCompletedAt(LocalDateTime.now());
-
-            sessionRepository.save(session);
-
-            // 查询已存在的答案，建立索引
-            List<InterviewAnswerEntity> existingAnswers = answerRepository.findBySession_SessionIdOrderByQuestionIndex(sessionId);
-            java.util.Map<Integer, InterviewAnswerEntity> answerMap = existingAnswers.stream()
-                .collect(java.util.stream.Collectors.toMap(
-                    InterviewAnswerEntity::getQuestionIndex,
-                    a -> a,
-                    (a1, a2) -> a1
-                ));
-
-            // 建立参考答案索引
-            java.util.Map<Integer, InterviewReportDTO.ReferenceAnswer> refAnswerMap = report.referenceAnswers().stream()
-                .collect(java.util.stream.Collectors.toMap(
-                    InterviewReportDTO.ReferenceAnswer::questionIndex,
-                    r -> r,
-                    (r1, r2) -> r1
-                ));
-
-            List<InterviewAnswerEntity> answersToSave = new java.util.ArrayList<>();
-
-            // 遍历所有评估结果，更新或创建答案记录
-            for (InterviewReportDTO.QuestionEvaluation eval : report.questionDetails()) {
-                InterviewAnswerEntity answer = answerMap.get(eval.questionIndex());
-
-                if (answer == null) {
-                    // 未回答的题目，创建新记录
-                    answer = new InterviewAnswerEntity();
-                    answer.setSession(session);
-                    answer.setQuestionIndex(eval.questionIndex());
-                    answer.setQuestion(eval.question());
-                    answer.setCategory(eval.category());
-                    answer.setUserAnswer(null);  // 未回答
-                    log.debug("为未回答的题目 {} 创建答案记录", eval.questionIndex());
-                }
-
-                // 更新评分和反馈
-                answer.setScore(eval.score());
-                answer.setFeedback(eval.feedback());
-
-                // 设置参考答案和关键点
-                InterviewReportDTO.ReferenceAnswer refAns = refAnswerMap.get(eval.questionIndex());
-                if (refAns != null) {
-                    answer.setReferenceAnswer(refAns.referenceAnswer());
-                    if (refAns.keyPoints() != null && !refAns.keyPoints().isEmpty()) {
-                        answer.setKeyPointsJson(objectMapper.writeValueAsString(refAns.keyPoints()));
-                    }
-                }
-
-                answersToSave.add(answer);
-            }
-
-            answerRepository.saveAll(answersToSave);
-            log.info("面试报告已保存: sessionId={}, score={}, 答案数={}",
-                sessionId, report.overallScore(), answersToSave.size());
-
-        } catch (JacksonException e) {
-            log.error("序列化报告失败: {}", e.getMessage(), e);
-        }
+        reportPersistenceService.saveReport(sessionId, report);
     }
     
     /**
@@ -361,47 +313,11 @@ public class InterviewPersistenceService {
         return answerRepository.findBySession_SessionIdOrderByQuestionIndex(sessionId);
     }
 
-    private static final int MAX_HISTORICAL_QUESTIONS = 60;
-
     /**
      * 获取历史提问列表（结构化，按分类压缩用）。
      * 有 resumeId 时精确匹配 resumeId + skillId；无 resumeId 时按 skillId 查全部（通用模式兜底）。
      */
     public List<HistoricalQuestion> getHistoricalQuestions(String skillId, Long resumeId) {
-        List<InterviewSessionEntity> sessions;
-        if (resumeId != null) {
-            sessions = sessionRepository.findTop10ByResumeIdAndSkillIdOrderByCreatedAtDesc(resumeId, skillId);
-        } else {
-            sessions = sessionRepository.findTop10BySkillIdOrderByCreatedAtDesc(skillId);
-        }
-
-        log.info("加载历史题目: skillId={}, resumeId={}, 查到 {} 个历史会话", skillId, resumeId, sessions.size());
-
-        LinkedHashSet<String> seen = new LinkedHashSet<>();
-        List<HistoricalQuestion> result = sessions.stream()
-            .map(InterviewSessionEntity::getQuestionsJson)
-            .filter(json -> json != null && !json.isEmpty())
-            .flatMap(json -> {
-                try {
-                    List<InterviewQuestionDTO> questions = objectMapper.readValue(json,
-                        new TypeReference<List<InterviewQuestionDTO>>() {});
-                    return questions.stream()
-                        .filter(q -> !q.isFollowUp())
-                        .map(q -> new HistoricalQuestion(q.question(), q.type(), q.topicSummary()));
-                } catch (Exception e) {
-                    log.error("解析历史问题JSON失败", e);
-                    return java.util.stream.Stream.<HistoricalQuestion>empty();
-                }
-            })
-            .filter(hq -> seen.add(hq.question()))
-            .limit(MAX_HISTORICAL_QUESTIONS)
-            .toList();
-
-        log.info("历史题目加载完成: 去重后 {} 道主问题，按分类: {}", result.size(),
-            result.stream().collect(java.util.stream.Collectors.groupingBy(
-                hq -> hq.type() != null ? hq.type() : "GENERAL",
-                java.util.stream.Collectors.counting())));
-
-        return result;
+        return historyQuestionService.getHistoricalQuestions(skillId, resumeId);
     }
 }
