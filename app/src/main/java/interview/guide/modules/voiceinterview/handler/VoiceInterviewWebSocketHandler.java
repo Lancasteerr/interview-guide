@@ -64,6 +64,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private final VoiceInterviewProperties voiceInterviewProperties;
     private final ObjectProvider<MeterRegistry> meterRegistryProvider;
     private final VoiceWebSocketMessageService messageService;
+    private final VoiceWebSocketConversationService conversationService;
 
     VoiceInterviewWebSocketHandler(
         ObjectMapper objectMapper,
@@ -85,7 +86,8 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             voiceHistoryLoader,
             voiceInterviewProperties,
             meterRegistryProvider,
-            new VoiceWebSocketMessageService(objectMapper)
+            new VoiceWebSocketMessageService(objectMapper),
+            new VoiceWebSocketConversationService(interviewService, voiceHistoryLoader)
         );
     }
 
@@ -100,7 +102,8 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
         interview.guide.modules.voiceinterview.context.VoiceHistoryLoader voiceHistoryLoader,
         VoiceInterviewProperties voiceInterviewProperties,
         ObjectProvider<MeterRegistry> meterRegistryProvider,
-        VoiceWebSocketMessageService messageService) {
+        VoiceWebSocketMessageService messageService,
+        VoiceWebSocketConversationService conversationService) {
         this.objectMapper = objectMapper;
         this.sttService = sttService;
         this.ttsService = ttsService;
@@ -111,6 +114,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
         this.voiceInterviewProperties = voiceInterviewProperties;
         this.meterRegistryProvider = meterRegistryProvider;
         this.messageService = messageService;
+        this.conversationService = conversationService;
     }
 
     /**
@@ -231,13 +235,13 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                     return;
                 }
 
-                VoiceInterviewSessionEntity sessionEntity = getSessionEntity(sessionId);
+                VoiceInterviewSessionEntity sessionEntity = conversationService.getSessionEntity(sessionId);
                 if (sessionEntity == null) {
                     log.warn("Session entity not found when sending opening question: {}", sessionId);
                     return;
                 }
 
-                List<String> history = getHistory(sessionId, sessionEntity.getLlmProvider());
+                List<String> history = conversationService.getHistory(sessionId, sessionEntity.getLlmProvider());
                 if (history != null && !history.isEmpty()) {
                     // 已有历史对话（如重连/恢复），不重复开场
                     return;
@@ -253,7 +257,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 }
 
                 // 先落库再推前端，确保用户提交时 DB 中已有该条消息
-                saveMessage(sessionId, null, aiReply);
+                conversationService.saveMessage(sessionId, null, aiReply);
                 messageService.sendTextMessage(session, aiReply, true);
 
                 // 语音随后下发
@@ -645,14 +649,17 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
             log.info("Getting LLM response for session {}, textLength={}", sessionId, userText.length());
 
-            VoiceInterviewSessionEntity sessionEntity = getSessionEntity(sessionId);
+            VoiceInterviewSessionEntity sessionEntity = conversationService.getSessionEntity(sessionId);
             if (sessionEntity == null) {
                 log.error("Session entity not found for session {}, cannot generate LLM response", sessionId);
                 messageService.sendError(session, "会话不存在，请重新开始面试");
                 return;
             }
 
-            List<String> conversationHistory = getHistory(sessionId, sessionEntity.getLlmProvider());
+            List<String> conversationHistory = conversationService.getHistory(
+                sessionId,
+                sessionEntity.getLlmProvider()
+            );
 
             long llmStartNanos = System.nanoTime();
             AtomicLong firstTokenAtNanos = new AtomicLong(0);
@@ -727,7 +734,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
                 messageService.sendSubtitle(session, userText, true);
                 messageService.sendTextMessage(session, aiReply, true);
-                saveMessage(sessionId, userText, aiReply);
+                conversationService.saveMessage(sessionId, userText, aiReply);
 
                 // 按顺序收集所有 TTS 结果（带超时，防止单句 TTS 挂死阻塞整条管道）
                 if (chunkEmitter != null) {
@@ -823,7 +830,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
                 messageService.sendSubtitle(session, userText, true);
                 messageService.sendTextMessage(session, aiReply, true);
-                saveMessage(sessionId, userText, aiReply);
+                conversationService.saveMessage(sessionId, userText, aiReply);
 
                 long ttsStartNanos = System.nanoTime();
                 log.info("[Session: {}] Starting TTS synthesis for text (length: {})",
@@ -1037,47 +1044,6 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private String extractSessionId(WebSocketSession session) {
         String path = session.getUri().getPath();
         return path.substring(path.lastIndexOf('/') + 1);
-    }
-
-    /**
-     * Get chat history for session.
-     * 加载对话历史并进行上下文压缩（滑动窗口 + 可选增量摘要），再格式化为文本行。
-     * 当 contextCompression.enabled=false 时行为与改前完全一致（返回全量格式化轮次）。
-     */
-    private List<String> getHistory(String sessionId, String llmProvider) {
-        try {
-            List<String> history = voiceHistoryLoader.loadHistory(sessionId, llmProvider);
-            log.debug("Loaded {} compressed history entries for session {}", history.size(), sessionId);
-            return history;
-        } catch (Exception e) {
-            log.error("Error loading conversation history for session {}", sessionId, e);
-            return new ArrayList<>();
-        }
-    }
-
-    /**
-     * Get session entity from database
-     */
-    private VoiceInterviewSessionEntity getSessionEntity(String sessionId) {
-        try {
-            Long sessionIdLong = Long.parseLong(sessionId);
-            return interviewService.getSession(sessionIdLong);
-        } catch (NumberFormatException e) {
-            log.error("Invalid session ID format: {}", sessionId);
-            return null;
-        }
-    }
-
-    /**
-     * Save message to database
-     */
-    private void saveMessage(String sessionId, String userText, String aiText) {
-        try {
-            interviewService.saveMessage(sessionId, userText, aiText);
-            log.debug("Message saved to database for session: {}", sessionId);
-        } catch (Exception e) {
-            log.error("Error saving message for session {}", sessionId, e);
-        }
     }
 
     /**
