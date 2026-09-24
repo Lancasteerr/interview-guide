@@ -35,9 +35,6 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 @Slf4j
 public class LlmProviderConfigService {
 
-  private static final String DASHSCOPE_PROVIDER_ID = "dashscope";
-  private static final int MAX_RERANK_CONFIG_LENGTH = 128;
-
   private final LlmProviderProperties properties;
   private final LlmProviderRegistry registry;
   private final LlmProviderRepository providerRepository;
@@ -51,6 +48,7 @@ public class LlmProviderConfigService {
   private final LlmProviderConnectivityTester connectivityTester;
   private final VoiceProviderConfigService voiceConfigService;
   private final LlmProviderDefaultService defaultService;
+  private final LlmProviderConfigValidator validator;
 
   private static final Map<String, String> RECOMMENDED_EMBEDDING_MODELS = Map.of(
       "dashscope", "text-embedding-v3",
@@ -87,6 +85,7 @@ public class LlmProviderConfigService {
     this.defaultService = new LlmProviderDefaultService(
         properties, registry, providerRepository, globalSettingRepository,
         this::writeDefaultProviderToYaml);
+    this.validator = new LlmProviderConfigValidator();
   }
 
   public LlmProviderConfigService(
@@ -268,11 +267,11 @@ public class LlmProviderConfigService {
       boolean supportsEmbedding = request.supportsEmbedding() != null
           ? request.supportsEmbedding()
           : embeddingModel != null;
-      validateEmbeddingConfig(providerId, supportsEmbedding, embeddingModel, embeddingDimensions);
+      validator.validateEmbeddingConfig(providerId, supportsEmbedding, embeddingModel, embeddingDimensions);
       String rerankModel = trimOrNull(request.rerankModel());
       String rerankWorkspaceId = trimOrNull(request.rerankWorkspaceId());
       boolean supportsRerank = Boolean.TRUE.equals(request.supportsRerank());
-      validateRerankConfig(providerId, supportsRerank, rerankModel, rerankWorkspaceId);
+      validator.validateRerankConfig(providerId, supportsRerank, rerankModel, rerankWorkspaceId);
 
       ApiKeyEncryptionService.EncryptedValue encrypted = encryptionService.encrypt(apiKey);
       providerRepository.save(LlmProviderEntity.builder()
@@ -332,7 +331,7 @@ public class LlmProviderConfigService {
       if (request.supportsEmbedding() != null) {
         provider.setSupportsEmbedding(request.supportsEmbedding());
       }
-      validateEmbeddingConfig(
+      validator.validateEmbeddingConfig(
           id,
           provider.isSupportsEmbedding(),
           provider.getEmbeddingModel(),
@@ -346,7 +345,7 @@ public class LlmProviderConfigService {
       String targetRerankWorkspaceId = request.rerankWorkspaceId() != null
           ? trimOrNull(request.rerankWorkspaceId())
           : disablingRerank ? null : provider.getRerankWorkspaceId();
-      validateRerankConfig(
+      validator.validateRerankConfig(
           id, targetSupportsRerank, targetRerankModel, targetRerankWorkspaceId);
       provider.setSupportsRerank(targetSupportsRerank);
       provider.setRerankModel(targetSupportsRerank ? targetRerankModel : null);
@@ -475,7 +474,7 @@ public class LlmProviderConfigService {
     String rerankModel = trimOrNull(request.rerankModel());
     String rerankWorkspaceId = trimOrNull(request.rerankWorkspaceId());
     boolean supportsRerank = Boolean.TRUE.equals(request.supportsRerank());
-    validateRerankConfig(request.id(), supportsRerank, rerankModel, rerankWorkspaceId);
+    validator.validateRerankConfig(request.id(), supportsRerank, rerankModel, rerankWorkspaceId);
     config.setSupportsRerank(supportsRerank);
     config.setRerankModel(supportsRerank ? rerankModel : null);
     config.setRerankWorkspaceId(supportsRerank ? rerankWorkspaceId : null);
@@ -523,7 +522,7 @@ public class LlmProviderConfigService {
     String targetRerankWorkspaceId = request.rerankWorkspaceId() != null
         ? trimOrNull(request.rerankWorkspaceId())
         : disablingRerank ? null : config.getRerankWorkspaceId();
-    validateRerankConfig(
+    validator.validateRerankConfig(
         id, targetSupportsRerank, targetRerankModel, targetRerankWorkspaceId);
     config.setSupportsRerank(targetSupportsRerank);
     config.setRerankModel(targetSupportsRerank ? targetRerankModel : null);
@@ -625,86 +624,11 @@ public class LlmProviderConfigService {
     return normalized;
   }
 
-  private void validateEmbeddingConfig(
-      String providerId,
-      boolean supportsEmbedding,
-      String embeddingModel,
-      Integer embeddingDimensions) {
-    String normalizedModel = trimOrNull(embeddingModel);
-    if (!supportsEmbedding) {
-      return;
-    }
-    if (normalizedModel == null) {
-      throw new BusinessException(ErrorCode.BAD_REQUEST,
-          "支持 Embedding 的 Provider 必须填写 embeddingModel");
-    }
-//    if (looksLikeChatModel(normalizedModel)) {
-//      String recommendation = RECOMMENDED_EMBEDDING_MODELS.get(providerId.toLowerCase());
-//      String suffix = recommendation != null
-//          ? "，推荐填写 " + recommendation
-//          : "，请填写该厂商真实的 Embedding 模型名";
-//      throw new BusinessException(ErrorCode.BAD_REQUEST,
-//          "Embedding Model 不能填写聊天模型 '" + normalizedModel + "'" + suffix);
-//    }
-    if (embeddingDimensions == null || embeddingDimensions <= 0) {
-      throw new BusinessException(ErrorCode.BAD_REQUEST, "向量维度必须为正整数");
-    }
-  }
-
-  private void validateRerankConfig(
-      String providerId,
-      boolean supportsRerank,
-      String rerankModel,
-      String rerankWorkspaceId) {
-    String normalizedModel = trimOrNull(rerankModel);
-    String normalizedWorkspaceId = trimOrNull(rerankWorkspaceId);
-    boolean hasRerankConfig = supportsRerank
-        || normalizedModel != null
-        || normalizedWorkspaceId != null;
-    if (!DASHSCOPE_PROVIDER_ID.equalsIgnoreCase(providerId) && hasRerankConfig) {
-      throw new BusinessException(ErrorCode.BAD_REQUEST,
-          "当前仅 DashScope Provider 支持配置 Rerank");
-    }
-    if (!supportsRerank) {
-      if (normalizedModel != null || normalizedWorkspaceId != null) {
-        throw new BusinessException(ErrorCode.BAD_REQUEST,
-            "配置 Rerank 模型或 Workspace ID 前必须启用 Rerank");
-      }
-      return;
-    }
-    if (normalizedModel == null) {
-      throw new BusinessException(ErrorCode.BAD_REQUEST,
-          "支持 Rerank 的 DashScope Provider 必须填写 rerankModel");
-    }
-    if (normalizedWorkspaceId == null) {
-      throw new BusinessException(ErrorCode.BAD_REQUEST,
-          "支持 Rerank 的 DashScope Provider 必须填写 rerankWorkspaceId");
-    }
-    if (normalizedModel.length() > MAX_RERANK_CONFIG_LENGTH) {
-      throw new BusinessException(ErrorCode.BAD_REQUEST,
-          "rerankModel 长度不能超过 " + MAX_RERANK_CONFIG_LENGTH);
-    }
-    if (normalizedWorkspaceId.length() > MAX_RERANK_CONFIG_LENGTH) {
-      throw new BusinessException(ErrorCode.BAD_REQUEST,
-          "rerankWorkspaceId 长度不能超过 " + MAX_RERANK_CONFIG_LENGTH);
-    }
-  }
-
   private Integer resolveEmbeddingDimensions(Integer configuredDimensions) {
     if (configuredDimensions != null && configuredDimensions > 0) {
       return configuredDimensions;
     }
     return properties.getEmbeddingDimensions();
-  }
-
-  private boolean looksLikeChatModel(String model) {
-    String lower = model.toLowerCase();
-    return lower.startsWith("glm-")
-        || lower.startsWith("deepseek")
-        || lower.startsWith("kimi")
-        || lower.startsWith("moonshot")
-        || lower.startsWith("qwen")
-        || lower.startsWith("ernie");
   }
 
   private String toEnvKey(String providerId) {
