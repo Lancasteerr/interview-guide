@@ -21,7 +21,6 @@ import reactor.core.publisher.Flux;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -43,7 +42,7 @@ public class KnowledgeBaseQueryService {
     private final KnowledgeBaseCountService countService;
     private final KnowledgeBaseRagPromptService ragPromptService;
     private final KnowledgeBaseRagResponseService ragResponseService;
-    private final boolean mergeOriginalQuery;
+    private final KnowledgeBaseRagRetrievalService ragRetrievalService;
 
     public KnowledgeBaseQueryService(
             LlmProviderRegistry llmProviderRegistry,
@@ -61,7 +60,11 @@ public class KnowledgeBaseQueryService {
         this.ragPromptService = new KnowledgeBaseRagPromptService(
             llmProviderRegistry, ragMetrics, queryProperties, resourceLoader);
         this.ragResponseService = new KnowledgeBaseRagResponseService(NO_RESULT_RESPONSE);
-        this.mergeOriginalQuery = queryProperties.getSearch().isMergeOriginalQuery();
+        this.ragRetrievalService = new KnowledgeBaseRagRetrievalService(
+            llmProviderRegistry,
+            ragMetrics,
+            vectorService,
+            queryProperties.getSearch().isMergeOriginalQuery());
     }
 
     private ChatClient getChatClient() {
@@ -410,23 +413,16 @@ public class KnowledgeBaseQueryService {
     }
 
     private RerankResult rerankDocuments(String query, List<Document> candidates) {
-        return rerankDocuments(query, candidates, RerankExecutionMode.CONFIGURED);
+        return ragRetrievalService.rerank(query, candidates);
     }
 
     private RerankResult rerankDocuments(String query, List<Document> candidates,
                                          RerankExecutionMode mode) {
-        RerankResult result = mode == RerankExecutionMode.CONFIGURED
-            ? llmProviderRegistry.rerankDocuments(query, candidates)
-            : llmProviderRegistry.rerankDocuments(query, candidates, mode);
-        ragMetrics.recordStageDuration(
-            "rerank", result.status().name().toLowerCase(), result.durationMs() * 1_000_000L);
-        ragMetrics.recordRerankRequest(
-            result.status().name().toLowerCase(), result.reason().metricValue());
-        return result;
+        return ragRetrievalService.rerank(query, candidates, mode);
     }
 
     private List<Document> documentsOf(RerankResult result) {
-        return result.documents().stream().map(RerankedDocument::document).toList();
+        return ragRetrievalService.documentsOf(result);
     }
 
 
@@ -516,113 +512,12 @@ public class KnowledgeBaseQueryService {
 
 //    向量检索（attemptedQueries 非空时记录实际尝试过的候选，第一个命中后即返回）
     private List<Document> retrieveRelevantDocs(KnowledgeBaseRagQueryPlan queryContext, List<Long> knowledgeBaseIds) {
-        return retrieveRelevantDocs(queryContext, knowledgeBaseIds, null);
+        return ragRetrievalService.retrieve(queryContext, knowledgeBaseIds, null);
     }
 
     private List<Document> retrieveRelevantDocs(KnowledgeBaseRagQueryPlan queryContext, List<Long> knowledgeBaseIds,
                                                 List<String> attemptedQueries) {
-        List<String> candidates = queryContext.candidateQueries();
-        if (mergeOriginalQuery && candidates.size() > 1
-                && !candidates.get(0).equals(candidates.get(1))) {
-            return retrieveAndMerge(queryContext, knowledgeBaseIds, attemptedQueries);
-        }
-        for (int i = 0; i < candidates.size(); i++) {
-            String candidateQuery = candidates.get(i);
-            if (candidateQuery.isBlank()) {
-                continue;
-            }
-            if (attemptedQueries != null) {
-                attemptedQueries.add(candidateQuery);
-            }
-            long startNanos = System.nanoTime();
-            List<Document> docs = vectorService.similaritySearch(
-                candidateQuery,
-                knowledgeBaseIds,
-                queryContext.searchParams().topK(),
-                queryContext.searchParams().minScore()
-            );
-            long durationMs = (System.nanoTime() - startNanos) / 1_000_000;
-            log.info("RAG 检索完成: kbCount={}, questionLength={}, queryVariant={}, hits={}, durationMs={}",
-                knowledgeBaseIds.size(), candidateQuery.length(),
-                i == 0 ? "rewritten" : "original", docs.size(), durationMs);
-            if (hasEffectiveHit(docs)) {
-                ragMetrics.recordRetrievalHits("single", docs.size());
-                return docs;
-            }
-        }
-        return List.of();
-    }
-
-    /**
-     * 双路召回融合：改写 Query 与原始 Query 各自按相同 Top K/阈值检索一次，
-     * 按 Document ID 去重保留高分，null 分数排后、同分保持改写路优先的稳定顺序，
-     * 按分数降序截取最终 Top K。两路均来自同一向量库与相似度定义，第一版用最大分数融合。
-     */
-    private List<Document> retrieveAndMerge(KnowledgeBaseRagQueryPlan queryContext, List<Long> knowledgeBaseIds,
-                                            List<String> attemptedQueries) {
-        Map<String, Document> merged = new LinkedHashMap<>();
-        int topK = queryContext.searchParams().topK();
-        int rewrittenHits = 0;
-        int originalHits = 0;
-        for (int i = 0; i < 2; i++) {
-            String candidateQuery = queryContext.candidateQueries().get(i);
-            if (candidateQuery.isBlank()) {
-                continue;
-            }
-            if (attemptedQueries != null) {
-                attemptedQueries.add(candidateQuery);
-            }
-            List<Document> docs = vectorService.similaritySearch(
-                candidateQuery, knowledgeBaseIds, topK, queryContext.searchParams().minScore());
-            if (i == 0) {
-                rewrittenHits = docs.size();
-            } else {
-                originalHits = docs.size();
-            }
-            for (Document doc : docs) {
-                merged.merge(doc.getId(), doc, KnowledgeBaseQueryService::higherScore);
-            }
-        }
-        List<Document> result = merged.values().stream()
-            .sorted(KnowledgeBaseQueryService::scoreDescendingNullsLast)
-            .limit(topK)
-            .collect(Collectors.toList());
-        log.info("RAG 双路融合完成: kbCount={}, rewrittenHits={}, originalHits={}, dedupedHits={}, finalHits={}, topK={}",
-            knowledgeBaseIds.size(), rewrittenHits, originalHits, merged.size(), result.size(), topK);
-        ragMetrics.recordRetrievalHits("rewritten", rewrittenHits);
-        ragMetrics.recordRetrievalHits("original", originalHits);
-        ragMetrics.recordRetrievalHits("merged", result.size());
-        return result;
-    }
-
-    private static Document higherScore(Document existing, Document incoming) {
-        Double existingScore = existing.getScore();
-        Double incomingScore = incoming.getScore();
-        if (incomingScore == null) {
-            return existing;
-        }
-        if (existingScore == null || incomingScore > existingScore) {
-            return incoming;
-        }
-        return existing;
-    }
-
-    /**
-     * 分数降序且 null 分数排最后；分数相同时保持"改写 Query 结果优先"的稳定顺序（稳定排序保证）。
-     */
-    private static int scoreDescendingNullsLast(Document a, Document b) {
-        Double scoreA = a.getScore();
-        Double scoreB = b.getScore();
-        if (scoreA == null && scoreB == null) {
-            return 0;
-        }
-        if (scoreA == null) {
-            return 1;
-        }
-        if (scoreB == null) {
-            return -1;
-        }
-        return Double.compare(scoreB, scoreA);
+        return ragRetrievalService.retrieve(queryContext, knowledgeBaseIds, attemptedQueries);
     }
 
     private Flux<String> normalizeStreamOutput(Flux<String> rawFlux) {
