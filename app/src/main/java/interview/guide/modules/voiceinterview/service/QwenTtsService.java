@@ -8,8 +8,6 @@ import com.alibaba.dashscope.audio.qwen_tts_realtime.QwenTtsRealtimeParam;
 import com.google.gson.JsonObject;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.Response;
-import okhttp3.WebSocket;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -17,7 +15,6 @@ import jakarta.annotation.PreDestroy;
 import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -47,6 +44,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class QwenTtsService {
 
     private final QwenTtsConfiguration configuration;
+    private final QwenTtsConnectionService connectionService;
 
     // 保留旧字段作为反射/诊断兼容视图，合成流程统一读取 configuration。
     @Deprecated private String model;
@@ -62,6 +60,7 @@ public class QwenTtsService {
 
     public QwenTtsService(VoiceInterviewProperties voiceInterviewProperties) {
         this.configuration = new QwenTtsConfiguration(voiceInterviewProperties);
+        this.connectionService = new QwenTtsConnectionService(configuration);
         syncLegacyConfigurationView();
     }
 
@@ -161,15 +160,10 @@ public class QwenTtsService {
                 }
             };
 
-            AtomicReference<Throwable> connectionFailureRef = new AtomicReference<>();
-            CountDownLatch connectionFinishedLatch = new CountDownLatch(1);
-            QwenTtsRealtime qwenTtsRealtime = createClient(
-                    param, callback, connectionFailureRef, connectionFinishedLatch);
+            QwenTtsRealtime qwenTtsRealtime = connectionService.open(param, callback);
 
             try {
                 // Connect to server (blocking)
-                connectWithTimeout(qwenTtsRealtime, connectionFailureRef, connectionFinishedLatch);
-
                 // Configure session with TTS parameters
                 QwenTtsRealtimeConfig config = QwenTtsRealtimeConfig.builder()
                         .voice(configuration.voice())
@@ -230,64 +224,6 @@ public class QwenTtsService {
         } catch (Exception e) {
             log.error("Failed to synthesize text", e);
             return new byte[0];
-        }
-    }
-
-    private QwenTtsRealtime createClient(
-            QwenTtsRealtimeParam param,
-            QwenTtsRealtimeCallback callback,
-            AtomicReference<Throwable> connectionFailureRef,
-            CountDownLatch connectionFinishedLatch) {
-        return new QwenTtsRealtime(param, callback) {
-            @Override
-            public void onFailure(WebSocket webSocket, Throwable throwable, Response response) {
-                String status = response == null
-                        ? "no HTTP response"
-                        : "HTTP " + response.code() + " " + response.message();
-                connectionFailureRef.compareAndSet(
-                        null,
-                        new IllegalStateException("TTS WebSocket handshake failed: " + status, throwable));
-                connectionFinishedLatch.countDown();
-            }
-        };
-    }
-
-    private void connectWithTimeout(
-            QwenTtsRealtime qwenTtsRealtime,
-            AtomicReference<Throwable> connectionFailureRef,
-            CountDownLatch connectionFinishedLatch) throws Exception {
-        Thread connectThread = Thread.ofVirtual()
-                .name("qwen-tts-connect")
-                .start(() -> {
-                    try {
-                        qwenTtsRealtime.connect();
-                    } catch (Throwable throwable) {
-                        connectionFailureRef.compareAndSet(null, throwable);
-                    } finally {
-                        connectionFinishedLatch.countDown();
-                    }
-                });
-
-        try {
-            boolean completed = connectionFinishedLatch.await(
-                    configuration.connectTimeoutSeconds(), TimeUnit.SECONDS);
-            if (!completed) {
-                throw new TimeoutException(
-                        "TTS WebSocket connection timed out after "
-                            + configuration.connectTimeoutSeconds() + " seconds");
-            }
-        } finally {
-            if (connectThread.isAlive()) {
-                connectThread.interrupt();
-            }
-        }
-
-        Throwable failure = connectionFailureRef.get();
-        if (failure instanceof Exception exception) {
-            throw exception;
-        }
-        if (failure != null) {
-            throw new IllegalStateException("TTS WebSocket connection failed", failure);
         }
     }
 
