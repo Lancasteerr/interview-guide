@@ -26,7 +26,6 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -115,6 +114,13 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
         this.meterRegistryProvider = meterRegistryProvider;
         this.messageService = messageService;
         this.conversationService = conversationService;
+        this.openingService = new VoiceWebSocketOpeningService(
+            ttsService,
+            voiceInterviewProperties,
+            conversationService,
+            messageService,
+            this::convertPcmToWav
+        );
     }
 
     /**
@@ -129,7 +135,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final Map<String, SessionState> sessionStates = new ConcurrentHashMap<>();
-    private final Map<String, byte[]> openingAudioCache = new ConcurrentHashMap<>();
+    private final VoiceWebSocketOpeningService openingService;
 
     // Activity tracking for pause timeout
     // 活动跟踪（用于暂停超时）
@@ -144,10 +150,6 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private static final long AI_SPEAK_COOLDOWN_MS = 800;
     private static final int MAX_ASR_READY_RETRY = 2;
     private static final long ASR_READY_CHECK_DELAY_SECONDS = 10;
-    private static final String DEFAULT_OPENING_QUESTION_ALGORITHM =
-        "你好，我是本场面试官。第一个问题：请你口述一道算法题，不写代码，只讲\u300C问题建模、数据结构选型、步骤、复杂度、边界处理\u300D。";
-    private static final String DEFAULT_OPENING_QUESTION_BACKEND =
-        "你好，我是本场面试官。第一个问题：请用 1 分钟介绍一个你深度参与的项目，按三点回答：业务目标、你负责的核心模块、核心技术栈。说完我会立刻追问一个关键技术决策。";
 
     private static ScheduledExecutorService createUtteranceMergeScheduler() {
         ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(2, r -> {
@@ -162,40 +164,9 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
     @PostConstruct
     void warmupOpeningAudioCache() {
-        if (!voiceInterviewProperties.isOpeningAudioWarmupEnabled()) {
-            log.info("Opening audio cache warmup is disabled");
-            return;
-        }
         voicePipelineExecutor.execute(() -> {
-            try {
-                VoiceInterviewProperties.OpeningConfig opening = voiceInterviewProperties.getOpening();
-                if (opening == null) {
-                    return;
-                }
-                LinkedHashSet<String> allTemplates = new LinkedHashSet<>();
-                if (opening.getSkillQuestions() != null) {
-                    allTemplates.addAll(opening.getSkillQuestions().values());
-                }
-                allTemplates.add(opening.getAlgorithmQuestion());
-                allTemplates.add(opening.getBackendQuestion());
-                for (String template : allTemplates) {
-                    preloadOpeningAudio(template);
-                }
-                log.info("Opening audio cache warmed: {} entries", openingAudioCache.size());
-            } catch (Exception e) {
-                log.warn("Opening audio cache warmup skipped: {}", e.getMessage());
-            }
+            openingService.warmupOpeningAudioCache();
         });
-    }
-
-    private void preloadOpeningAudio(String text) {
-        if (text == null || text.isBlank()) {
-            return;
-        }
-        byte[] wavAudio = synthesizeToWav(text);
-        if (wavAudio.length > 0) {
-            openingAudioCache.put(text, wavAudio);
-        }
     }
 
     @Override
@@ -230,93 +201,8 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
     private void triggerOpeningQuestionIfNeeded(String sessionId, WebSocketSession session) {
         voicePipelineExecutor.execute(() -> {
-            try {
-                if (session == null || !session.isOpen()) {
-                    return;
-                }
-
-                VoiceInterviewSessionEntity sessionEntity = conversationService.getSessionEntity(sessionId);
-                if (sessionEntity == null) {
-                    log.warn("Session entity not found when sending opening question: {}", sessionId);
-                    return;
-                }
-
-                List<String> history = conversationService.getHistory(sessionId, sessionEntity.getLlmProvider());
-                if (history != null && !history.isEmpty()) {
-                    // 已有历史对话（如重连/恢复），不重复开场
-                    return;
-                }
-
-                String aiReply = buildOpeningQuestion(sessionEntity);
-                if (aiReply == null || aiReply.isBlank()) {
-                    return;
-                }
-
-                if (!session.isOpen()) {
-                    return;
-                }
-
-                // 先落库再推前端，确保用户提交时 DB 中已有该条消息
-                conversationService.saveMessage(sessionId, null, aiReply);
-                messageService.sendTextMessage(session, aiReply, true);
-
-                // 语音随后下发
-                byte[] wavAudio = getOpeningWavAudio(aiReply);
-                if (wavAudio.length > 0 && session.isOpen()) {
-                    messageService.sendAudio(session, wavAudio, aiReply);
-                }
-
-                log.info("Opening question sent for session {}", sessionId);
-            } catch (Exception e) {
-                log.error("Failed to send opening question for session {}", sessionId, e);
-            }
+            openingService.sendOpeningQuestion(sessionId, session);
         });
-    }
-
-    private byte[] getOpeningWavAudio(String text) {
-        byte[] cached = openingAudioCache.get(text);
-        if (cached != null && cached.length > 0) {
-            return cached;
-        }
-        byte[] wav = synthesizeToWav(text);
-        if (wav.length > 0) {
-            openingAudioCache.put(text, wav);
-        }
-        return wav;
-    }
-
-    private byte[] synthesizeToWav(String text) {
-        byte[] pcm = ttsService.synthesize(text);
-        if (pcm == null || pcm.length == 0) {
-            return new byte[0];
-        }
-        return convertPcmToWav(pcm);
-    }
-
-    private String buildOpeningQuestion(VoiceInterviewSessionEntity sessionEntity) {
-        String skillId = sessionEntity.getSkillId() != null ? sessionEntity.getSkillId() : "";
-        VoiceInterviewProperties.OpeningConfig opening = voiceInterviewProperties.getOpening();
-        Map<String, String> skillQuestions = opening != null ? opening.getSkillQuestions() : null;
-        if (skillQuestions != null) {
-            String bySkill = skillQuestions.get(skillId);
-            if (bySkill != null && !bySkill.isBlank()) {
-                return bySkill;
-            }
-        }
-        List<String> algorithmSkills = opening != null && opening.getAlgorithmSkills() != null
-            ? opening.getAlgorithmSkills()
-            : List.of();
-
-        if (algorithmSkills.contains(skillId)) {
-            String configured = opening != null ? opening.getAlgorithmQuestion() : null;
-            return configured != null && !configured.isBlank()
-                ? configured
-                : DEFAULT_OPENING_QUESTION_ALGORITHM;
-        }
-        String configured = opening != null ? opening.getBackendQuestion() : null;
-        return configured != null && !configured.isBlank()
-            ? configured
-            : DEFAULT_OPENING_QUESTION_BACKEND;
     }
 
     @Override
