@@ -403,7 +403,8 @@ public class KnowledgeBaseQueryService {
             RerankedDocument reranked = rerankResult.documents().get(i);
             Document doc = reranked.document();
             docs.add(new RagQueryExecution.RetrievedDoc(
-                i + 1, doc.getText(), extractScore(doc), reranked.rerankScore(), doc.getMetadata()));
+                i + 1, doc.getId(), doc.getText(), extractScore(doc), reranked.rerankScore(),
+                doc.getMetadata()));
         }
         SearchParams params = queryContext != null ? queryContext.searchParams()
             : new SearchParams(topkLong, minScoreDefault);
@@ -514,6 +515,7 @@ public class KnowledgeBaseQueryService {
             Document document = reranked.document();
             docs.add(new RagQueryExecution.RetrievedDoc(
                 i + 1,
+                document.getId(),
                 document.getText(),
                 extractScore(document),
                 reranked.rerankScore(),

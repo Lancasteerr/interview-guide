@@ -45,6 +45,7 @@ public record RagQueryExecution(
    * 检索片段快照。
    *
    * @param rank     片段排名（1 起）
+   * @param documentId 向量库文档 ID
    * @param text     片段全文
    * @param score    相似度分数（来自向量库 metadata，可能为 null）
    * @param rerankScore Rerank 相关度分数（未执行或回退时为 null）
@@ -52,6 +53,7 @@ public record RagQueryExecution(
    */
   public record RetrievedDoc(
       int rank,
+      String documentId,
       String text,
       Double score,
       Double rerankScore,

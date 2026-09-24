@@ -1,6 +1,7 @@
 package interview.guide.rag;
 
 import interview.guide.common.config.RerankProperties;
+import interview.guide.common.ai.rerank.RerankExecutionMode;
 import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.model.VectorStatus;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
@@ -37,6 +38,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.fail;
 
@@ -59,8 +61,10 @@ class RagEvaluationTest {
   private static final String DATASET = "rag-eval/dataset-v1.jsonl";
   private static final String REPORT_DIR =
       System.getProperty("ragEval.reportDir", "build/reports/rag-eval");
+  private static final RagEvalRunMode RUN_MODE = RagEvalRunMode.fromEnvironment();
   private static final String RUN_ID =
-      "rag-eval-" + System.getenv().getOrDefault("RAG_EVAL_RUN_TAG", "baseline") + "-" + System.currentTimeMillis();
+      "rag-eval-" + System.getenv().getOrDefault("RAG_EVAL_RUN_TAG", RUN_MODE.value())
+          + "-" + System.currentTimeMillis();
 
   private static String evalDbUrl;
   private static String sourceDbUrl;
@@ -138,10 +142,11 @@ class RagEvaluationTest {
       fail("RAG 测评在阶段 " + stage + " 失败：" + e.getMessage()
           + "，错误报告见 " + REPORT_DIR + "/" + RUN_ID + ".json");
     }
-    long harnessErrors = ((List<?>) report.getOrDefault("samples", List.of())).stream()
-        .filter(r -> "HARNESS_ERROR".equals(((Map<?, ?>) r).get("outcome"))).count();
-    if (harnessErrors > 0) {
-      fail(harnessErrors + " 个样本发生环境级错误，报告见 " + REPORT_DIR + "/" + RUN_ID + ".md");
+    long harnessErrors = countHarnessErrors(report);
+    long invalidPairs = countInvalidPairs(report);
+    if (harnessErrors > 0 || invalidPairs > 0) {
+      fail(harnessErrors + " 个样本发生环境级错误，" + invalidPairs
+          + " 个配对结果无效，报告见 " + REPORT_DIR + "/" + RUN_ID + ".md");
     }
   }
 
@@ -151,16 +156,183 @@ class RagEvaluationTest {
     stageRun("PROVIDER_SETUP", this::seedProvidersFromSourceDatabase);
     Map<String, Integer> chunkCounts = stage("VECTORIZATION", () -> vectorizeFixtures(fixtureContents));
 
+    if (RUN_MODE == RagEvalRunMode.PAIRED_RERANK) {
+      return executePairedEvaluation(samples, chunkCounts);
+    }
+
     List<Map<String, Object>> sampleResults = new ArrayList<>();
     List<Map<String, Object>> badCases = new ArrayList<>();
     List<Map<String, Object>> faithfulnessReview = new ArrayList<>();
+    RerankExecutionMode rerankMode = RUN_MODE == RagEvalRunMode.RERANK
+        ? RerankExecutionMode.FORCE_ENABLED : RerankExecutionMode.DISABLED;
     for (RagEvalSample sample : samples) {
-      sampleResults.add(evaluateSample(sample, faithfulnessReview, badCases));
+      sampleResults.add(evaluateSample(sample, faithfulnessReview, badCases,
+          rerankMode, true));
     }
     final List<Map<String, Object>> results = sampleResults;
     final List<Map<String, Object>> bad = badCases;
     final List<Map<String, Object>> faith = faithfulnessReview;
     return stage("REPORT", () -> buildReport(samples, results, bad, faith, chunkCounts));
+  }
+
+  private Map<String, Object> executePairedEvaluation(
+      List<RagEvalSample> samples, Map<String, Integer> chunkCounts) throws Exception {
+    if ("true".equalsIgnoreCase(System.getenv("APP_AI_RAG_REWRITE_ENABLED"))) {
+      throw new IllegalStateException(
+          "paired-rerank 要求 APP_AI_RAG_REWRITE_ENABLED=false，避免两次独立 Query 改写造成对照失真");
+    }
+
+    List<Map<String, Object>> vectorResults = new ArrayList<>();
+    List<Map<String, Object>> rerankResults = new ArrayList<>();
+    List<Map<String, Object>> pairedResults = new ArrayList<>();
+    List<Map<String, Object>> vectorBadCases = new ArrayList<>();
+    List<Map<String, Object>> rerankBadCases = new ArrayList<>();
+    List<Map<String, Object>> pairBadCases = new ArrayList<>();
+
+    for (RagEvalSample sample : samples) {
+      Map<String, Object> vector = evaluateSample(
+          sample, List.of(), vectorBadCases, RerankExecutionMode.DISABLED, false);
+      Map<String, Object> rerank = evaluateSample(
+          sample, List.of(), rerankBadCases, RerankExecutionMode.FORCE_ENABLED, false);
+      vectorResults.add(vector);
+      rerankResults.add(rerank);
+      pairedResults.add(pairSample(sample, vector, rerank, pairBadCases));
+    }
+
+    addArmToBadCases(vectorBadCases, "vectorOnly", pairBadCases);
+    addArmToBadCases(rerankBadCases, "vectorRerank", pairBadCases);
+    return stage("REPORT", () -> buildPairedReport(
+        samples, vectorResults, rerankResults, pairedResults, pairBadCases, chunkCounts));
+  }
+
+  private Map<String, Object> pairSample(
+      RagEvalSample sample,
+      Map<String, Object> vector,
+      Map<String, Object> rerank,
+      List<Map<String, Object>> pairBadCases) {
+    Map<String, Object> pair = new LinkedHashMap<>();
+    pair.put("id", sample.id());
+    pair.put("split", sample.split());
+    pair.put("tags", sample.tags());
+    pair.put("question", sample.question());
+    pair.put("shouldReject", sample.shouldReject());
+    pair.put("generationEvaluation", false);
+    pair.put("vectorOnly", vector);
+    pair.put("vectorRerank", rerank);
+
+    boolean queryContextSame = sameQueryContext(vector, rerank);
+    boolean candidateSetSame = candidateSet(vector).equals(candidateSet(rerank));
+    boolean rerankValid = validRerankResult(rerank);
+    List<String> errors = new ArrayList<>();
+    if (!queryContextSame) {
+      errors.add("QUERY_CONTEXT_MISMATCH");
+    }
+    if (!candidateSetSame) {
+      errors.add("CANDIDATE_SET_MISMATCH");
+    }
+    if (!rerankValid) {
+      errors.add("RERANK_NOT_EXECUTED");
+    }
+
+    pair.put("candidateSetSame", candidateSetSame);
+    pair.put("queryContextSame", queryContextSame);
+    pair.put("pairStatus", errors.isEmpty() ? "VALID" : "INVALID");
+    pair.put("pairErrors", errors);
+    if (!errors.isEmpty()) {
+      Map<String, Object> bad = new LinkedHashMap<>();
+      bad.put("id", sample.id());
+      bad.put("question", sample.question());
+      bad.put("reason", "PAIR_INVALID");
+      bad.put("detail", String.join(",", errors));
+      pairBadCases.add(bad);
+    }
+    return pair;
+  }
+
+  private boolean sameQueryContext(Map<String, Object> left, Map<String, Object> right) {
+    return Objects.equals(left.get("rewrittenQuestion"), right.get("rewrittenQuestion"))
+        && Objects.equals(left.get("attemptedQueries"), right.get("attemptedQueries"))
+        && Objects.equals(left.get("resolvedTopK"), right.get("resolvedTopK"))
+        && Objects.equals(left.get("resolvedMinScore"), right.get("resolvedMinScore"));
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<String> candidateSet(Map<String, Object> result) {
+    return ((List<Map<String, Object>>) result.getOrDefault("retrievedDocs", List.of())).stream()
+        .map(doc -> String.valueOf(doc.getOrDefault("documentId", ""))
+            + "#" + String.valueOf(doc.getOrDefault("contentHash", "")))
+        .sorted()
+        .toList();
+  }
+
+  private boolean validRerankResult(Map<String, Object> result) {
+    if ("HARNESS_ERROR".equals(result.get("outcome"))) {
+      return false;
+    }
+    String status = String.valueOf(result.get("rerankStatus"));
+    String reason = String.valueOf(result.get("rerankReason"));
+    return "SUCCESS".equals(status)
+        || ("SKIPPED".equals(status) && "insufficient_candidates".equals(reason));
+  }
+
+  private void addArmToBadCases(List<Map<String, Object>> source,
+                                String arm,
+                                List<Map<String, Object>> target) {
+    for (Map<String, Object> original : source) {
+      Map<String, Object> copy = new LinkedHashMap<>(original);
+      copy.put("arm", arm);
+      target.add(copy);
+    }
+  }
+
+  private Map<String, Object> buildPairedReport(
+      List<RagEvalSample> samples,
+      List<Map<String, Object>> vectorResults,
+      List<Map<String, Object>> rerankResults,
+      List<Map<String, Object>> pairedResults,
+      List<Map<String, Object>> badCases,
+      Map<String, Integer> chunkCounts) throws Exception {
+    Map<String, Object> report = new LinkedHashMap<>();
+    report.put("runId", RUN_ID);
+    report.put("timestamp", java.time.Instant.now().toString());
+    report.put("evaluationMode", RUN_MODE.value());
+    report.put("environment", buildEnvironment(chunkCounts));
+    report.put("metrics", new LinkedHashMap<>());
+    report.put("rejection", Map.of("status", "NOT_EVALUATED"));
+    report.put("badCases", badCases);
+    report.put("faithfulnessReview", List.of());
+    report.put("arms", Map.of(
+        "vectorOnly", Map.of("samples", vectorResults),
+        "vectorRerank", Map.of("samples", rerankResults)));
+    report.put("comparison", new LinkedHashMap<>());
+    report.put("samples", pairedResults);
+    report.put("datasetVersion", DATASET);
+    report.put("datasetSize", samples.size());
+    report.put("generationEvaluation", false);
+    report.put("rejectionEvaluation", "NOT_EVALUATED");
+    return report;
+  }
+
+  @SuppressWarnings("unchecked")
+  private long countHarnessErrors(Map<String, Object> report) {
+    if (RUN_MODE != RagEvalRunMode.PAIRED_RERANK) {
+      return ((List<Map<String, Object>>) report.getOrDefault("samples", List.of())).stream()
+          .filter(r -> "HARNESS_ERROR".equals(r.get("outcome"))).count();
+    }
+    Map<String, Map<String, Object>> arms = (Map<String, Map<String, Object>>) report
+        .getOrDefault("arms", Map.of());
+    return arms.values().stream()
+        .flatMap(arm -> ((List<Map<String, Object>>) arm.getOrDefault("samples", List.of())).stream())
+        .filter(r -> "HARNESS_ERROR".equals(r.get("outcome"))).count();
+  }
+
+  @SuppressWarnings("unchecked")
+  private long countInvalidPairs(Map<String, Object> report) {
+    if (RUN_MODE != RagEvalRunMode.PAIRED_RERANK) {
+      return 0;
+    }
+    return ((List<Map<String, Object>>) report.getOrDefault("samples", List.of())).stream()
+        .filter(r -> "INVALID".equals(r.get("pairStatus"))).count();
   }
 
   private interface StageSupplier<T> {
@@ -205,13 +377,23 @@ class RagEvaluationTest {
   private Map<String, Object> evaluateSample(RagEvalSample sample,
                                              List<Map<String, Object>> faithfulnessReview,
                                              List<Map<String, Object>> badCases) {
+    return evaluateSample(sample, faithfulnessReview, badCases,
+        RerankExecutionMode.CONFIGURED, true);
+  }
+
+  private Map<String, Object> evaluateSample(RagEvalSample sample,
+                                             List<Map<String, Object>> faithfulnessReview,
+                                             List<Map<String, Object>> badCases,
+                                             RerankExecutionMode rerankMode,
+                                             boolean allowGeneration) {
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("id", sample.id());
     result.put("split", sample.split());
     result.put("tags", sample.tags());
     result.put("question", sample.question());
     result.put("shouldReject", sample.shouldReject());
-    result.put("evaluateGeneration", sample.evaluateGeneration());
+    boolean evaluateGeneration = allowGeneration && sample.evaluateGeneration();
+    result.put("evaluateGeneration", evaluateGeneration);
     long totalStart = System.nanoTime();
     try {
       Long kbId = fixtureKbIds.get(sample.fixture());
@@ -221,7 +403,7 @@ class RagEvaluationTest {
       List<Message> history = toMessages(sample.history());
 
       RagQueryExecution execution;
-      if (sample.evaluateGeneration()) {
+      if (evaluateGeneration) {
         List<String> chunks = new ArrayList<>();
         List<RagQueryExecution> trace = new ArrayList<>();
         queryService
@@ -234,7 +416,8 @@ class RagEvaluationTest {
                 String.join("", chunks), "NO_RESULT")
             : trace.getFirst();
       } else {
-        execution = queryService.retrieveOnly(List.of(kbId), sample.question(), history);
+        execution = queryService.retrieveOnly(
+            List.of(kbId), sample.question(), history, rerankMode);
       }
 
       List<String> hitEvidenceIds = new ArrayList<>();
@@ -259,7 +442,7 @@ class RagEvaluationTest {
           : (double) hitEvidenceIds.size() / sample.expectedEvidence().size();
       boolean predictedReject = "NO_RESULT".equals(execution.outcome());
 
-      if (sample.evaluateGeneration() && !sample.shouldReject()) {
+      if (evaluateGeneration && !sample.shouldReject()) {
         faithfulnessReview.add(faithfulnessEntry(sample, execution));
       }
 
@@ -300,6 +483,7 @@ class RagEvaluationTest {
   private Map<String, Object> retrievedDocEntry(RagQueryExecution.RetrievedDoc doc) {
     Map<String, Object> entry = new LinkedHashMap<>();
     entry.put("rank", doc.rank());
+    entry.put("documentId", doc.documentId());
     entry.put("score", doc.score() != null ? doc.score() : -1.0);
     entry.put("rerankScore", doc.rerankScore());
     entry.put("excerpt", doc.text() != null && doc.text().length() > 200
@@ -382,6 +566,7 @@ class RagEvaluationTest {
     Map<String, Object> report = new LinkedHashMap<>();
     report.put("runId", RUN_ID);
     report.put("timestamp", java.time.Instant.now().toString());
+    report.put("evaluationMode", RUN_MODE.value());
     report.put("environment", buildEnvironment(chunkCounts));
     report.put("metrics", buildMetrics(sampleResults));
     report.put("rejection", RagEvalMetrics.rejectionMetrics(sampleResults));
