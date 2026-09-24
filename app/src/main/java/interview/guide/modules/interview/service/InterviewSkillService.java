@@ -20,15 +20,9 @@ import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -53,10 +47,6 @@ public class InterviewSkillService {
     private static final String SKILL_META_FILE = "skill.meta.yml";
     private static final String JD_PARSE_SYSTEM_PROMPT_PATH = "classpath:prompts/interview/jd-parse-system.st";
 
-    private static final int MAX_REFERENCE_SECTION_CHARS = 12000;
-    private static final int MAX_EVALUATION_REFERENCE_SECTION_CHARS = 6000;
-    private static final int MAX_SINGLE_REFERENCE_CHARS = 3000;
-
     private final LlmProviderRegistry llmProviderRegistry;
     private final StructuredOutputInvoker structuredOutputInvoker;
     private final BeanOutputConverter<CategoryListDTO> jdOutputConverter;
@@ -68,16 +58,9 @@ public class InterviewSkillService {
     /** 预设 Skill 注册表，启动时从 classpath:skills/{skillId}/SKILL.md 加载 */
     private final Map<String, InterviewSkillProperties.SkillDefinition> presetRegistry = new TreeMap<>();
 
-    /** 参考内容缓存（classpath 资源不可变，加载一次后复用） */
-    private final Map<String, String> referenceCache = new ConcurrentHashMap<>();
-
-    /** 全局 category key → (ref文件名, 是否shared) 映射，启动时构建，之后只读 */
-    private final Map<String, RefMapping> categoryRefIndex = new HashMap<>();
-
     /** JD 解析用的参考文件清单 Markdown 表格，启动时生成一次 */
     private String cachedReferenceFileList;
-
-    record RefMapping(String ref, boolean shared, String sourceSkillId) {}
+    private final InterviewSkillReferenceService referenceService;
 
     public InterviewSkillService(LlmProviderRegistry llmProviderRegistry,
                                  StructuredOutputInvoker structuredOutputInvoker,
@@ -87,6 +70,7 @@ public class InterviewSkillService {
         this.structuredOutputInvoker = structuredOutputInvoker;
         this.resourceLoader = resourceLoader;
         this.promptSanitizer = promptSanitizer;
+        this.referenceService = new InterviewSkillReferenceService(resourceLoader, presetRegistry);
         this.jdOutputConverter = new BeanOutputConverter<>(CategoryListDTO.class) {};
         this.jdSystemPromptTemplate = new PromptTemplate(loadClasspathPrompt(JD_PARSE_SYSTEM_PROMPT_PATH));
     }
@@ -115,23 +99,8 @@ public class InterviewSkillService {
 
         log.info("共加载 {} 个预设 Skill", presetRegistry.size());
 
-        buildCategoryRefIndex();
-        cachedReferenceFileList = buildReferenceFileList();
-    }
-
-    private void buildCategoryRefIndex() {
-        categoryRefIndex.clear();
-        for (var entry : presetRegistry.entrySet()) {
-            InterviewSkillProperties.SkillDefinition def = entry.getValue();
-            if (def.getCategories() == null) continue;
-            for (InterviewSkillProperties.CategoryDef cat : def.getCategories()) {
-                if (cat.getRef() != null && !cat.getRef().isBlank() && cat.getKey() != null) {
-                    categoryRefIndex.putIfAbsent(cat.getKey(),
-                        new RefMapping(cat.getRef(), Boolean.TRUE.equals(cat.getShared()), entry.getKey()));
-                }
-            }
-        }
-        log.info("构建 category→reference 映射: {} 个条目", categoryRefIndex.size());
+        referenceService.rebuildIndex();
+        cachedReferenceFileList = referenceService.buildReferenceFileList();
     }
 
     public List<SkillDTO> getAllSkills() {
@@ -158,7 +127,7 @@ public class InterviewSkillService {
             .map(cat -> {
                 String safeKey = sanitizeCategoryKey(cat.key());
                 String safeLabel = sanitizeCategoryLabel(cat.label());
-                RefMapping refMapping = categoryRefIndex.get(safeKey);
+                InterviewSkillReferenceService.RefMapping refMapping = referenceService.findMapping(safeKey);
                 if (refMapping != null) {
                     if (!refMapping.ref().equals(cat.ref())
                         || refMapping.shared() != Boolean.TRUE.equals(cat.shared())) {
@@ -217,36 +186,6 @@ public class InterviewSkillService {
         }
     }
 
-    private String buildReferenceFileList() {
-        // 收集所有去重的参考文件（文件名 → Markdown 表格行）
-        Map<String, String> refDescriptions = new LinkedHashMap<>();
-        for (var entry : presetRegistry.entrySet()) {
-            String skillName = entry.getValue().getDisplayName() != null
-                ? entry.getValue().getDisplayName() : entry.getValue().getName();
-            if (entry.getValue().getCategories() == null) continue;
-            for (InterviewSkillProperties.CategoryDef cat : entry.getValue().getCategories()) {
-                if (cat.getRef() != null && !cat.getRef().isBlank()) {
-                    refDescriptions.putIfAbsent(cat.getRef(),
-                        "| " + cat.getRef()
-                            + " | " + (Boolean.TRUE.equals(cat.getShared()) ? "shared" : "skill-local")
-                            + " | " + skillName
-                            + " | " + cat.getLabel() + " |\n");
-                }
-            }
-        }
-
-        if (refDescriptions.isEmpty()) {
-            return "（无可用参考文件）";
-        }
-
-        StringBuilder sb = new StringBuilder("| 文件名 | 范围 | 来源 Skill | 覆盖内容 |\n");
-        sb.append("|--------|------|-------------|----------|\n");
-        for (String row : refDescriptions.values()) {
-            sb.append(row);
-        }
-        return sb.toString();
-    }
-
     public Map<String, Integer> calculateAllocation(String skillId, int totalQuestions) {
         return calculateAllocation(getSkill(skillId).categories(), totalQuestions);
     }
@@ -260,80 +199,21 @@ public class InterviewSkillService {
     }
 
     public String buildReferenceSection(SkillDTO skill, Map<String, Integer> allocation) {
-        return buildReferenceSectionInternal(
-            skill,
-            category -> allocation.getOrDefault(category.key(), 0) > 0,
-            MAX_REFERENCE_SECTION_CHARS
-        );
+        return referenceService.buildReferenceSection(skill, allocation);
     }
 
     /**
      * 评估阶段参考基线：不限制题量分配，覆盖该 skill 下所有配置了 reference 的分类。
      */
     public String buildEvaluationReferenceSection(String skillId) {
-        SkillDTO skill = getSkill(skillId);
-        return buildReferenceSectionInternal(
-            skill,
-            category -> true,
-            MAX_EVALUATION_REFERENCE_SECTION_CHARS
-        );
+        return referenceService.buildEvaluationReferenceSection(skillId, this::getSkill);
     }
 
     /**
      * 安全版本的评估参考基线：skillId 为空或加载失败时返回空字符串，不抛异常。
      */
     public String buildEvaluationReferenceSectionSafe(String skillId) {
-        if (skillId == null || skillId.isBlank()) {
-            return "";
-        }
-        try {
-            return buildEvaluationReferenceSection(skillId);
-        } catch (Exception e) {
-            log.warn("加载评估参考基线失败，降级为无参考: skillId={}, error={}", skillId, e.getMessage());
-            return "";
-        }
-    }
-
-    private String buildReferenceSectionInternal(SkillDTO skill,
-                                                 Predicate<SkillCategoryDTO> categoryFilter,
-                                                 int maxChars) {
-        StringBuilder sb = new StringBuilder();
-
-        for (SkillCategoryDTO category : skill.categories()) {
-            if (!categoryFilter.test(category)) {
-                continue;
-            }
-            if (category.ref() == null || category.ref().isBlank()) {
-                continue;
-            }
-
-            // custom 模式下非 shared 的 ref 需要查原始 skillId 拼路径
-            String effectiveSkillId = skill.id();
-            if (CUSTOM_SKILL_ID.equals(skill.id()) && !category.shared() && category.ref() != null) {
-                RefMapping mapping = categoryRefIndex.get(category.key());
-                if (mapping != null) {
-                    effectiveSkillId = mapping.sourceSkillId();
-                }
-            }
-            String referenceContent = loadReferenceContent(effectiveSkillId, category.ref(), category.shared());
-            if (referenceContent.isBlank()) {
-                continue;
-            }
-
-            if (!sb.isEmpty()) {
-                sb.append("\n\n");
-            }
-            sb.append("### ").append(category.label()).append(" (").append(category.key()).append(")\n");
-            sb.append(referenceContent);
-
-            if (sb.length() >= maxChars) {
-                sb.setLength(maxChars);
-                sb.append("\n...（references 已截断）");
-                break;
-            }
-        }
-
-        return sb.isEmpty() ? "未配置 references。" : sb.toString();
+        return referenceService.buildEvaluationReferenceSectionSafe(skillId, this::getSkill);
     }
 
     private String loadClasspathPrompt(String path) throws IOException {
@@ -410,83 +290,6 @@ public class InterviewSkillService {
         } catch (IOException e) {
             return null;
         }
-    }
-
-    private String loadReferenceContent(String skillId, String referenceFile, boolean shared) {
-        if (!isSafeReferencePath(referenceFile)) {
-            log.warn("忽略不安全的 reference 路径: skillId={}, ref={}", skillId, referenceFile);
-            return "";
-        }
-
-        List<String> candidateLocations = resolveReferenceLocations(skillId, referenceFile, shared);
-        for (String location : candidateLocations) {
-            String content = referenceCache.computeIfAbsent(location, this::readReferenceContent);
-            if (!content.isBlank()) {
-                return content;
-            }
-        }
-
-        log.warn("未找到 reference: skillId={}, ref={}, shared={}, locations={}",
-            skillId, referenceFile, shared, candidateLocations);
-        return "";
-    }
-
-    private List<String> resolveReferenceLocations(String skillId, String referenceFile, boolean shared) {
-        LinkedHashSet<String> locations = new LinkedHashSet<>();
-        if (shared) {
-            locations.add(buildSharedReferenceLocation(referenceFile));
-        }
-
-        addSkillReferenceLocations(locations, skillId, referenceFile);
-
-        if (!shared) {
-            locations.add(buildSharedReferenceLocation(referenceFile));
-        }
-
-        if (CUSTOM_SKILL_ID.equals(skillId) || shared) {
-            for (String presetSkillId : presetRegistry.keySet()) {
-                addSkillReferenceLocations(locations, presetSkillId, referenceFile);
-            }
-        }
-
-        return List.copyOf(locations);
-    }
-
-    private void addSkillReferenceLocations(LinkedHashSet<String> locations, String skillId, String referenceFile) {
-        if (skillId == null || skillId.isBlank() || CUSTOM_SKILL_ID.equals(skillId)) {
-            return;
-        }
-        locations.add("classpath:skills/" + skillId + "/references/" + referenceFile);
-        locations.add("classpath:skills/" + skillId + "/" + referenceFile);
-    }
-
-    private String buildSharedReferenceLocation(String referenceFile) {
-        return "classpath:skills/_shared/references/" + referenceFile;
-    }
-
-    private String readReferenceContent(String location) {
-        Resource resource = resourceLoader.getResource(location);
-        if (!resource.exists()) {
-            return "";
-        }
-
-        try {
-            String content = resource.getContentAsString(StandardCharsets.UTF_8).trim();
-            if (content.length() > MAX_SINGLE_REFERENCE_CHARS) {
-                return content.substring(0, MAX_SINGLE_REFERENCE_CHARS) + "\n...（单文件内容已截断）";
-            }
-            return content;
-        } catch (IOException e) {
-            log.warn("读取 reference 失败: location={}", location, e);
-            return "";
-        }
-    }
-
-    private boolean isSafeReferencePath(String referenceFile) {
-        return !referenceFile.contains("..")
-            && !referenceFile.startsWith("/")
-            && !referenceFile.startsWith("\\")
-            && referenceFile.matches("[a-zA-Z0-9._/-]+");
     }
 
     /**
