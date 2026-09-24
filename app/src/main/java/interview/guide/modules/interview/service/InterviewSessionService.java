@@ -4,7 +4,6 @@ import interview.guide.common.constant.CommonConstants.InterviewDefaults;
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
-import interview.guide.common.model.AsyncTaskStatus;
 import interview.guide.infrastructure.redis.InterviewSessionCache;
 import interview.guide.infrastructure.redis.InterviewSessionCache.CachedSession;
 import interview.guide.infrastructure.redis.RedisService;
@@ -48,10 +47,10 @@ public class InterviewSessionService {
     private final InterviewPersistenceService persistenceService;
     private final InterviewSessionCache sessionCache;
     private final ObjectMapper objectMapper;
-    private final EvaluateStreamProducer evaluateStreamProducer;
     private final LlmProviderRegistry llmProviderRegistry;
     private final RedisService redisService;
     private final InterviewSessionStateService stateService;
+    private final InterviewAnswerSubmissionService answerSubmissionService;
 
     public InterviewSessionService(
         InterviewQuestionService questionService,
@@ -71,7 +70,14 @@ public class InterviewSessionService {
             evaluateStreamProducer,
             llmProviderRegistry,
             redisService,
-            new InterviewSessionStateService(persistenceService, sessionCache, objectMapper)
+            new InterviewSessionStateService(persistenceService, sessionCache, objectMapper),
+            new InterviewAnswerSubmissionService(
+                persistenceService,
+                sessionCache,
+                objectMapper,
+                evaluateStreamProducer,
+                new InterviewSessionStateService(persistenceService, sessionCache, objectMapper)
+            )
         );
     }
 
@@ -85,16 +91,17 @@ public class InterviewSessionService {
         EvaluateStreamProducer evaluateStreamProducer,
         LlmProviderRegistry llmProviderRegistry,
         RedisService redisService,
-        InterviewSessionStateService stateService) {
+        InterviewSessionStateService stateService,
+        InterviewAnswerSubmissionService answerSubmissionService) {
         this.questionService = questionService;
         this.evaluationService = evaluationService;
         this.persistenceService = persistenceService;
         this.sessionCache = sessionCache;
         this.objectMapper = objectMapper;
-        this.evaluateStreamProducer = evaluateStreamProducer;
         this.llmProviderRegistry = llmProviderRegistry;
         this.redisService = redisService;
         this.stateService = stateService;
+        this.answerSubmissionService = answerSubmissionService;
     }
 
     /**
@@ -344,147 +351,21 @@ public class InterviewSessionService {
      * 如果是最后一题，自动触发异步评估
      */
     public SubmitAnswerResponse submitAnswer(SubmitAnswerRequest request) {
-        CachedSession session = stateService.getOrRestoreSession(request.sessionId());
-        List<InterviewQuestionDTO> questions = session.getQuestions(objectMapper);
-
-        int index = request.questionIndex();
-        if (index < 0 || index >= questions.size()) {
-            throw new BusinessException(ErrorCode.INTERVIEW_QUESTION_NOT_FOUND, "无效的问题索引: " + index);
-        }
-
-        // 更新问题答案
-        InterviewQuestionDTO question = questions.get(index);
-        InterviewQuestionDTO answeredQuestion = question.withAnswer(request.answer());
-        questions.set(index, answeredQuestion);
-
-        // 移动到下一题
-        int newIndex = index + 1;
-
-        // 检查是否全部完成
-        boolean hasNextQuestion = newIndex < questions.size();
-        InterviewQuestionDTO nextQuestion = hasNextQuestion ? questions.get(newIndex) : null;
-
-        SessionStatus newStatus = hasNextQuestion ? SessionStatus.IN_PROGRESS : SessionStatus.COMPLETED;
-
-        persistSubmittedAnswer(request, index, question, newIndex, newStatus);
-
-        // 更新 Redis 缓存。DB 已经持久化成功，缓存失败时可由后续读取从数据库恢复。
-        sessionCache.updateQuestions(request.sessionId(), questions);
-        sessionCache.updateCurrentIndex(request.sessionId(), newIndex);
-        if (newStatus == SessionStatus.COMPLETED) {
-            sessionCache.updateSessionStatus(request.sessionId(), SessionStatus.COMPLETED);
-            enqueueEvaluationTask(request.sessionId());
-        }
-
-        log.info("会话 {} 提交答案: 问题{}, 剩余{}题",
-            request.sessionId(), index, questions.size() - newIndex);
-
-        return new SubmitAnswerResponse(
-            hasNextQuestion,
-            nextQuestion,
-            newIndex,
-            questions.size()
-        );
-    }
-
-    private void persistSubmittedAnswer(SubmitAnswerRequest request, int index,
-                                        InterviewQuestionDTO question, int newIndex,
-                                        SessionStatus newStatus) {
-        try {
-            persistenceService.saveAnswer(
-                request.sessionId(), index,
-                question.question(), question.category(),
-                request.answer(), 0, null  // 分数在报告生成时更新
-            );
-            persistenceService.updateCurrentQuestionIndex(request.sessionId(), newIndex);
-            persistenceService.updateSessionStatus(request.sessionId(),
-                newStatus == SessionStatus.COMPLETED
-                    ? InterviewSessionEntity.SessionStatus.COMPLETED
-                    : InterviewSessionEntity.SessionStatus.IN_PROGRESS);
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("保存答案到数据库失败: sessionId={}, questionIndex={}",
-                request.sessionId(), index, e);
-            throw new BusinessException(ErrorCode.INTERVIEW_ANSWER_SAVE_FAILED,
-                "保存答案失败，请稍后重试");
-        }
-    }
-
-    private void enqueueEvaluationTask(String sessionId) {
-        persistenceService.updateEvaluateStatus(sessionId, AsyncTaskStatus.PENDING, null);
-        evaluateStreamProducer.sendEvaluateTask(sessionId);
-        log.info("会话 {} 已完成所有问题，评估任务已入队", sessionId);
+        return answerSubmissionService.submitAnswer(request);
     }
 
     /**
      * 暂存答案（不进入下一题）
      */
     public void saveAnswer(SubmitAnswerRequest request) {
-        CachedSession session = stateService.getOrRestoreSession(request.sessionId());
-        List<InterviewQuestionDTO> questions = session.getQuestions(objectMapper);
-
-        int index = request.questionIndex();
-        if (index < 0 || index >= questions.size()) {
-            throw new BusinessException(ErrorCode.INTERVIEW_QUESTION_NOT_FOUND, "无效的问题索引: " + index);
-        }
-
-        // 更新问题答案
-        InterviewQuestionDTO question = questions.get(index);
-        InterviewQuestionDTO answeredQuestion = question.withAnswer(request.answer());
-        questions.set(index, answeredQuestion);
-
-        // 更新 Redis 缓存
-        sessionCache.updateQuestions(request.sessionId(), questions);
-
-        // 更新状态为进行中
-        if (session.getStatus() == SessionStatus.CREATED) {
-            sessionCache.updateSessionStatus(request.sessionId(), SessionStatus.IN_PROGRESS);
-        }
-
-        // 保存答案到数据库（不更新currentIndex）
-        try {
-            persistenceService.saveAnswer(
-                request.sessionId(), index,
-                question.question(), question.category(),
-                request.answer(), 0, null
-            );
-            persistenceService.updateSessionStatus(request.sessionId(),
-                InterviewSessionEntity.SessionStatus.IN_PROGRESS);
-        } catch (Exception e) {
-            log.warn("暂存答案到数据库失败: {}", e.getMessage());
-        }
-
-        log.info("会话 {} 暂存答案: 问题{}", request.sessionId(), index);
+        answerSubmissionService.saveAnswer(request);
     }
 
     /**
      * 提前交卷（触发异步评估）
      */
     public void completeInterview(String sessionId) {
-        CachedSession session = stateService.getOrRestoreSession(sessionId);
-
-        if (session.getStatus() == SessionStatus.COMPLETED || session.getStatus() == SessionStatus.EVALUATED) {
-            throw new BusinessException(ErrorCode.INTERVIEW_ALREADY_COMPLETED);
-        }
-
-        // 更新 Redis 缓存
-        sessionCache.updateSessionStatus(sessionId, SessionStatus.COMPLETED);
-
-        // 更新数据库状态
-        try {
-            persistenceService.updateSessionStatus(sessionId,
-                InterviewSessionEntity.SessionStatus.COMPLETED);
-            // 设置评估状态为 PENDING
-            persistenceService.updateEvaluateStatus(sessionId, AsyncTaskStatus.PENDING, null);
-        } catch (Exception e) {
-            log.warn("更新会话状态失败: {}", e.getMessage());
-        }
-
-        // 发送评估任务到 Redis Stream
-        evaluateStreamProducer.sendEvaluateTask(sessionId);
-
-        log.info("会话 {} 提前交卷，评估任务已入队", sessionId);
+        answerSubmissionService.completeInterview(sessionId);
     }
 
     /**
