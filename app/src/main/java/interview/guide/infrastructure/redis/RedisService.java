@@ -2,11 +2,8 @@ package interview.guide.infrastructure.redis;
 
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RAtomicLong;
-import org.redisson.api.RKeys;
-import org.redisson.api.RList;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
-import org.redisson.api.options.KeysScanOptions;
 import org.redisson.api.stream.StreamMessageId;
 import org.springframework.stereotype.Service;
 
@@ -37,12 +34,14 @@ public class RedisService {
     private final RedisDataAdapter dataAdapter;
     private final RedisLockAdapter lockAdapter;
     private final RedisStreamAdapter streamAdapter;
+    private final RedisCollectionAdapter collectionAdapter;
 
     public RedisService(RedissonClient redissonClient) {
         this.redissonClient = redissonClient;
         this.dataAdapter = new RedisDataAdapter(redissonClient);
         this.lockAdapter = new RedisLockAdapter(redissonClient);
         this.streamAdapter = new RedisStreamAdapter(redissonClient);
+        this.collectionAdapter = new RedisCollectionAdapter(redissonClient);
     }
 
     // ==================== 基础键值操作 ====================
@@ -337,21 +336,21 @@ public class RedisService {
      * 获取原子计数器
      */
     public RAtomicLong getAtomicLong(String key) {
-        return redissonClient.getAtomicLong(key);
+        return collectionAdapter.getAtomicLong(key);
     }
 
     /**
      * 自增并返回
      */
     public long increment(String key) {
-        return redissonClient.getAtomicLong(key).incrementAndGet();
+        return collectionAdapter.increment(key);
     }
 
     /**
      * 自减并返回
      */
     public long decrement(String key) {
-        return redissonClient.getAtomicLong(key).decrementAndGet();
+        return collectionAdapter.decrement(key);
     }
 
     // ==================== 列表操作 ====================
@@ -360,16 +359,14 @@ public class RedisService {
      * 从列表右侧添加元素
      */
     public <T> void listRightPush(String key, T value) {
-        RList<T> list = redissonClient.getList(key);
-        list.add(value);
+        collectionAdapter.listRightPush(key, value);
     }
 
     /**
      * 获取列表所有元素
      */
     public <T> List<T> listGetAll(String key) {
-        RList<T> list = redissonClient.getList(key);
-        return list.readAll();
+        return collectionAdapter.listGetAll(key);
     }
 
     // ==================== 工具方法 ====================
@@ -385,15 +382,13 @@ public class RedisService {
      * 按模式删除键
      */
     public long deleteByPattern(String pattern) {
-        RKeys keys = redissonClient.getKeys();
-        return keys.deleteByPattern(pattern);
+        return collectionAdapter.deleteByPattern(pattern);
     }
 
     /**
      * 按模式查找键
      */
     public Iterable<String> findKeysByPattern(String pattern) {
-        RKeys keys = redissonClient.getKeys();
-        return keys.getKeys(KeysScanOptions.defaults().pattern(pattern));
+        return collectionAdapter.findKeysByPattern(pattern);
     }
 }
