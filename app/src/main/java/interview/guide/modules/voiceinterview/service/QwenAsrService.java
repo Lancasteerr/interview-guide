@@ -18,10 +18,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -89,19 +86,7 @@ public class QwenAsrService {
         this.turnDetectionSilenceDurationMs = configuration.turnDetectionSilenceDurationMs();
     }
 
-    /**
-     * Active ASR sessions map.
-     * Key: session ID (user-provided identifier)
-     * Value: AsrSession containing the OmniRealtimeConversation instance and callbacks
-     */
-    private final Map<String, AsrSession> sessions = new ConcurrentHashMap<>();
-
-    /** 防止同一 interview sessionId 上并发 stop/start；并在重连时与 {@link #sessionLocks} 配合 */
-    private final ConcurrentHashMap<String, Object> sessionLocks = new ConcurrentHashMap<>();
-
-    private Object lockForSession(String sessionId) {
-        return sessionLocks.computeIfAbsent(sessionId, k -> new Object());
-    }
+    private final QwenAsrSessionManager sessionManager = new QwenAsrSessionManager();
 
     /**
      * Initialize the ASR service.
@@ -157,7 +142,7 @@ public class QwenAsrService {
             Consumer<String> onPartial,
             Runnable onReady,
             Consumer<Throwable> onError) {
-        synchronized (lockForSession(sessionId)) {
+        synchronized (sessionManager.lockFor(sessionId)) {
             startTranscriptionLocked(sessionId, onFinal, onPartial, onReady, onError);
         }
     }
@@ -179,7 +164,7 @@ public class QwenAsrService {
             Consumer<String> onPartial,
             Runnable onReady,
             Consumer<Throwable> onError) {
-        synchronized (lockForSession(sessionId)) {
+        synchronized (sessionManager.lockFor(sessionId)) {
             log.info("[Session: {}] Restarting DashScope ASR (stop + start)", sessionId);
             stopTranscription(sessionId);
             try {
@@ -193,7 +178,7 @@ public class QwenAsrService {
             for (int attempt = 0; attempt < 10; attempt++) {
                 try {
                     Thread.sleep(100);
-                    AsrSession newSession = sessions.get(sessionId);
+                    QwenAsrSessionManager.Session newSession = sessionManager.get(sessionId);
                     if (newSession != null && newSession.isReady()) {
                         log.info("[Session: {}] ASR reconnection verified successfully", sessionId);
                         return;
@@ -215,7 +200,7 @@ public class QwenAsrService {
             Consumer<String> onPartial,
             Runnable onReady,
             Consumer<Throwable> onError) {
-        if (sessions.containsKey(sessionId)) {
+        if (sessionManager.contains(sessionId)) {
             throw new IllegalStateException("Session already exists: " + sessionId);
         }
 
@@ -247,22 +232,20 @@ public class QwenAsrService {
                     log.warn("[Session: {}] DashScope ASR WebSocket closed - code: {}, reason: {}",
                             sessionId, code, reason);
                     // 仅移除与本次连接对应的会话，避免重连后旧 onClose 误删新连接（典型「第三轮起无声」根因）
-                    sessions.compute(sessionId, (id, existing) -> {
-                        if (existing != null && closed != null && existing.getConversation() == closed) {
-                            return null;
-                        }
-                        return existing;
-                    });
+                    if (closed != null) {
+                        sessionManager.removeIfSameConversation(sessionId, closed);
+                    }
                 }
             };
 
             // Create OmniRealtimeConversation instance
             OmniRealtimeConversation conversation = new OmniRealtimeConversation(param, callback);
             conversationRef.set(conversation);
-            AsrSession asrSession = new AsrSession(conversation, onFinal, onPartial, onError);
+            QwenAsrSessionManager.Session asrSession = new QwenAsrSessionManager.Session(
+                conversation, onFinal, onPartial, onError);
 
             // Store session in map BEFORE connecting to ensure hasActiveSession() returns true
-            sessions.put(sessionId, asrSession);
+            sessionManager.put(sessionId, asrSession);
 
             // Connect to server asynchronously (non-blocking)
             Thread connectionThread = new Thread(() -> {
@@ -286,7 +269,7 @@ public class QwenAsrService {
 
                     // Update session with configuration
                     conversation.updateSession(config);
-                    if (sessions.get(sessionId) != asrSession) {
+                    if (sessionManager.get(sessionId) != asrSession) {
                         log.debug("[Session: {}] Ignoring stale ASR connection ready callback", sessionId);
                         return;
                     }
@@ -299,12 +282,7 @@ public class QwenAsrService {
 
                 } catch (Exception e) {
                     log.error("[Session: {}] Failed to establish connection", sessionId, e);
-                    sessions.compute(sessionId, (id, existing) -> {
-                        if (existing != null && existing.getConversation() == conversation) {
-                            return null;
-                        }
-                        return existing;
-                    });
+                    sessionManager.removeIfSameConversation(sessionId, conversation);
                     onError.accept(e);
                 }
             }, "ASR-Connection-" + sessionId);
@@ -314,7 +292,7 @@ public class QwenAsrService {
         } catch (Exception e) {
             String errorMsg = "Failed to create transcription session: " + sessionId;
             log.error(errorMsg, e);
-            sessions.remove(sessionId);
+            sessionManager.remove(sessionId);
             onError.accept(new IllegalStateException(errorMsg, e));
             throw new IllegalStateException(errorMsg, e);
         }
@@ -334,7 +312,7 @@ public class QwenAsrService {
      * @throws IllegalStateException if session does not exist
      */
     public void sendAudio(String sessionId, byte[] audioData) {
-        AsrSession session = sessions.get(sessionId);
+        QwenAsrSessionManager.Session session = sessionManager.get(sessionId);
         if (session == null) {
             throw new IllegalStateException("No active session found: " + sessionId);
         }
@@ -373,10 +351,10 @@ public class QwenAsrService {
      * @param sessionId Session identifier
      */
     public void stopTranscription(String sessionId) {
-        synchronized (lockForSession(sessionId)) {
-            AsrSession session = sessions.remove(sessionId);
+        synchronized (sessionManager.lockFor(sessionId)) {
+            QwenAsrSessionManager.Session session = sessionManager.remove(sessionId);
             // Clean up the session lock to prevent memory leak
-            sessionLocks.remove(sessionId);
+            sessionManager.removeLock(sessionId);
             if (session == null) {
                 log.warn("[Session: {}] Attempted to stop non-existent session", sessionId);
                 return;
@@ -407,11 +385,11 @@ public class QwenAsrService {
      * @return true if session exists and is active, false otherwise
      */
     public boolean hasActiveSession(String sessionId) {
-        return sessions.containsKey(sessionId);
+        return sessionManager.contains(sessionId);
     }
 
     public boolean isReady(String sessionId) {
-        AsrSession session = sessions.get(sessionId);
+        QwenAsrSessionManager.Session session = sessionManager.get(sessionId);
         return session != null && session.isReady();
     }
 
@@ -423,10 +401,11 @@ public class QwenAsrService {
      */
     @PreDestroy
     public void destroy() {
-        log.info("Destroying QwenAsrService with {} active sessions", sessions.size());
+        log.info("Destroying QwenAsrService with {} active sessions", sessionManager.size());
 
         // Stop all active sessions
-        sessions.keySet().forEach(sessionId -> {
+        Set<String> activeSessionIds = sessionManager.sessionIds();
+        activeSessionIds.forEach(sessionId -> {
             try {
                 stopTranscription(sessionId);
             } catch (Exception e) {
@@ -434,7 +413,7 @@ public class QwenAsrService {
             }
         });
 
-        sessions.clear();
+        sessionManager.clear();
         log.info("QwenAsrService destroyed successfully");
     }
 
@@ -599,48 +578,6 @@ public class QwenAsrService {
             }
         }
         return null;
-    }
-
-    /**
-     * Internal class to hold session data.
-     */
-    private static class AsrSession {
-        private final OmniRealtimeConversation conversation;
-        private final Consumer<String> onFinal;
-        private final Consumer<String> onPartial;
-        private final Consumer<Throwable> onError;
-        private final CountDownLatch readyLatch = new CountDownLatch(1);
-
-        AsrSession(
-                OmniRealtimeConversation conversation,
-                Consumer<String> onFinal,
-                Consumer<String> onPartial,
-                Consumer<Throwable> onError) {
-            this.conversation = conversation;
-            this.onFinal = onFinal;
-            this.onPartial = onPartial;
-            this.onError = onError;
-        }
-
-        public OmniRealtimeConversation getConversation() {
-            return conversation;
-        }
-
-        public Consumer<Throwable> getOnError() {
-            return onError;
-        }
-
-        void markReady() {
-            readyLatch.countDown();
-        }
-
-        boolean isReady() {
-            return readyLatch.getCount() == 0;
-        }
-
-        boolean awaitReady(long timeoutMs) throws InterruptedException {
-            return readyLatch.await(timeoutMs, TimeUnit.MILLISECONDS);
-        }
     }
 
     // Setter methods for configuration (used by Spring @Value injection or tests)
