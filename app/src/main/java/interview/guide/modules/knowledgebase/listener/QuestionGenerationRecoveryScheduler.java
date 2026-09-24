@@ -3,7 +3,7 @@ package interview.guide.modules.knowledgebase.listener;
 import interview.guide.modules.knowledgebase.entity.KnowledgeBaseEntity;
 import interview.guide.modules.knowledgebase.model.QuestionGenStatus;
 import interview.guide.modules.knowledgebase.repository.KnowledgeBaseRepository;
-import interview.guide.modules.knowledgebase.service.QuestionGenerationStateService;
+import interview.guide.modules.knowledgebase.service.question.QuestionGenerationStateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

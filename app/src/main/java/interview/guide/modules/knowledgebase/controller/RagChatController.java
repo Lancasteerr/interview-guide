@@ -8,7 +8,7 @@ import interview.guide.modules.knowledgebase.dto.RagChatDTO.SessionDetailDTO;
 import interview.guide.modules.knowledgebase.dto.RagChatDTO.SessionListItemDTO;
 import interview.guide.modules.knowledgebase.dto.RagChatDTO.UpdateKnowledgeBasesRequest;
 import interview.guide.modules.knowledgebase.dto.RagChatDTO.UpdateTitleRequest;
-import interview.guide.modules.knowledgebase.service.RagChatSessionService;
+import interview.guide.modules.knowledgebase.service.rag.RagChatSessionService;
 import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;

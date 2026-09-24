@@ -3,7 +3,7 @@ package interview.guide.modules.knowledgebase.listener;
 import interview.guide.common.async.AbstractStreamProducer;
 import interview.guide.common.constant.AsyncTaskStreamConstants;
 import interview.guide.infrastructure.redis.RedisService;
-import interview.guide.modules.knowledgebase.service.QuestionGenerationStateService;
+import interview.guide.modules.knowledgebase.service.question.QuestionGenerationStateService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
