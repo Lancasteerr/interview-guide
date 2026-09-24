@@ -84,6 +84,8 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     // Activity tracking for pause timeout
     // 活动跟踪（用于暂停超时）
     private final Map<String, Long> lastActivityTime = new ConcurrentHashMap<>();
+    private final VoiceWebSocketSessionRegistry sessionRegistry =
+        new VoiceWebSocketSessionRegistry(sessions, sessionStates, lastActivityTime);
     private static final long WARNING_TIME_MS = (long) (4.5 * 60 * 1000);  // 4:30
     private static final long PAUSE_TIMEOUT_MS = 5 * 60 * 1000;            // 5:00
     private static final int WS_SEND_TIME_LIMIT_MS = 10_000;
@@ -160,9 +162,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             session, WS_SEND_TIME_LIMIT_MS, WS_SEND_BUFFER_LIMIT_BYTES
         );
 
-        sessions.put(sessionId, safeSession);
-        sessionStates.put(sessionId, new SessionState());
-        lastActivityTime.put(sessionId, System.currentTimeMillis());
+        sessionRegistry.register(sessionId, safeSession);
         log.info("WebSocket connection established for session: {}", sessionId);
 
         try {
@@ -328,7 +328,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
             // Update last activity time for pause timeout detection
             // 更新最后活动时间（用于暂停超时检测）
-            lastActivityTime.put(sessionId, System.currentTimeMillis());
+            sessionRegistry.touch(sessionId);
 
             switch (type) {
                 case "audio":
@@ -374,16 +374,13 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
         String sessionId = extractSessionId(session);
         try {
-            sessions.remove(sessionId);
-            SessionState removedState = sessionStates.remove(sessionId);
+            SessionState removedState = sessionRegistry.remove(sessionId);
             if (removedState != null) {
                 Thread t = removedState.getProcessingThread();
                 if (t != null) {
                     t.interrupt();
                 }
             }
-            lastActivityTime.remove(sessionId);
-
             // Stop STT transcription
             sttService.stopTranscription(sessionId);
             log.info("WebSocket connection closed for session: {}, status: {}", sessionId, status);
@@ -464,7 +461,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
      * DashScope ASR 断线后重连（回调与首次 start 一致）
      */
     private void restartDashScopeStt(String sessionId) {
-        WebSocketSession session = sessions.get(sessionId);
+        WebSocketSession session = sessionRegistry.getSession(sessionId);
         if (session == null || !session.isOpen()) {
             return;
         }
@@ -485,14 +482,14 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
      * Just send audio to STT transcriber (results come via callback)
      */
     private void handleUserAudio(String sessionId, String base64Audio) {
-        WebSocketSession session = sessions.get(sessionId);
+        WebSocketSession session = sessionRegistry.getSession(sessionId);
         if (session == null) {
             log.warn("Session not found: {}", sessionId);
             return;
         }
 
         // AI 正在说话或处于回声冷却期时，丢弃麦克风输入，防止回声触发 LLM
-        SessionState state = sessionStates.get(sessionId);
+        SessionState state = sessionRegistry.getState(sessionId);
         if (state != null && state.isAiSpeakingOrCooldown()) {
             return;
         }
@@ -547,8 +544,8 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
      * Handle STT result from callback (partial = live; final = committed segment for LLM).
      */
     private void handleSttResult(String sessionId, String recognizedText, boolean isFinalSegment) {
-        WebSocketSession session = sessions.get(sessionId);
-        SessionState state = sessionStates.get(sessionId);
+        WebSocketSession session = sessionRegistry.getSession(sessionId);
+        SessionState state = sessionRegistry.getState(sessionId);
 
         if (session == null || state == null) {
             log.warn("Session or state not found: {}", sessionId);
@@ -580,8 +577,8 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
      * 手动提交：获取 mergeBuffer 中累积的用户文本并触发 LLM 管线。
      */
     private void flushMergedUtteranceToLlm(String sessionId) {
-        WebSocketSession session = sessions.get(sessionId);
-        SessionState state = sessionStates.get(sessionId);
+        WebSocketSession session = sessionRegistry.getSession(sessionId);
+        SessionState state = sessionRegistry.getState(sessionId);
         if (session == null || state == null || !session.isOpen()) {
             return;
         }
@@ -882,7 +879,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 if (control.getData() != null) {
                     Object textObj = control.getData().get("text");
                     if (textObj instanceof String text && !text.isBlank()) {
-                        SessionState state = sessionStates.get(sessionId);
+                        SessionState state = sessionRegistry.getState(sessionId);
                         if (state != null) {
                             state.setMergeBufferDirectly(text);
                         }
@@ -1134,7 +1131,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     public void checkPauseTimeout() {
         long now = System.currentTimeMillis();
 
-        lastActivityTime.forEach((sessionId, lastTime) -> {
+        sessionRegistry.forEachLastActivity((sessionId, lastTime) -> {
             long elapsed = now - lastTime;
 
             // Send warning at 4:30
@@ -1167,7 +1164,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
      * 发送暂停警告通知
      */
     private void sendPauseWarning(String sessionId) {
-        WebSocketSession session = sessions.get(sessionId);
+        WebSocketSession session = sessionRegistry.getSession(sessionId);
         if (session != null && session.isOpen()) {
             sendMessage(session, toJson(Map.of(
                 "type", "control",
@@ -1183,7 +1180,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
      * 处理暂停超时 - 保存状态并断开连接
      */
     private void handlePauseTimeout(String sessionId) {
-        WebSocketSession session = sessions.get(sessionId);
+        WebSocketSession session = sessionRegistry.getSession(sessionId);
 
         try {
             if (session != null && session.isOpen()) {
@@ -1205,9 +1202,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
             // 4. Cleanup - Stop ASR session to prevent resource leak
             sttService.stopTranscription(sessionId);
-            sessions.remove(sessionId);
-            sessionStates.remove(sessionId);
-            lastActivityTime.remove(sessionId);
+            sessionRegistry.remove(sessionId);
 
             log.info("Session {} paused due to timeout", sessionId);
 
@@ -1334,7 +1329,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     /**
      * Internal class to hold session state
      */
-    private static class SessionState {
+    static class SessionState {
         private final AtomicReference<String> accumulatedText = new AtomicReference<>("");
         private final AtomicBoolean processing = new AtomicBoolean(false);
         /** AI 正在播放 TTS 音频，期间丢弃麦克风回声 */
