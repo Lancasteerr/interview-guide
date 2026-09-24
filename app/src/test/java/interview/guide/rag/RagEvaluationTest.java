@@ -417,7 +417,7 @@ class RagEvaluationTest {
         List<String> chunks = new ArrayList<>();
         List<RagQueryExecution> trace = new ArrayList<>();
         queryService
-            .answerQuestionStream(List.of(kbId), sample.question(), history, trace::add)
+            .answerQuestionStream(List.of(kbId), sample.question(), history, trace::add, rerankMode)
             .doOnNext(chunks::add)
             .blockLast();
         execution = trace.isEmpty()

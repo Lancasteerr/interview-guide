@@ -254,7 +254,8 @@ public class KnowledgeBaseQueryService {
      * @return 流式响应
      */
     public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history) {
-        return answerQuestionStream(knowledgeBaseIds, question, history, null);
+        return answerQuestionStream(
+            knowledgeBaseIds, question, history, null, RerankExecutionMode.CONFIGURED);
     }
 
     /**
@@ -264,7 +265,18 @@ public class KnowledgeBaseQueryService {
      * @param trace 执行轨迹收集器（可为 null，为 null 时行为与无收集器入口完全一致）
      */
     public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history,
-                                             java.util.function.Consumer<RagQueryExecution> trace) {
+                                              java.util.function.Consumer<RagQueryExecution> trace) {
+        return answerQuestionStream(
+            knowledgeBaseIds, question, history, trace, RerankExecutionMode.CONFIGURED);
+    }
+
+    /**
+     * 流式查询知识库，并允许评测显式选择 rerank 实验臂。
+     * 生产调用应使用不带模式的入口，保持全局配置语义。
+     */
+    public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history,
+                                              java.util.function.Consumer<RagQueryExecution> trace,
+                                              RerankExecutionMode rerankMode) {
         long totalStart = System.nanoTime();
         String normalized = normalizeQuestion(question);
         log.info("收到知识库流式提问: kbIds={}, questionLength={}, historySize={}", knowledgeBaseIds,
@@ -291,7 +303,7 @@ public class KnowledgeBaseQueryService {
                 queryContext, knowledgeBaseIds, attemptedQueries);
             long retrievalMs = (System.nanoTime() - retrievalStart) / 1_000_000;
             RerankResult rerankResult = rerankDocuments(
-                queryContext.candidateQueries().getFirst(), retrievedDocs);
+                queryContext.candidateQueries().getFirst(), retrievedDocs, rerankMode);
             List<Document> relevantDocs = documentsOf(rerankResult);
 
             if (!hasEffectiveHit(relevantDocs)) {

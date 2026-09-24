@@ -208,6 +208,34 @@ class KnowledgeBaseQueryServiceTest {
     }
 
     @Test
+    @DisplayName("流式问答显式实验臂不读取全局 rerank 配置")
+    void explicitStreamModeUsesRerankArm() throws Exception {
+      service = buildService(false);
+      mockPlainClient();
+      Document first = Document.builder().id("first").text("第一段").score(0.9).build();
+      Document second = Document.builder().id("second").text("第二段").score(0.7).build();
+      when(vectorService.similaritySearch(anyString(), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(first, second));
+      when(llmProviderRegistry.rerankDocuments(
+          eq("原始问题"), anyList(), eq(RerankExecutionMode.FORCE_ENABLED)))
+          .thenReturn(RerankResult.success(List.of(
+              new RerankedDocument(second, 0.95),
+              new RerankedDocument(first, 0.25)), 12));
+      when(plainChatClient.prompt().system(anyString()).user(anyString()).stream().content())
+          .thenReturn(Flux.just("流式回答"));
+      List<RagQueryExecution> traces = new ArrayList<>();
+
+      service.answerQuestionStream(List.of(1L), "原始问题", List.of(), traces::add,
+          RerankExecutionMode.FORCE_ENABLED).collectList().block();
+
+      assertThat(traces).singleElement().extracting(RagQueryExecution::rerankStatus)
+          .isEqualTo("SUCCESS");
+      verify(llmProviderRegistry).rerankDocuments(
+          eq("原始问题"), anyList(), eq(RerankExecutionMode.FORCE_ENABLED));
+      verify(llmProviderRegistry, never()).rerankDocuments(eq("原始问题"), anyList());
+    }
+
+    @Test
     @DisplayName("retrieveOnly 输出 Rerank 顺序且保留向量分")
     void retrieveOnlyUsesRerankedOrderAndKeepsVectorScore() throws Exception {
       service = buildService(false);
