@@ -4,6 +4,7 @@ import interview.guide.modules.voiceinterview.service.QwenAsrService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.WebSocketSession;
 
+import java.util.Base64;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
@@ -66,6 +67,93 @@ final class VoiceWebSocketAsrCoordinator {
                 messageService.sendError(session, "语音识别失败: " + error.getMessage());
             }
         );
+    }
+
+    void sendAudio(
+        String sessionId,
+        String base64Audio,
+        BiConsumer<String, Boolean> sttResultHandler) {
+        WebSocketSession session = sessionRegistry.getSession(sessionId);
+        if (session == null) {
+            log.warn("Session not found: {}", sessionId);
+            return;
+        }
+
+        VoiceInterviewWebSocketHandler.SessionState state = sessionRegistry.getState(sessionId);
+        if (state != null && state.isAiSpeakingOrCooldown()) {
+            return;
+        }
+
+        try {
+            byte[] audioData = Base64.getDecoder().decode(base64Audio);
+            log.debug("Received audio data for session {}, size: {} bytes", sessionId, audioData.length);
+
+            try {
+                sttService.sendAudio(sessionId, audioData);
+            } catch (IllegalStateException ex) {
+                if (isAsrNotReady(ex)) {
+                    log.debug("[Session: {}] Dropping audio chunk before ASR ready", sessionId);
+                    return;
+                }
+                if (shouldRecoverAsrConnection(ex)) {
+                    log.warn("[Session: {}] ASR send failed ({}), restarting DashScope and retrying chunk",
+                        sessionId, ex.getMessage() != null ? ex.getMessage() : "unknown");
+                    restart(sessionId, sttResultHandler);
+                    boolean sent = false;
+                    for (int i = 0; i < 15; i++) {
+                        try {
+                            Thread.sleep(80);
+                            sttService.sendAudio(sessionId, audioData);
+                            sent = true;
+                            break;
+                        } catch (IllegalStateException retry) {
+                            if (isAsrNotReady(retry)) {
+                                continue;
+                            }
+                            if (!shouldRecoverAsrConnection(retry)) {
+                                throw retry;
+                            }
+                        }
+                    }
+                    if (!sent) {
+                        log.error("[Session: {}] ASR still down after restart", sessionId);
+                        messageService.sendError(session, "语音识别连接中断，请刷新页面后重试");
+                    }
+                } else {
+                    throw ex;
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error handling user audio for session {}", sessionId, e);
+            messageService.sendError(session, formatErrorMessage(e));
+        }
+    }
+
+    private static boolean shouldRecoverAsrConnection(IllegalStateException ex) {
+        String message = ex.getMessage();
+        return message != null
+            && (message.contains("No active session") || message.contains("ASR append failed"));
+    }
+
+    private static boolean isAsrNotReady(IllegalStateException ex) {
+        String message = ex.getMessage();
+        return message != null && message.contains("ASR session not ready");
+    }
+
+    private static String formatErrorMessage(Exception e) {
+        Throwable cause = e.getCause();
+        if (cause != null) {
+            String message = cause.getMessage();
+            if (message != null) {
+                if (message.contains("403") || message.contains("ACCESS_DENIED")) {
+                    return "阿里云语音服务认证失败：AccessKey 无效或已过期。请在 .env 文件中配置正确的 ALIYUN_ACCESS_KEY";
+                }
+                if (message.contains("timeout") || message.contains("channel inactive")) {
+                    return "阿里云语音服务连接超时。请检查网络连接或稍后重试";
+                }
+            }
+        }
+        return "语音处理失败：" + e.getMessage();
     }
 
     private void scheduleReadyCheck(

@@ -25,7 +25,6 @@ import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorato
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -247,7 +246,11 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 case "audio":
                     String audioData = msg.has("data") ? msg.get("data").asText() : null;
                     if (audioData != null && !audioData.isEmpty()) {
-                        handleUserAudio(sessionId, audioData);
+                        asrCoordinator.sendAudio(
+                            sessionId,
+                            audioData,
+                            (text, isFinal) -> handleSttResult(sessionId, text, isFinal)
+                        );
                     } else {
                         log.warn("Received audio message without data");
                     }
@@ -312,86 +315,6 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
         log.error("WebSocket transport error for session {}", extractSessionId(session), exception);
-    }
-
-    /** 无会话、append 失败等均可重连 ASR */
-    private static boolean shouldRecoverAsrConnection(IllegalStateException ex) {
-        String m = ex.getMessage();
-        if (m == null) {
-            return false;
-        }
-        return m.contains("No active session") || m.contains("ASR append failed");
-    }
-
-    private static boolean isAsrNotReady(IllegalStateException ex) {
-        String m = ex.getMessage();
-        return m != null && m.contains("ASR session not ready");
-    }
-
-    /**
-     * Handle user audio message
-     * Just send audio to STT transcriber (results come via callback)
-     */
-    private void handleUserAudio(String sessionId, String base64Audio) {
-        WebSocketSession session = sessionRegistry.getSession(sessionId);
-        if (session == null) {
-            log.warn("Session not found: {}", sessionId);
-            return;
-        }
-
-        // AI 正在说话或处于回声冷却期时，丢弃麦克风输入，防止回声触发 LLM
-        SessionState state = sessionRegistry.getState(sessionId);
-        if (state != null && state.isAiSpeakingOrCooldown()) {
-            return;
-        }
-
-        try {
-            byte[] audioData = Base64.getDecoder().decode(base64Audio);
-            log.debug("Received audio data for session {}, size: {} bytes", sessionId, audioData.length);
-
-            try {
-                sttService.sendAudio(sessionId, audioData);
-            } catch (IllegalStateException ex) {
-                if (isAsrNotReady(ex)) {
-                    log.debug("[Session: {}] Dropping audio chunk before ASR ready", sessionId);
-                    return;
-                } else if (shouldRecoverAsrConnection(ex)) {
-                    log.warn("[Session: {}] ASR send failed ({}), restarting DashScope and retrying chunk",
-                            sessionId, ex.getMessage() != null ? ex.getMessage() : "unknown");
-                    asrCoordinator.restart(
-                        sessionId,
-                        (text, isFinal) -> handleSttResult(sessionId, text, isFinal)
-                    );
-                    boolean sent = false;
-                    for (int i = 0; i < 15; i++) {
-                        try {
-                            Thread.sleep(80);
-                            sttService.sendAudio(sessionId, audioData);
-                            sent = true;
-                            break;
-                        } catch (IllegalStateException retry) {
-                            if (isAsrNotReady(retry)) {
-                                continue;
-                            }
-                            if (!shouldRecoverAsrConnection(retry)) {
-                                throw retry;
-                            }
-                        }
-                    }
-                    if (!sent) {
-                        log.error("[Session: {}] ASR still down after restart", sessionId);
-                        messageService.sendError(session, "语音识别连接中断，请刷新页面后重试");
-                    }
-                } else {
-                    throw ex;
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("Error handling user audio for session {}", sessionId, e);
-            String errorMessage = getErrorMessage(e);
-            messageService.sendError(session, errorMessage);
-        }
     }
 
     /**
@@ -708,29 +631,6 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             state.aiSpeaking.set(false);
             state.aiSpeakEndAt.set(System.currentTimeMillis() + AI_SPEAK_COOLDOWN_MS);
         }
-    }
-
-    /**
-     * Convert exception to user-friendly error message
-     */
-    private String getErrorMessage(Exception e) {
-        Throwable cause = e.getCause();
-
-        // Check for specific Aliyun errors
-        if (cause != null) {
-            String message = cause.getMessage();
-            if (message != null) {
-                if (message.contains("403") || message.contains("ACCESS_DENIED")) {
-                    return "阿里云语音服务认证失败：AccessKey 无效或已过期。请在 .env 文件中配置正确的 ALIYUN_ACCESS_KEY";
-                }
-                if (message.contains("timeout") || message.contains("channel inactive")) {
-                    return "阿里云语音服务连接超时。请检查网络连接或稍后重试";
-                }
-            }
-        }
-
-        // Default error message
-        return "语音处理失败：" + e.getMessage();
     }
 
     /**
