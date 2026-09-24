@@ -3,6 +3,7 @@ package interview.guide.modules.knowledgebase.service;
 import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.rerank.RerankResult;
 import interview.guide.common.ai.rerank.RerankedDocument;
+import interview.guide.common.ai.rerank.RerankExecutionMode;
 import interview.guide.modules.knowledgebase.config.KnowledgeBaseQueryProperties;
 import interview.guide.modules.knowledgebase.metrics.RagMetrics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -35,6 +36,7 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.atLeastOnce;
@@ -70,6 +72,9 @@ class KnowledgeBaseQueryServiceTest {
     when(resourceLoader.getResource(anyString()))
         .thenAnswer(invocation -> new ByteArrayResource("模板".getBytes(StandardCharsets.UTF_8)));
     lenient().when(llmProviderRegistry.rerankDocuments(anyString(), anyList()))
+        .thenAnswer(invocation -> RerankResult.disabled(invocation.getArgument(1)));
+    lenient().when(llmProviderRegistry.rerankDocuments(
+            anyString(), anyList(), any(RerankExecutionMode.class)))
         .thenAnswer(invocation -> RerankResult.disabled(invocation.getArgument(1)));
   }
 
@@ -163,6 +168,44 @@ class KnowledgeBaseQueryServiceTest {
   @Nested
   @DisplayName("Rerank 后处理")
   class RerankPostProcessing {
+
+    @Test
+    @DisplayName("显式关闭实验臂不读取全局 rerank 配置")
+    void explicitDisabledUsesVectorOnlyArm() throws Exception {
+      service = buildService(false);
+      stubDocuments();
+
+      RagQueryExecution execution = service.retrieveOnly(
+          List.of(1L), "原始问题", List.of(), RerankExecutionMode.DISABLED);
+
+      assertThat(execution.rerankStatus()).isEqualTo("DISABLED");
+      verify(llmProviderRegistry).rerankDocuments(
+          eq("原始问题"), anyList(), eq(RerankExecutionMode.DISABLED));
+      verify(llmProviderRegistry, never()).rerankDocuments(eq("原始问题"), anyList());
+    }
+
+    @Test
+    @DisplayName("显式开启实验臂调用 rerank 且不修改全局配置")
+    void forceEnabledUsesRerankArm() throws Exception {
+      service = buildService(false);
+      Document first = Document.builder().id("first").text("第一段").score(0.9).build();
+      Document second = Document.builder().id("second").text("第二段").score(0.7).build();
+      when(vectorService.similaritySearch(anyString(), anyList(), anyInt(), anyDouble()))
+          .thenReturn(List.of(first, second));
+      when(llmProviderRegistry.rerankDocuments(
+          eq("原始问题"), anyList(), eq(RerankExecutionMode.FORCE_ENABLED)))
+          .thenReturn(RerankResult.success(List.of(
+              new RerankedDocument(second, 0.95),
+              new RerankedDocument(first, 0.25)), 12));
+
+      RagQueryExecution execution = service.retrieveOnly(
+          List.of(1L), "原始问题", List.of(), RerankExecutionMode.FORCE_ENABLED);
+
+      assertThat(execution.rerankStatus()).isEqualTo("SUCCESS");
+      assertThat(execution.retrievedDocs()).extracting(RagQueryExecution.RetrievedDoc::text)
+          .containsExactly("第二段", "第一段");
+      verify(llmProviderRegistry, never()).rerankDocuments(eq("原始问题"), anyList());
+    }
 
     @Test
     @DisplayName("retrieveOnly 输出 Rerank 顺序且保留向量分")

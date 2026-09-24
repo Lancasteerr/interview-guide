@@ -4,6 +4,7 @@ import interview.guide.common.ai.LlmProviderRegistry;
 import interview.guide.common.ai.PromptSecurityConstants;
 import interview.guide.common.ai.rerank.RerankResult;
 import interview.guide.common.ai.rerank.RerankedDocument;
+import interview.guide.common.ai.rerank.RerankExecutionMode;
 import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.knowledgebase.metrics.RagMetrics;
 import interview.guide.common.exception.BusinessException;
@@ -435,7 +436,14 @@ public class KnowledgeBaseQueryService {
     }
 
     private RerankResult rerankDocuments(String query, List<Document> candidates) {
-        RerankResult result = llmProviderRegistry.rerankDocuments(query, candidates);
+        return rerankDocuments(query, candidates, RerankExecutionMode.CONFIGURED);
+    }
+
+    private RerankResult rerankDocuments(String query, List<Document> candidates,
+                                         RerankExecutionMode mode) {
+        RerankResult result = mode == RerankExecutionMode.CONFIGURED
+            ? llmProviderRegistry.rerankDocuments(query, candidates)
+            : llmProviderRegistry.rerankDocuments(query, candidates, mode);
         ragMetrics.recordStageDuration(
             "rerank", result.status().name().toLowerCase(), result.durationMs() * 1_000_000L);
         ragMetrics.recordRerankRequest(
@@ -453,6 +461,15 @@ public class KnowledgeBaseQueryService {
      * 供 RAG 测评复用生产检索逻辑，避免在测评代码中复制改写与分档规则。
      */
     public RagQueryExecution retrieveOnly(List<Long> knowledgeBaseIds, String question, List<Message> history) {
+        return retrieveOnly(knowledgeBaseIds, question, history, RerankExecutionMode.CONFIGURED);
+    }
+
+    /**
+     * 仅执行检索链路，并允许评测显式选择 rerank 实验臂。
+     * 生产调用应使用三参数入口，保持全局配置语义。
+     */
+    public RagQueryExecution retrieveOnly(List<Long> knowledgeBaseIds, String question,
+                                          List<Message> history, RerankExecutionMode rerankMode) {
         String normalized = normalizeQuestion(question);
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalized.isBlank()) {
             return new RagQueryExecution(normalized, normalized, List.of(normalized),
@@ -467,7 +484,7 @@ public class KnowledgeBaseQueryService {
             queryContext, knowledgeBaseIds, attemptedQueries);
         long retrievalMs = (System.nanoTime() - retrievalStart) / 1_000_000;
         RerankResult rerankResult = rerankDocuments(
-            queryContext.candidateQueries().getFirst(), retrievedDocs);
+            queryContext.candidateQueries().getFirst(), retrievedDocs, rerankMode);
         List<Document> relevantDocs = documentsOf(rerankResult);
         boolean hit = hasEffectiveHit(relevantDocs);
         String stageResult = hit ? "success" : "reject";

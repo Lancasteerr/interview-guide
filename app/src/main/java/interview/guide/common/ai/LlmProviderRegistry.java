@@ -9,6 +9,7 @@ import interview.guide.common.ai.rerank.DashScopeDocumentReranker;
 import interview.guide.common.ai.rerank.DocumentReranker;
 import interview.guide.common.ai.rerank.RerankReason;
 import interview.guide.common.ai.rerank.RerankResult;
+import interview.guide.common.ai.rerank.RerankExecutionMode;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
 import interview.guide.modules.llmprovider.entity.LlmGlobalSettingEntity;
@@ -189,7 +190,18 @@ public class LlmProviderRegistry {
      * 全局开关、Provider 能力和模型支持范围都在此处统一判定。
      */
     public RerankResult rerankDocuments(String query, List<Document> candidates) {
-        if (!rerankProperties.isEnabled()) {
+        return rerankDocuments(query, candidates, RerankExecutionMode.CONFIGURED);
+    }
+
+    /**
+     * Rerank with an explicit invocation mode. Evaluation uses this overload
+     * to compare vector-only and rerank arms without changing the singleton
+     * configuration object shared by the application context.
+     */
+    public RerankResult rerankDocuments(String query, List<Document> candidates,
+                                        RerankExecutionMode mode) {
+        if (mode == RerankExecutionMode.DISABLED
+            || (mode == RerankExecutionMode.CONFIGURED && !rerankProperties.isEnabled())) {
             return RerankResult.disabled(candidates);
         }
         if (candidates.size() < 2) {

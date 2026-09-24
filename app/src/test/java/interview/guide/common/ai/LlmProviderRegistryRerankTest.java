@@ -1,6 +1,7 @@
 package interview.guide.common.ai;
 
 import interview.guide.common.ai.rerank.RerankReason;
+import interview.guide.common.ai.rerank.RerankExecutionMode;
 import interview.guide.common.ai.rerank.RerankStatus;
 import interview.guide.common.config.LlmProviderProperties;
 import interview.guide.common.config.LlmProviderProperties.ProviderConfig;
@@ -37,6 +38,18 @@ class LlmProviderRegistryRerankTest {
     LlmProviderRegistry registry = registry(properties, rerankProperties, null, null);
 
     var result = registry.rerankDocuments("问题", candidates);
+
+    assertThat(result.status()).isEqualTo(RerankStatus.DISABLED);
+    verify(properties, times(0)).getProviders();
+  }
+
+  @Test
+  @DisplayName("显式关闭时不读取 Provider，即使全局开关已开启")
+  void explicitDisabledDoesNotResolveProvider() {
+    LlmProviderProperties properties = mock(LlmProviderProperties.class);
+    LlmProviderRegistry registry = registry(properties, enabledProperties(), null, null);
+
+    var result = registry.rerankDocuments("问题", candidates, RerankExecutionMode.DISABLED);
 
     assertThat(result.status()).isEqualTo(RerankStatus.DISABLED);
     verify(properties, times(0)).getProviders();
@@ -94,6 +107,28 @@ class LlmProviderRegistryRerankTest {
 
     assertThat(result.status()).isEqualTo(RerankStatus.SKIPPED);
     assertThat(result.reason()).isEqualTo(RerankReason.UNSUPPORTED_MODEL);
+  }
+
+  @Test
+  @DisplayName("显式开启时不受全局开关影响，仍执行 Provider 能力校验")
+  void forceEnabledBypassesGlobalSwitch() {
+    LlmProviderProperties properties = mock(LlmProviderProperties.class);
+    ProviderConfig config = new ProviderConfig();
+    config.setApiKey("test-key");
+    config.setSupportsRerank(true);
+    config.setRerankModel("qwen3-rerank");
+    config.setRerankWorkspaceId("llm-test123");
+    when(properties.getProviders()).thenReturn(Map.of("dashscope", config));
+    RerankProperties rerankProperties = new RerankProperties();
+    rerankProperties.setEnabled(false);
+    LlmProviderRegistry registry = registry(properties, rerankProperties, null, null);
+
+    var result = registry.rerankDocuments(
+        "问题", candidates, RerankExecutionMode.FORCE_ENABLED);
+
+    assertThat(result.status()).isEqualTo(RerankStatus.SKIPPED);
+    assertThat(result.reason()).isEqualTo(RerankReason.UNSUPPORTED_MODEL);
+    verify(properties, times(1)).getProviders();
   }
 
   private LlmProviderRegistry registry(
