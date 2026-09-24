@@ -7,9 +7,7 @@ import com.alibaba.dashscope.audio.omni.OmniRealtimeModality;
 import com.alibaba.dashscope.audio.omni.OmniRealtimeParam;
 import com.alibaba.dashscope.audio.omni.OmniRealtimeTranscriptionParam;
 import com.alibaba.dashscope.exception.NoApiKeyException;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,6 +47,7 @@ import java.util.function.Consumer;
 public class QwenAsrService {
 
     private final QwenAsrConfiguration configuration;
+    private final QwenAsrEventService eventService = new QwenAsrEventService();
 
     // 保留旧字段作为反射/诊断兼容视图，连接流程统一读取 configuration。
     @Deprecated private String url;
@@ -439,75 +438,7 @@ public class QwenAsrService {
             Consumer<String> onFinal,
             Consumer<String> onPartial,
             Consumer<Throwable> onError) {
-        try {
-            String eventType = message.get("type").getAsString();
-
-            log.trace("[Session: {}] Received event: {}", sessionId, eventType);
-
-            switch (eventType) {
-                case "session.created":
-                    log.debug("[Session: {}] Session created on server", sessionId);
-                    break;
-
-                case "session.updated":
-                    log.debug("[Session: {}] Session configuration updated", sessionId);
-                    break;
-
-                case "conversation.item.input_audio_transcription.completed":
-                    // Final transcription result
-                    JsonObject transcriptObj = message.getAsJsonObject();
-                    String transcript = transcriptObj.get("transcript").getAsString();
-                    String language = transcriptObj.has("language") ?
-                            transcriptObj.get("language").getAsString() : "unknown";
-                    String emotion = transcriptObj.has("emotion") ?
-                            transcriptObj.get("emotion").getAsString() : "neutral";
-
-                    log.debug("[Session: {}] Transcription completed - language: {}, emotion: {}, textLength: {}",
-                            sessionId, language, emotion, transcript.length());
-
-                    onFinal.accept(transcript);
-                    break;
-
-                case "conversation.item.input_audio_transcription.text":
-                case "conversation.item.input_audio_transcription.delta":
-                    dispatchPartialTranscript(sessionId, message, onPartial);
-                    break;
-
-                case "error":
-                    // Error event
-                    JsonObject errorObj = message.getAsJsonObject("error");
-                    String errorType = errorObj.has("type") ? errorObj.get("type").getAsString() : "unknown";
-                    String errorCode = errorObj.has("code") ? errorObj.get("code").getAsString() : "unknown";
-                    String errorMessage = errorObj.has("message") ? errorObj.get("message").getAsString() : "Unknown error";
-
-                    String fullErrorMessage = String.format("ASR Error [%s/%s]: %s",
-                        errorType, errorCode, ErrorLogSanitizer.summarize(errorMessage));
-                    log.error("[Session: {}] {}", sessionId, fullErrorMessage);
-
-                    onError.accept(new IllegalStateException(fullErrorMessage));
-                    break;
-
-                case "session.finished":
-                    log.debug("[Session: {}] Session finished on server", sessionId);
-                    break;
-
-                case "conversation.item.input_audio_transcription.failed":
-                    log.error("[Session: {}] ASR transcription failed (single utterance)", sessionId);
-                    break;
-
-                default:
-                    if (eventType != null && eventType.contains("transcription")) {
-                        log.debug("[Session: {}] Unhandled transcription-related event: type={}", sessionId, eventType);
-                    } else {
-                        log.trace("[Session: {}] Unhandled event type: {}", sessionId, eventType);
-                    }
-            }
-
-        } catch (Exception e) {
-            log.error("[Session: {}] Error processing server event: {}", sessionId,
-                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
-            onError.accept(e);
-        }
+        eventService.handleServerEvent(sessionId, message, onFinal, onPartial, onError);
     }
 
     /**
@@ -535,49 +466,7 @@ public class QwenAsrService {
      * </p>
      */
     static String extractTranscriptPayload(JsonObject message) {
-        if (message.has("transcript") && !message.get("transcript").isJsonNull()) {
-            JsonElement el = message.get("transcript");
-            if (el.isJsonPrimitive()) {
-                return el.getAsString();
-            }
-        }
-        // Real-time partial: text + stash (see Alibaba qwen-asr-realtime server events doc)
-        if (message.has("text") || message.has("stash")) {
-            String prefix = "";
-            String suffix = "";
-            if (message.has("text") && !message.get("text").isJsonNull() && message.get("text").isJsonPrimitive()) {
-                prefix = message.get("text").getAsString();
-            }
-            if (message.has("stash") && !message.get("stash").isJsonNull() && message.get("stash").isJsonPrimitive()) {
-                suffix = message.get("stash").getAsString();
-            }
-            String combined = prefix + suffix;
-            if (!combined.isBlank()) {
-                return combined;
-            }
-        }
-        if (message.has("delta")) {
-            JsonElement d = message.get("delta");
-            if (d.isJsonPrimitive()) {
-                return d.getAsString();
-            }
-            if (d.isJsonObject()) {
-                JsonObject o = d.getAsJsonObject();
-                if (o.has("text") && !o.get("text").isJsonNull()) {
-                    return o.get("text").getAsString();
-                }
-                if (o.has("transcript") && !o.get("transcript").isJsonNull()) {
-                    return o.get("transcript").getAsString();
-                }
-            }
-        }
-        if (message.has("item") && message.get("item").isJsonObject()) {
-            JsonObject item = message.getAsJsonObject("item");
-            if (item.has("transcript") && !item.get("transcript").isJsonNull()) {
-                return item.get("transcript").getAsString();
-            }
-        }
-        return null;
+        return QwenAsrEventService.extractTranscriptPayload(message);
     }
 
     // Setter methods for configuration (used by Spring @Value injection or tests)
