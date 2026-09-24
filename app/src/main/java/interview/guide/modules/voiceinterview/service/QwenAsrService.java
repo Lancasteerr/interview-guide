@@ -6,7 +6,6 @@ import com.alibaba.dashscope.audio.omni.OmniRealtimeConversation;
 import com.alibaba.dashscope.audio.omni.OmniRealtimeModality;
 import com.alibaba.dashscope.audio.omni.OmniRealtimeParam;
 import com.alibaba.dashscope.audio.omni.OmniRealtimeTranscriptionParam;
-import com.alibaba.dashscope.exception.NoApiKeyException;
 import com.google.gson.JsonObject;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
 import lombok.extern.slf4j.Slf4j;
@@ -14,10 +13,6 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import java.util.Base64;
-import java.util.Collections;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -64,6 +59,7 @@ public class QwenAsrService {
     public QwenAsrService(VoiceInterviewProperties voiceInterviewProperties) {
         this.configuration = new QwenAsrConfiguration(voiceInterviewProperties.getQwen().getAsr());
         syncLegacyConfigurationView();
+        this.connectionService = new QwenAsrConnectionService(configuration, sessionManager, eventService);
     }
 
     public void reload(VoiceInterviewProperties voiceInterviewProperties) {
@@ -86,6 +82,7 @@ public class QwenAsrService {
     }
 
     private final QwenAsrSessionManager sessionManager = new QwenAsrSessionManager();
+    private final QwenAsrConnectionService connectionService;
 
     /**
      * Initialize the ASR service.
@@ -104,29 +101,11 @@ public class QwenAsrService {
 
     /**
      * Start a new transcription session.
-     *
-     * This method creates a new WebSocket connection to the DashScope ASR service
-     * and sets up callbacks for handling transcription results and errors.
-     *
-     * The session uses server-side VAD (Voice Activity Detection) to automatically
-     * detect sentence boundaries. When speech is detected and transcribed, the
-     * onResult callback will be invoked with the transcribed text.
-     *
-     * @param sessionId Unique identifier for this session
-     * @param onFinal Callback when a sentence/segment is finalized ({@code completed} event)
-     * @param onError Callback invoked when errors occur
-     * @throws IllegalStateException if session already exists or service not initialized
      */
     public void startTranscription(String sessionId, Consumer<String> onFinal, Consumer<Throwable> onError) {
         startTranscription(sessionId, onFinal, null, onError);
     }
 
-    /**
-     * Same as {@link #startTranscription(String, Consumer, Consumer)} but forwards partial transcripts
-     * ({@code conversation.item.input_audio_transcription.text}) for live subtitles.
-     *
-     * @param onPartial May be null if partials are not needed
-     */
     public void startTranscription(
             String sessionId,
             Consumer<String> onFinal,
@@ -141,13 +120,11 @@ public class QwenAsrService {
             Consumer<String> onPartial,
             Runnable onReady,
             Consumer<Throwable> onError) {
-        synchronized (sessionManager.lockFor(sessionId)) {
-            startTranscriptionLocked(sessionId, onFinal, onPartial, onReady, onError);
-        }
+        connectionService.start(sessionId, onFinal, onPartial, onReady, onError);
     }
 
     /**
-     * 停止旧连接并重新建立（用于 ASR WebSocket 被服务端关闭后恢复识别）。
+     * 停止旧连接并重新建立。
      */
     public void restartTranscription(
             String sessionId,
@@ -163,226 +140,17 @@ public class QwenAsrService {
             Consumer<String> onPartial,
             Runnable onReady,
             Consumer<Throwable> onError) {
-        synchronized (sessionManager.lockFor(sessionId)) {
-            log.info("[Session: {}] Restarting DashScope ASR (stop + start)", sessionId);
-            stopTranscription(sessionId);
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            startTranscriptionLocked(sessionId, onFinal, onPartial, onReady, onError);
-
-            // Verify reconnection succeeded
-            for (int attempt = 0; attempt < 10; attempt++) {
-                try {
-                    Thread.sleep(100);
-                    QwenAsrSessionManager.Session newSession = sessionManager.get(sessionId);
-                    if (newSession != null && newSession.isReady()) {
-                        log.info("[Session: {}] ASR reconnection verified successfully", sessionId);
-                        return;
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    log.warn("[Session: {}] ASR reconnection verification interrupted", sessionId);
-                    return;
-                }
-            }
-
-            log.warn("[Session: {}] ASR reconnection may not be fully ready after 1 second", sessionId);
-        }
+        connectionService.restart(sessionId, onFinal, onPartial, onReady, onError);
     }
 
-    private void startTranscriptionLocked(
-            String sessionId,
-            Consumer<String> onFinal,
-            Consumer<String> onPartial,
-            Runnable onReady,
-            Consumer<Throwable> onError) {
-        if (sessionManager.contains(sessionId)) {
-            throw new IllegalStateException("Session already exists: " + sessionId);
-        }
-
-        try {
-            // Build OmniRealtimeParam with connection settings
-            OmniRealtimeParam param = OmniRealtimeParam.builder()
-                    .model(configuration.model())
-                    .url(configuration.url())
-                    .apikey(configuration.apiKey())
-                    .build();
-
-            final AtomicReference<OmniRealtimeConversation> conversationRef = new AtomicReference<>();
-
-            // Create callback handler for WebSocket events
-            OmniRealtimeCallback callback = new OmniRealtimeCallback() {
-                @Override
-                public void onOpen() {
-                    log.debug("[Session: {}] WebSocket connection established", sessionId);
-                }
-
-                @Override
-                public void onEvent(JsonObject message) {
-                    handleServerEvent(sessionId, message, onFinal, onPartial, onError);
-                }
-
-                @Override
-                public void onClose(int code, String reason) {
-                    OmniRealtimeConversation closed = conversationRef.get();
-                    log.warn("[Session: {}] DashScope ASR WebSocket closed - code: {}, reason: {}",
-                            sessionId, code, reason);
-                    // 仅移除与本次连接对应的会话，避免重连后旧 onClose 误删新连接（典型「第三轮起无声」根因）
-                    if (closed != null) {
-                        sessionManager.removeIfSameConversation(sessionId, closed);
-                    }
-                }
-            };
-
-            // Create OmniRealtimeConversation instance
-            OmniRealtimeConversation conversation = new OmniRealtimeConversation(param, callback);
-            conversationRef.set(conversation);
-            QwenAsrSessionManager.Session asrSession = new QwenAsrSessionManager.Session(
-                conversation, onFinal, onPartial, onError);
-
-            // Store session in map BEFORE connecting to ensure hasActiveSession() returns true
-            sessionManager.put(sessionId, asrSession);
-
-            // Connect to server asynchronously (non-blocking)
-            Thread connectionThread = new Thread(() -> {
-                try {
-                    conversation.connect();
-
-                    // Configure session with transcription parameters
-                    OmniRealtimeTranscriptionParam transcriptionParam = new OmniRealtimeTranscriptionParam();
-                    transcriptionParam.setLanguage(configuration.language());
-                    transcriptionParam.setInputSampleRate(configuration.sampleRate());
-                    transcriptionParam.setInputAudioFormat(configuration.format());
-
-                    OmniRealtimeConfig config = OmniRealtimeConfig.builder()
-                            .modalities(Collections.singletonList(OmniRealtimeModality.TEXT))
-                            .enableTurnDetection(configuration.enableTurnDetection())
-                            .turnDetectionType(configuration.turnDetectionType())
-                            .turnDetectionThreshold(configuration.turnDetectionThreshold())
-                            .turnDetectionSilenceDurationMs(configuration.turnDetectionSilenceDurationMs())
-                            .transcriptionConfig(transcriptionParam)
-                            .build();
-
-                    // Update session with configuration
-                    conversation.updateSession(config);
-                    if (sessionManager.get(sessionId) != asrSession) {
-                        log.debug("[Session: {}] Ignoring stale ASR connection ready callback", sessionId);
-                        return;
-                    }
-                    asrSession.markReady();
-                    if (onReady != null) {
-                        onReady.run();
-                    }
-
-                    log.info("[Session: {}] Transcription session started successfully", sessionId);
-
-                } catch (Exception e) {
-                    log.error("[Session: {}] Failed to establish connection", sessionId, e);
-                    sessionManager.removeIfSameConversation(sessionId, conversation);
-                    onError.accept(e);
-                }
-            }, "ASR-Connection-" + sessionId);
-            connectionThread.setDaemon(true);
-            connectionThread.start();
-
-        } catch (Exception e) {
-            String errorMsg = "Failed to create transcription session: " + sessionId;
-            log.error(errorMsg, e);
-            sessionManager.remove(sessionId);
-            onError.accept(new IllegalStateException(errorMsg, e));
-            throw new IllegalStateException(errorMsg, e);
-        }
-    }
-
-    /**
-     * Send audio data to the ASR service for transcription.
-     *
-     * The audio data should be in PCM format at 16kHz sample rate.
-     * The data is Base64-encoded before being sent to the DashScope service.
-     *
-     * With server-side VAD enabled, the service will automatically detect
-     * speech segments and trigger transcription when silence is detected.
-     *
-     * @param sessionId Session identifier
-     * @param audioData Raw PCM audio bytes
-     * @throws IllegalStateException if session does not exist
-     */
     public void sendAudio(String sessionId, byte[] audioData) {
-        QwenAsrSessionManager.Session session = sessionManager.get(sessionId);
-        if (session == null) {
-            throw new IllegalStateException("No active session found: " + sessionId);
-        }
-
-        try {
-            if (!session.awaitReady(1200)) {
-                throw new IllegalStateException("ASR session not ready: " + sessionId);
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IllegalStateException("ASR session ready wait interrupted: " + sessionId, e);
-        }
-
-        try {
-            // Convert audio data to Base64
-            String audioBase64 = Base64.getEncoder().encodeToString(audioData);
-
-            // Send to ASR service
-            session.getConversation().appendAudio(audioBase64);
-
-            log.trace("[Session: {}] Sent {} bytes of audio data", sessionId, audioData.length);
-
-        } catch (Exception e) {
-            log.error("[Session: {}] appendAudio failed (upstream may reconnect)", sessionId, e);
-            // 抛出以便 WebSocket 层执行 restartTranscription；不在此重复 onError 避免用户先看到红条再恢复
-            throw new IllegalStateException("ASR append failed: " + sessionId, e);
-        }
+        connectionService.sendAudio(sessionId, audioData);
     }
 
-    /**
-     * Stop transcription and close the session.
-     *
-     * This method notifies the ASR service to complete any pending transcription,
-     * waits for the final results, and then closes the WebSocket connection.
-     *
-     * @param sessionId Session identifier
-     */
     public void stopTranscription(String sessionId) {
-        synchronized (sessionManager.lockFor(sessionId)) {
-            QwenAsrSessionManager.Session session = sessionManager.remove(sessionId);
-            // Clean up the session lock to prevent memory leak
-            sessionManager.removeLock(sessionId);
-            if (session == null) {
-                log.warn("[Session: {}] Attempted to stop non-existent session", sessionId);
-                return;
-            }
-
-            try {
-                session.getConversation().endSession();
-                log.info("[Session: {}] Transcription session stopped", sessionId);
-            } catch (InterruptedException e) {
-                log.error("[Session: {}] Thread interrupted while ending session", sessionId, e);
-                Thread.currentThread().interrupt();
-            } catch (Exception e) {
-                log.warn("[Session: {}] Error while ending session (may already be closed): {}", sessionId, e.getMessage());
-            }
-
-            try {
-                session.getConversation().close();
-            } catch (Exception e) {
-                log.debug("[Session: {}] Connection already closed: {}", sessionId, e.getMessage());
-            }
-        }
+        connectionService.stop(sessionId);
     }
 
-    /**
-     * Check if a session with the given ID is currently active.
-     *
-     * @param sessionId Session identifier
-     * @return true if session exists and is active, false otherwise
-     */
     public boolean hasActiveSession(String sessionId) {
         return sessionManager.contains(sessionId);
     }
@@ -394,26 +162,10 @@ public class QwenAsrService {
 
     /**
      * Destroy the service and cleanup all active sessions.
-     *
-     * This method is called automatically when the Spring container shuts down.
-     * It stops all active sessions and releases resources.
      */
     @PreDestroy
     public void destroy() {
-        log.info("Destroying QwenAsrService with {} active sessions", sessionManager.size());
-
-        // Stop all active sessions
-        Set<String> activeSessionIds = sessionManager.sessionIds();
-        activeSessionIds.forEach(sessionId -> {
-            try {
-                stopTranscription(sessionId);
-            } catch (Exception e) {
-                log.error("[Session: {}] Error during cleanup", sessionId, e);
-            }
-        });
-
-        sessionManager.clear();
-        log.info("QwenAsrService destroyed successfully");
+        connectionService.destroy();
     }
 
     /**
