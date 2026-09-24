@@ -116,6 +116,10 @@ final class VoiceInterviewMessageService {
         sessionId, VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY);
   }
 
+  void deleteMessages(Long sessionId) {
+    messageRepository.deleteBySessionId(sessionId);
+  }
+
   private int getNextSequenceNum(Long sessionId) {
     return (int) countDialogueMessages(sessionId) + 1;
   }

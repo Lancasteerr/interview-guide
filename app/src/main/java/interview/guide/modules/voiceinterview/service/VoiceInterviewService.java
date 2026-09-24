@@ -1,562 +1,196 @@
 package interview.guide.modules.voiceinterview.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
-import interview.guide.common.constant.CommonConstants.InterviewDefaults;
-import interview.guide.common.exception.BusinessException;
-import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.model.AsyncTaskStatus;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
 import interview.guide.modules.voiceinterview.dto.CreateSessionRequest;
-import interview.guide.modules.voiceinterview.dto.VoiceInterviewMessageDTO;
 import interview.guide.modules.voiceinterview.dto.SessionMetaDTO;
 import interview.guide.modules.voiceinterview.dto.SessionResponseDTO;
-import interview.guide.modules.voiceinterview.listener.VoiceEvaluateStreamProducer;
+import interview.guide.modules.voiceinterview.dto.VoiceInterviewMessageDTO;
 import interview.guide.modules.voiceinterview.entity.VoiceInterviewMessageEntity;
 import interview.guide.modules.voiceinterview.entity.VoiceInterviewSessionEntity;
-import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionStatus;
+import interview.guide.modules.voiceinterview.listener.VoiceEvaluateStreamProducer;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewEvaluationRepository;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewMessageRepository;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewSessionRepository;
-import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * Voice Interview Service
- * 语音面试服务
- * <p>
- * Provides business logic for voice interview session management including:
- * - Session lifecycle management (create, end, retrieve)
- * - Phase transitions and state tracking
- * - Message persistence and conversation history
- * - Redis caching for active sessions
- * </p>
+ * 语音面试服务门面，保留原有事务入口并委托会话、消息和评测子服务。
  */
 @Service
 @Slf4j
 public class VoiceInterviewService {
 
-    private final VoiceInterviewSessionRepository sessionRepository;
-    private final VoiceInterviewMessageRepository messageRepository;
-    private final VoiceInterviewEvaluationRepository evaluationRepository;
-    private final VoiceInterviewProperties properties;
-    private final VoiceEvaluateStreamProducer voiceEvaluateStreamProducer;
-    private final LlmProviderRegistry llmProviderRegistry;
-    private final VoiceInterviewSessionCacheService sessionCacheService;
-    private final VoiceInterviewPhaseService phaseService;
-    private final VoiceInterviewMessageService messageService;
-    private final VoiceInterviewEvaluationLifecycleService evaluationService;
+  private final VoiceInterviewSessionLifecycleService lifecycleService;
+  private final VoiceInterviewMessageService messageService;
+  private final VoiceInterviewEvaluationLifecycleService evaluationService;
 
-    private static final String DEFAULT_USER_ID = "default";
+  public VoiceInterviewService(
+      VoiceInterviewSessionRepository sessionRepository,
+      VoiceInterviewMessageRepository messageRepository,
+      VoiceInterviewEvaluationRepository evaluationRepository,
+      RedissonClient redissonClient,
+      VoiceInterviewProperties properties,
+      VoiceEvaluateStreamProducer voiceEvaluateStreamProducer,
+      LlmProviderRegistry llmProviderRegistry) {
+    VoiceInterviewSessionCacheService sessionCacheService =
+        new VoiceInterviewSessionCacheService(redissonClient);
+    VoiceInterviewPhaseService phaseService = new VoiceInterviewPhaseService(properties);
+    this.messageService = new VoiceInterviewMessageService(sessionRepository, messageRepository);
+    this.evaluationService = new VoiceInterviewEvaluationLifecycleService(
+        sessionRepository, voiceEvaluateStreamProducer, sessionCacheService);
+    this.lifecycleService = new VoiceInterviewSessionLifecycleService(
+        sessionRepository,
+        evaluationRepository,
+        properties,
+        sessionCacheService,
+        phaseService,
+        messageService,
+        evaluationService
+    );
+  }
 
-    public VoiceInterviewService(
-            VoiceInterviewSessionRepository sessionRepository,
-            VoiceInterviewMessageRepository messageRepository,
-            VoiceInterviewEvaluationRepository evaluationRepository,
-            RedissonClient redissonClient,
-            VoiceInterviewProperties properties,
-            VoiceEvaluateStreamProducer voiceEvaluateStreamProducer,
-            LlmProviderRegistry llmProviderRegistry) {
-        this.sessionRepository = sessionRepository;
-        this.messageRepository = messageRepository;
-        this.evaluationRepository = evaluationRepository;
-        this.properties = properties;
-        this.voiceEvaluateStreamProducer = voiceEvaluateStreamProducer;
-        this.llmProviderRegistry = llmProviderRegistry;
-        this.sessionCacheService = new VoiceInterviewSessionCacheService(redissonClient);
-        this.phaseService = new VoiceInterviewPhaseService(properties);
-        this.messageService = new VoiceInterviewMessageService(sessionRepository, messageRepository);
-        this.evaluationService = new VoiceInterviewEvaluationLifecycleService(
-            sessionRepository, voiceEvaluateStreamProducer, sessionCacheService);
+  @Transactional
+  public SessionResponseDTO createSession(CreateSessionRequest request) {
+    return lifecycleService.createSession(request);
+  }
+
+  @Transactional
+  public void endSessionIfInProgress(String sessionId) {
+    lifecycleService.endSessionIfInProgress(sessionId);
+  }
+
+  @Transactional
+  public void endSession(String sessionId) {
+    lifecycleService.endSession(sessionId);
+  }
+
+  public VoiceInterviewSessionEntity getSession(String sessionId) {
+    return lifecycleService.getSession(sessionId);
+  }
+
+  public VoiceInterviewSessionEntity getSession(Long sessionId) {
+    return lifecycleService.getSession(sessionId);
+  }
+
+  @Transactional
+  public void startPhase(String sessionId, String phaseStr) {
+    lifecycleService.startPhase(sessionId, phaseStr);
+  }
+
+  public VoiceInterviewSessionEntity.InterviewPhase getCurrentPhase(String sessionId) {
+    return lifecycleService.getCurrentPhase(sessionId);
+  }
+
+  @Transactional
+  public void saveMessage(String sessionId, String userText, String aiText) {
+    VoiceInterviewSessionEntity session = getSession(sessionId);
+    if (session == null) {
+      return;
     }
+    messageService.saveMessage(parseSessionId(sessionId), session, userText, aiText);
+  }
 
-    /**
-     * Create a new voice interview session
-     * 创建新的语音面试会话
-     *
-     * @param request Session creation request with role type and phase configuration
-     * @return SessionResponseDTO with session details and WebSocket URL
-     */
-    @Transactional
-    public SessionResponseDTO createSession(CreateSessionRequest request) {
-        String effectiveSkillId = request.getSkillId() != null ? request.getSkillId() : InterviewDefaults.SKILL_ID;
-        String effectiveLlmProvider = (request.getLlmProvider() != null && !request.getLlmProvider().isBlank())
-            ? request.getLlmProvider()
-            : null;
+  public List<VoiceInterviewMessageEntity> getConversationHistory(String sessionId) {
+    return messageService.getConversationHistory(parseSessionId(sessionId));
+  }
 
-        VoiceInterviewSessionEntity session = VoiceInterviewSessionEntity.builder()
-                .userId(DEFAULT_USER_ID)
-                .roleType(effectiveSkillId)
-                .skillId(effectiveSkillId)
-                .difficulty(request.getDifficulty() != null ? request.getDifficulty() : InterviewDefaults.DIFFICULTY)
-                .customJdText(request.getCustomJdText())
-                .resumeId(request.getResumeId())
-                .introEnabled(request.getIntroEnabled())
-                .techEnabled(request.getTechEnabled())
-                .projectEnabled(request.getProjectEnabled())
-                .hrEnabled(request.getHrEnabled())
-                .llmProvider(effectiveLlmProvider)
-                .plannedDuration(request.getPlannedDuration())
-                .currentPhase(phaseService.determineFirstPhase(request))
-                .build();
+  public Optional<VoiceInterviewMessageEntity> loadSummaryRow(String sessionId) {
+    return messageService.loadSummaryRow(parseSessionId(sessionId));
+  }
 
-        VoiceInterviewSessionEntity saved = sessionRepository.save(session);
-        sessionCacheService.put(saved);
+  @Transactional(rollbackFor = Exception.class)
+  public void saveSummaryRow(String sessionId, String summary, int coveredSequenceNum) {
+    messageService.saveSummaryRow(
+        parseSessionId(sessionId), sessionId, summary, coveredSequenceNum);
+  }
 
-        log.info("Created voice interview session: {} with template: {}, phase: {}",
-                saved.getId(), effectiveSkillId, saved.getCurrentPhase());
+  @Deprecated
+  @Transactional(rollbackFor = Exception.class)
+  public void saveSummaryRowLegacy(String sessionId, String summary, int coveredTurns) {
+    messageService.saveSummaryRowLegacy(parseSessionId(sessionId), sessionId, summary, coveredTurns);
+  }
 
-        return buildSessionResponse(saved);
+  public List<VoiceInterviewMessageDTO> getConversationHistoryDTO(String sessionId) {
+    return getConversationHistory(sessionId).stream()
+        .map(message -> VoiceInterviewMessageDTO.builder()
+            .id(message.getId())
+            .sessionId(message.getSessionId())
+            .messageType(message.getMessageType())
+            .phase(message.getPhase() != null ? message.getPhase().name() : null)
+            .userRecognizedText(message.getUserRecognizedText())
+            .aiGeneratedText(message.getAiGeneratedText())
+            .timestamp(message.getTimestamp())
+            .sequenceNum(message.getSequenceNum())
+            .build())
+        .collect(Collectors.toList());
+  }
+
+  @Transactional
+  public void pauseSession(String sessionId, String reason) {
+    lifecycleService.pauseSession(sessionId, reason);
+  }
+
+  @Transactional
+  public SessionResponseDTO resumeSession(String sessionId) {
+    return lifecycleService.resumeSession(sessionId);
+  }
+
+  public List<SessionMetaDTO> getAllSessions(String userId, String status) {
+    return lifecycleService.getAllSessions(userId, status);
+  }
+
+  public SessionResponseDTO getSessionDTO(Long sessionId) {
+    return lifecycleService.getSessionDTO(sessionId);
+  }
+
+  public boolean shouldTransitionToNextPhase(
+      VoiceInterviewSessionEntity session, LocalDateTime phaseStartTime, int questionCount) {
+    return lifecycleService.shouldTransitionToNextPhase(session, phaseStartTime, questionCount);
+  }
+
+  public VoiceInterviewSessionEntity.InterviewPhase getNextPhase(
+      VoiceInterviewSessionEntity session) {
+    return lifecycleService.getNextPhase(session);
+  }
+
+  public void updateEvaluateStatus(Long sessionId, AsyncTaskStatus status, String error) {
+    evaluationService.updateEvaluateStatus(sessionId, status, error);
+  }
+
+  @Transactional
+  public void triggerEvaluation(Long sessionId) {
+    evaluationService.triggerEvaluation(sessionId);
+  }
+
+  @Transactional
+  public void deleteSession(Long sessionId) {
+    lifecycleService.deleteSession(sessionId);
+  }
+
+  @Transactional
+  public int cleanupStaleSessions() {
+    return lifecycleService.cleanupStaleSessions();
+  }
+
+  private Long parseSessionId(String sessionId) {
+    if (sessionId == null) {
+      return null;
     }
-
-    /**
-     * 仅当会话处于 IN_PROGRESS 状态时结束，用于 WebSocket 异常断开的兜底。
-     * 正常结束的 endSession 已设为 COMPLETED，此方法不会重复操作。
-     */
-    @Transactional
-    public void endSessionIfInProgress(String sessionId) {
-        Long sessionIdLong = parseSessionId(sessionId);
-        VoiceInterviewSessionEntity session = sessionRepository.findById(sessionIdLong).orElse(null);
-        if (session == null || session.getStatus() != VoiceInterviewSessionStatus.IN_PROGRESS) {
-            return;
-        }
-        log.info("Auto-ending IN_PROGRESS session {} after WebSocket disconnect", sessionId);
-        endSession(session);
-        evaluationService.sendTaskAfterCommit(sessionIdLong);
+    try {
+      return Long.parseLong(sessionId);
+    } catch (NumberFormatException e) {
+      log.error("Invalid session ID format: {}", sessionId, e);
+      return null;
     }
-
-    /**
-     * End interview session and update status
-     * 结束面试会话并更新状态
-     *
-     * @param sessionId Session ID (String format, will be converted to Long)
-     */
-    @Transactional
-    public void endSession(String sessionId) {
-        Long sessionIdLong = parseSessionId(sessionId);
-        VoiceInterviewSessionEntity session = getSession(sessionIdLong);
-
-        if (session == null) {
-            log.warn("Session not found: {}", sessionId);
-            return;
-        }
-
-        endSession(session);
-        evaluationService.sendTaskAfterCommit(sessionIdLong);
-    }
-
-    private void endSession(VoiceInterviewSessionEntity session) {
-        session.setEndTime(LocalDateTime.now());
-        session.setCurrentPhase(VoiceInterviewSessionEntity.InterviewPhase.COMPLETED);
-        session.setStatus(VoiceInterviewSessionStatus.COMPLETED);
-        session.setActualDuration((int) Duration.between(session.getStartTime(), LocalDateTime.now()).toSeconds());
-        session.setEvaluateStatus(AsyncTaskStatus.PENDING);
-
-        sessionRepository.save(session);
-        sessionCacheService.invalidate(session.getId());
-
-        log.info("Ended voice interview session: {}, duration: {} seconds, evaluation triggered",
-                session.getId(), session.getActualDuration());
-    }
-
-    /**
-     * Get session by ID with Redis cache fallback
-     * 通过ID获取会话，支持Redis缓存
-     *
-     * @param sessionId Session ID (String format, will be converted to Long)
-     * @return VoiceInterviewSessionEntity or null if not found
-     */
-    public VoiceInterviewSessionEntity getSession(String sessionId) {
-        return getSession(parseSessionId(sessionId));
-    }
-
-    /**
-     * Get session by ID with Redis cache fallback
-     * 通过ID获取会话，支持Redis缓存
-     *
-     * @param sessionId Session ID as Long
-     * @return VoiceInterviewSessionEntity or null if not found
-     */
-    public VoiceInterviewSessionEntity getSession(Long sessionId) {
-        if (sessionId == null) {
-            return null;
-        }
-
-        // Try cache first
-        VoiceInterviewSessionEntity cached = sessionCacheService.get(sessionId);
-
-        if (cached != null) {
-            log.debug("Session {} found in cache", sessionId);
-            return cached;
-        }
-
-        // Fallback to database
-        return sessionRepository.findById(sessionId).orElse(null);
-    }
-
-    /**
-     * Start a new interview phase
-     * 开始新的面试阶段
-     *
-     * @param sessionId Session ID (String format)
-     * @param phaseStr  Phase as string (INTRO, TECH, PROJECT, HR)
-     */
-    @Transactional
-    public void startPhase(String sessionId, String phaseStr) {
-        Long sessionIdLong = parseSessionId(sessionId);
-        VoiceInterviewSessionEntity session = getSession(sessionIdLong);
-
-        if (session == null) {
-            log.warn("Cannot start phase - session not found: {}", sessionId);
-            return;
-        }
-
-        try {
-            VoiceInterviewSessionEntity.InterviewPhase newPhase =
-                    VoiceInterviewSessionEntity.InterviewPhase.valueOf(phaseStr.toUpperCase());
-
-            VoiceInterviewSessionEntity.InterviewPhase oldPhase = session.getCurrentPhase();
-            session.setCurrentPhase(newPhase);
-            sessionRepository.save(session);
-            sessionCacheService.put(session); // Update cache
-
-            log.info("Session {} transitioned from phase {} to {}", sessionId, oldPhase, newPhase);
-
-        } catch (IllegalArgumentException e) {
-            log.error("Invalid phase string: {}", phaseStr, e);
-        }
-    }
-
-    /**
-     * Get current phase for session
-     * 获取会话当前阶段
-     *
-     * @param sessionId Session ID (String format)
-     * @return Current InterviewPhase or null if session not found
-     */
-    public VoiceInterviewSessionEntity.InterviewPhase getCurrentPhase(String sessionId) {
-        VoiceInterviewSessionEntity session = getSession(sessionId);
-        return session != null ? session.getCurrentPhase() : null;
-    }
-
-    /**
-     * Save dialogue message (user and AI text) to database
-     * 保存对话消息（用户和AI文本）到数据库
-     *
-     * @param sessionId Session ID (String format)
-     * @param userText  User's recognized speech text
-     * @param aiText    AI's generated response text
-     */
-    @Transactional
-    public void saveMessage(String sessionId, String userText, String aiText) {
-        Long sessionIdLong = parseSessionId(sessionId);
-        VoiceInterviewSessionEntity session = getSession(sessionIdLong);
-
-        if (session == null) {
-            log.warn("Cannot save message - session not found: {}", sessionId);
-            return;
-        }
-
-        messageService.saveMessage(sessionIdLong, session, userText, aiText);
-    }
-
-    /**
-     * Get conversation history for a session
-     * 获取会话的对话历史记录
-     *
-     * @param sessionId Session ID (String format)
-     * @return List of messages ordered by sequence number
-     */
-    public List<VoiceInterviewMessageEntity> getConversationHistory(String sessionId) {
-        Long sessionIdLong = parseSessionId(sessionId);
-        return messageService.getConversationHistory(sessionIdLong);
-    }
-
-    /**
-     * 读取会话已持久化的上下文摘要行（message_type=SUMMARY）。无则空 Optional。
-     */
-    public Optional<VoiceInterviewMessageEntity> loadSummaryRow(String sessionId) {
-        Long sessionIdLong = parseSessionId(sessionId);
-        return messageService.loadSummaryRow(sessionIdLong);
-    }
-
-    /**
-     * 持久化上下文摘要行（真实覆盖边界版本，P1-06 起的唯一生产入口）。
-     * 在会话行悲观锁内原地更新或创建 SUMMARY 行；锁内校验边界单调不回退。
-     * LLM 压缩必须在事务外完成，本方法只做边界写入。
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void saveSummaryRow(String sessionId, String summary, int coveredSequenceNum) {
-        Long sessionIdLong = parseSessionId(sessionId);
-        messageService.saveSummaryRow(sessionIdLong, sessionId, summary, coveredSequenceNum);
-    }
-
-    /**
-     * 旧版按轮数编码的摘要持久化（负 sequenceNum 编码 coveredTurns）。
-     * 生产路径禁止再调用——会写出新字段为空的行导致迁移反复触发；
-     * 仅供数据修复工具与旧测试兼容使用。
-     */
-    @Deprecated
-    @Transactional(rollbackFor = Exception.class)
-    public void saveSummaryRowLegacy(String sessionId, String summary, int coveredTurns) {
-        Long sessionIdLong = parseSessionId(sessionId);
-        messageService.saveSummaryRowLegacy(sessionIdLong, sessionId, summary, coveredTurns);
-    }
-
-    /**
-     * Get conversation history as DTOs (for frontend)
-     */
-    public List<VoiceInterviewMessageDTO> getConversationHistoryDTO(String sessionId) {
-        return getConversationHistory(sessionId).stream()
-            .map(msg -> VoiceInterviewMessageDTO.builder()
-                .id(msg.getId())
-                .sessionId(msg.getSessionId())
-                .messageType(msg.getMessageType())
-                .phase(msg.getPhase() != null ? msg.getPhase().name() : null)
-                .userRecognizedText(msg.getUserRecognizedText())
-                .aiGeneratedText(msg.getAiGeneratedText())
-                .timestamp(msg.getTimestamp())
-                .sequenceNum(msg.getSequenceNum())
-                .build())
-            .collect(Collectors.toList());
-    }
-
-    /**
-     * Pause interview session
-     * 暂停面试会话
-     *
-     * @param sessionId Session ID
-     * @param reason Pause reason (user_initiated or timeout)
-     */
-    @Transactional
-    public void pauseSession(String sessionId, String reason) {
-        Long sessionIdLong = parseSessionId(sessionId);
-
-        VoiceInterviewSessionEntity session = sessionRepository.findById(sessionIdLong)
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "会话不存在: " + sessionId));
-
-        if (session.getStatus() != VoiceInterviewSessionStatus.IN_PROGRESS) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                "会话状态为 " + session.getStatus() + "，无法暂停"
-            );
-        }
-
-        session.setStatus(VoiceInterviewSessionStatus.PAUSED);
-        session.setPausedAt(LocalDateTime.now());
-
-        sessionRepository.save(session);
-        sessionCacheService.invalidate(sessionIdLong);
-
-        log.info("Session {} paused, reason: {}", sessionId, reason);
-    }
-
-    /**
-     * Resume interview session
-     * 恢复面试会话
-     *
-     * @param sessionId Session ID
-     * @return SessionResponseDTO with WebSocket URL
-     */
-    @Transactional
-    public SessionResponseDTO resumeSession(String sessionId) {
-        Long sessionIdLong = parseSessionId(sessionId);
-
-        VoiceInterviewSessionEntity session = sessionRepository.findById(sessionIdLong)
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "会话不存在: " + sessionId));
-
-        if (session.getStatus() != VoiceInterviewSessionStatus.PAUSED) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST,
-                "会话状态为 " + session.getStatus() + "，无法恢复"
-            );
-        }
-
-        session.setStatus(VoiceInterviewSessionStatus.IN_PROGRESS);
-        session.setResumedAt(LocalDateTime.now());
-
-        VoiceInterviewSessionEntity saved = sessionRepository.save(session);
-        sessionCacheService.put(saved);
-
-        log.info("Session {} resumed with {} messages in conversation history",
-            sessionId, countDialogueMessages(sessionIdLong));
-
-        return buildSessionResponse(saved);
-    }
-
-    /**
-     * Get all sessions for a user
-     * 获取用户所有会话
-     *
-     * @param userId User ID (optional, defaults to DEFAULT_USER_ID)
-     * @param status Filter by status (optional)
-     * @return List of session metadata
-     */
-    public List<SessionMetaDTO> getAllSessions(String userId, String status) {
-        userId = userId != null ? userId : DEFAULT_USER_ID;
-
-        List<VoiceInterviewSessionEntity> sessions;
-        if (status != null && !status.isEmpty()) {
-            VoiceInterviewSessionStatus statusEnum =
-                VoiceInterviewSessionStatus.valueOf(status.toUpperCase());
-            sessions = sessionRepository.findByUserIdAndStatusOrderByUpdatedAtDesc(userId, statusEnum);
-        } else {
-            sessions = sessionRepository.findByUserIdOrderByUpdatedAtDesc(userId);
-        }
-
-        return sessions.stream()
-            .map(session -> SessionMetaDTO.builder()
-                .sessionId(session.getId())
-                .roleType(session.getRoleType())
-                .status(session.getStatus().name())
-                .currentPhase(session.getCurrentPhase().name())
-                .createdAt(session.getCreatedAt())
-                .updatedAt(session.getUpdatedAt())
-                .actualDuration(session.getActualDuration())
-                .messageCount(countDialogueMessages(session.getId()))
-                .evaluateStatus(session.getEvaluateStatus() != null ? session.getEvaluateStatus().name() : null)
-                .evaluateError(session.getEvaluateError())
-                .build())
-            .collect(Collectors.toList());
-    }
-
-    /**
-     * Get session DTO by ID
-     * 通过ID获取会话DTO
-     *
-     * @param sessionId Session ID as Long
-     * @return SessionResponseDTO with session details or null if not found
-     */
-    public SessionResponseDTO getSessionDTO(Long sessionId) {
-        VoiceInterviewSessionEntity session = getSession(sessionId);
-
-        if (session == null) {
-            return null;
-        }
-
-        return buildSessionResponse(session);
-    }
-
-    /**
-     * Check if session should transition to next phase based on duration and question count
-     * 检查是否应该转换到下一个阶段（基于时长和问题数量）
-     *
-     * @param session        Current session
-     * @param phaseStartTime Time when current phase started
-     * @param questionCount  Number of questions asked in current phase
-     * @return true if should transition, false otherwise
-     */
-    public boolean shouldTransitionToNextPhase(VoiceInterviewSessionEntity session,
-                                                 LocalDateTime phaseStartTime,
-                                                 int questionCount) {
-        return phaseService.shouldTransitionToNextPhase(session, phaseStartTime, questionCount);
-    }
-
-    /**
-     * Get the next enabled phase after current phase
-     * 获取当前阶段之后的下一个启用的阶段
-     *
-     * @param session Current session
-     * @return Next InterviewPhase or COMPLETED if no more phases
-     */
-    public VoiceInterviewSessionEntity.InterviewPhase getNextPhase(VoiceInterviewSessionEntity session) {
-        return phaseService.getNextPhase(session);
-    }
-
-    // ==================== Private Helper Methods ====================
-
-    /**
-     * Determine the first phase based on enabled phases
-     * 根据启用的阶段确定第一个阶段
-     */
-    private SessionResponseDTO buildSessionResponse(VoiceInterviewSessionEntity session) {
-        return SessionResponseDTO.builder()
-                .sessionId(session.getId())
-                .roleType(session.getRoleType())
-                .currentPhase(session.getCurrentPhase().name())
-                .status(session.getStatus().name())
-                .startTime(session.getStartTime())
-                .plannedDuration(session.getPlannedDuration())
-                .webSocketUrl(String.format("/ws/voice-interview/%d", session.getId()))
-                .build();
-    }
-
-    /**
-     * Get next sequence number for messages in a session
-     */
-    private long countDialogueMessages(Long sessionId) {
-        return messageService.countDialogueMessages(sessionId);
-    }
-
-    /**
-     * Update evaluation status on session entity (shared by Producer/Consumer/Controller)
-     */
-    public void updateEvaluateStatus(Long sessionId, AsyncTaskStatus status, String error) {
-        evaluationService.updateEvaluateStatus(sessionId, status, error);
-    }
-
-    /**
-     * Trigger async evaluation for a session (called by Controller)
-     */
-    @Transactional
-    public void triggerEvaluation(Long sessionId) {
-        evaluationService.triggerEvaluation(sessionId);
-    }
-
-    /**
-     * 删除语音面试会话及其关联的消息和评估记录
-     */
-    @Transactional
-    public void deleteSession(Long sessionId) {
-        if (!sessionRepository.existsById(sessionId)) {
-            throw new BusinessException(ErrorCode.VOICE_SESSION_NOT_FOUND, "会话不存在: " + sessionId);
-        }
-        evaluationRepository.findBySessionId(sessionId).ifPresent(evaluationRepository::delete);
-        messageRepository.deleteBySessionId(sessionId);
-        sessionRepository.deleteById(sessionId);
-        log.info("Deleted voice interview session: {}", sessionId);
-    }
-
-    /**
-     * Parse session ID from String to Long with error handling
-     */
-    private Long parseSessionId(String sessionId) {
-        if (sessionId == null) {
-            return null;
-        }
-        try {
-            return Long.parseLong(sessionId);
-        } catch (NumberFormatException e) {
-            log.error("Invalid session ID format: {}", sessionId, e);
-            return null;
-        }
-    }
-
-    /**
-     * 清理超时会话，重新投递卡住的 PENDING 评估，并结束超时的 PROCESSING 评估。
-     * 由 @Scheduled 在 WebSocketHandler 中定时触发。
-     */
-    @Transactional
-    public int cleanupStaleSessions() {
-        LocalDateTime staleThreshold = LocalDateTime.now().minusHours(2);
-
-        List<VoiceInterviewSessionEntity> staleSessions = sessionRepository
-            .findByStatusAndStartTimeBefore(VoiceInterviewSessionStatus.IN_PROGRESS, staleThreshold);
-
-        int cleaned = 0;
-        for (VoiceInterviewSessionEntity session : staleSessions) {
-            log.info("Cleaning up stale IN_PROGRESS session {}, started at {}",
-                session.getId(), session.getStartTime());
-            endSession(session);
-            evaluationService.sendTaskAfterCommit(session.getId());
-            cleaned++;
-        }
-
-        return cleaned + evaluationService.recoverStaleEvaluations();
-    }
+  }
 }
