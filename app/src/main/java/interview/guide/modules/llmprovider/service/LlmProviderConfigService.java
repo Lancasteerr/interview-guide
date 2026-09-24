@@ -62,6 +62,7 @@ public class LlmProviderConfigService {
   private final QwenTtsService ttsService;
   private final LlmProviderConnectivityTester connectivityTester;
   private final VoiceProviderConfigService voiceConfigService;
+  private final LlmProviderDefaultService defaultService;
 
   private static final Map<String, String> RECOMMENDED_EMBEDDING_MODELS = Map.of(
       "dashscope", "text-embedding-v3",
@@ -94,6 +95,9 @@ public class LlmProviderConfigService {
     this.connectivityTester = new LlmProviderConnectivityTester();
     this.voiceConfigService = new VoiceProviderConfigService(
         voiceProperties, asrService, ttsService, yamlPath, envPath, this::maskApiKey);
+    this.defaultService = new LlmProviderDefaultService(
+        properties, registry, providerRepository, globalSettingRepository,
+        this::writeDefaultProviderToYaml);
   }
 
   public LlmProviderConfigService(
@@ -230,13 +234,7 @@ public class LlmProviderConfigService {
   public DefaultProviderDTO getDefaultProvider() {
     rwLock.readLock().lock();
     try {
-      if (!isDatabaseBacked()) {
-        return new DefaultProviderDTO(properties.getDefaultProvider(), properties.getDefaultEmbeddingProvider());
-      }
-      LlmGlobalSettingEntity setting = getGlobalSettingOrThrow();
-      return new DefaultProviderDTO(
-          setting.getDefaultChatProviderId(),
-          setting.getDefaultEmbeddingProviderId());
+      return defaultService.getDefaultProvider();
     } finally {
       rwLock.readLock().unlock();
     }
@@ -431,20 +429,7 @@ public class LlmProviderConfigService {
   public void updateDefaultProvider(DefaultProviderDTO request) {
     rwLock.writeLock().lock();
     try {
-      if (!isDatabaseBacked()) {
-        updateDefaultProviderLegacy(request);
-        return;
-      }
-      String providerId = trimOrNull(request.defaultProvider());
-      if (providerId == null) {
-        throw new BusinessException(ErrorCode.BAD_REQUEST, "defaultProvider 不能为空");
-      }
-      getProviderEntityOrThrow(providerId);
-      LlmGlobalSettingEntity setting = getGlobalSettingOrThrow();
-      setting.setDefaultChatProviderId(providerId);
-      globalSettingRepository.save(setting);
-      registry.reload();
-      log.info("Updated default provider: {}", providerId);
+      defaultService.updateDefaultProvider(request);
     } finally {
       rwLock.writeLock().unlock();
     }
@@ -454,26 +439,7 @@ public class LlmProviderConfigService {
   public void updateDefaultEmbeddingProvider(DefaultProviderDTO request) {
     rwLock.writeLock().lock();
     try {
-      String providerId = trimOrNull(request.defaultEmbeddingProvider());
-      if (providerId == null) {
-        throw new BusinessException(ErrorCode.BAD_REQUEST, "defaultEmbeddingProvider 不能为空");
-      }
-      LlmProviderEntity provider = getProviderEntityOrThrow(providerId);
-      String embeddingModel = trimOrNull(provider.getEmbeddingModel());
-      if (!provider.isSupportsEmbedding() || embeddingModel == null) {
-        throw new BusinessException(ErrorCode.BAD_REQUEST,
-            "Provider '" + providerId + "' 不支持 Embedding，不能设为默认向量服务");
-      }
-      validateEmbeddingConfig(
-          providerId,
-          true,
-          embeddingModel,
-          resolveEmbeddingDimensions(provider.getEmbeddingDimensions()));
-      LlmGlobalSettingEntity setting = getGlobalSettingOrThrow();
-      setting.setDefaultEmbeddingProviderId(providerId);
-      globalSettingRepository.save(setting);
-      registry.reload();
-      log.info("Updated default embedding provider: {}", providerId);
+      defaultService.updateDefaultEmbeddingProvider(request);
     } finally {
       rwLock.writeLock().unlock();
     }
@@ -618,17 +584,6 @@ public class LlmProviderConfigService {
     String envKey = toEnvKey(id);
     removeProviderFromYaml(id);
     removeFromEnv(envKey);
-    registry.reload();
-  }
-
-  private void updateDefaultProviderLegacy(DefaultProviderDTO request) {
-    String providerId = trimOrNull(request.defaultProvider());
-    if (providerId == null) {
-      throw new BusinessException(ErrorCode.BAD_REQUEST, "defaultProvider 不能为空");
-    }
-    getLegacyProviderConfigOrThrow(providerId);
-    properties.setDefaultProvider(providerId);
-    writeDefaultProviderToYaml(providerId);
     registry.reload();
   }
 
