@@ -47,6 +47,7 @@ public class UnifiedEvaluationService {
     private final int fallbackMaxExtraCalls;
     private final int fallbackMinGroups;
     private final ResourceLoader resourceLoader;
+    private final EvaluationReportAssembler reportAssembler = new EvaluationReportAssembler();
 
     // 批次评估结果
     record BatchReportDTO(
@@ -65,7 +66,7 @@ public class UnifiedEvaluationService {
         List<String> keyPoints
     ) {}
 
-    private record BatchResult(
+    record BatchResult(
         List<Integer> questionIndexes,
         BatchReportDTO report
     ) {}
@@ -139,10 +140,10 @@ public class UnifiedEvaluationService {
         );
 
         // 合并批次结果
-        List<QuestionEvalDTO> mergedEvaluations = mergeQuestionEvaluations(batchResults);
-        String fallbackFeedback = mergeOverallFeedback(batchResults);
-        List<String> fallbackStrengths = mergeListItems(batchResults, true);
-        List<String> fallbackImprovements = mergeListItems(batchResults, false);
+        List<QuestionEvalDTO> mergedEvaluations = reportAssembler.mergeQuestionEvaluations(batchResults);
+        String fallbackFeedback = reportAssembler.mergeOverallFeedback(batchResults);
+        List<String> fallbackStrengths = reportAssembler.mergeListItems(batchResults, true);
+        List<String> fallbackImprovements = reportAssembler.mergeListItems(batchResults, false);
 
         // 二次汇总
         SummaryDTO summary = summarizeBatchResults(
@@ -150,7 +151,7 @@ public class UnifiedEvaluationService {
             mergedEvaluations, fallbackFeedback, fallbackStrengths, fallbackImprovements
         );
 
-        return buildReport(sessionId, qaRecords, mergedEvaluations,
+        return reportAssembler.buildReport(sessionId, qaRecords, mergedEvaluations,
             summary.overallFeedback(), summary.strengths(), summary.improvements());
     }
 
@@ -357,46 +358,7 @@ public class UnifiedEvaluationService {
      *   不做半索引半位置的混用（避免同一份评估被重复消费或错位）
      */
     private List<QuestionEvalDTO> mergeQuestionEvaluations(List<BatchResult> batchResults) {
-        List<QuestionEvalDTO> merged = new ArrayList<>();
-        for (BatchResult result : batchResults) {
-            List<Integer> expectedIndexes = result.questionIndexes();
-            List<QuestionEvalDTO> current =
-                result.report() != null && result.report().questionEvaluations() != null
-                    ? result.report().questionEvaluations()
-                    : List.of();
-
-            Map<Integer, QuestionEvalDTO> byIndex = new HashMap<>();
-            Set<Integer> returnedIndexes = new LinkedHashSet<>();
-            for (QuestionEvalDTO dto : current) {
-                if (dto == null) {
-                    continue;
-                }
-                returnedIndexes.add(dto.questionIndex());
-                if (expectedIndexes.contains(dto.questionIndex())) {
-                    byIndex.putIfAbsent(dto.questionIndex(), dto);
-                }
-            }
-            boolean countsMatch = current.size() == expectedIndexes.size();
-            boolean allMapped = byIndex.size() == expectedIndexes.size();
-            boolean oneBasedShift = !allMapped && countsMatch
-                && isConsistentOneBasedShift(returnedIndexes, expectedIndexes);
-            boolean noUsableIndex = byIndex.isEmpty() && countsMatch;
-            boolean positionalFallback = oneBasedShift || noUsableIndex;
-
-            for (int i = 0; i < expectedIndexes.size(); i++) {
-                int originalIndex = expectedIndexes.get(i);
-                QuestionEvalDTO dto = positionalFallback
-                    ? current.get(i)
-                    : byIndex.get(originalIndex);
-                if (dto != null && dto.questionIndex() != originalIndex) {
-                    dto = new QuestionEvalDTO(originalIndex, dto.score(), dto.feedback(),
-                        dto.referenceAnswer(), dto.keyPoints());
-                }
-                merged.add(dto != null ? dto : new QuestionEvalDTO(
-                    originalIndex, 0, "该题未成功生成评估结果，系统按 0 分处理。", "", List.of()));
-            }
-        }
-        return merged;
+        return reportAssembler.mergeQuestionEvaluations(batchResults);
     }
 
     /**
@@ -410,27 +372,11 @@ public class UnifiedEvaluationService {
     }
 
     private String mergeOverallFeedback(List<BatchResult> batchResults) {
-        String feedback = batchResults.stream()
-            .map(BatchResult::report)
-            .filter(r -> r != null && r.overallFeedback() != null && !r.overallFeedback().isBlank())
-            .map(BatchReportDTO::overallFeedback)
-            .collect(Collectors.joining("\n\n"));
-        return feedback.isBlank() ? "本次面试已完成分批评估，但未生成有效综合评语。" : feedback;
+        return reportAssembler.mergeOverallFeedback(batchResults);
     }
 
     private List<String> mergeListItems(List<BatchResult> batchResults, boolean strengthsMode) {
-        Set<String> merged = new LinkedHashSet<>();
-        for (BatchResult result : batchResults) {
-            BatchReportDTO report = result.report();
-            if (report == null) continue;
-            List<String> items = strengthsMode ? report.strengths() : report.improvements();
-            if (items == null) continue;
-            items.stream()
-                .filter(item -> item != null && !item.isBlank())
-                .map(String::trim)
-                .forEach(merged::add);
-        }
-        return merged.stream().limit(8).toList();
+        return reportAssembler.mergeListItems(batchResults, strengthsMode);
     }
 
     private SummaryDTO summarizeBatchResults(
@@ -443,8 +389,8 @@ public class UnifiedEvaluationService {
             vars.put("resumeText", resumeContext);
             vars.put("referenceContext",
                 (referenceContext != null && !referenceContext.isBlank()) ? referenceContext : "无");
-            vars.put("categorySummary", buildCategorySummary(qaRecords, evaluations));
-            vars.put("questionHighlights", buildQuestionHighlights(qaRecords, evaluations));
+            vars.put("categorySummary", reportAssembler.buildCategorySummary(qaRecords, evaluations));
+            vars.put("questionHighlights", reportAssembler.buildQuestionHighlights(qaRecords, evaluations));
             vars.put("fallbackOverallFeedback", fallbackFeedback);
             vars.put("fallbackStrengths", String.join("\n", fallbackStrengths));
             vars.put("fallbackImprovements", String.join("\n", fallbackImprovements));
@@ -456,11 +402,8 @@ public class UnifiedEvaluationService {
                 ErrorCode.INTERVIEW_EVALUATION_FAILED, "总结评估失败：", "总结评估", log
             );
 
-            String feedback = dto != null && dto.overallFeedback() != null && !dto.overallFeedback().isBlank()
-                ? dto.overallFeedback() : fallbackFeedback;
-            List<String> strengths = sanitizeItems(dto != null ? dto.strengths() : null, fallbackStrengths);
-            List<String> improvements = sanitizeItems(dto != null ? dto.improvements() : null, fallbackImprovements);
-            return new SummaryDTO(feedback, strengths, improvements);
+            return reportAssembler.summarize(qaRecords, evaluations, dto, fallbackFeedback,
+                fallbackStrengths, fallbackImprovements);
         } catch (Exception e) {
             log.warn("二次汇总评估失败，降级到批次聚合结果: sessionId={}, error={}",
                 sessionId, ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
@@ -468,101 +411,19 @@ public class UnifiedEvaluationService {
         }
     }
 
-    private List<String> sanitizeItems(List<String> primary, List<String> fallback) {
-        List<String> source = (primary != null && !primary.isEmpty()) ? primary : fallback;
-        if (source == null || source.isEmpty()) return List.of();
-        return source.stream()
-            .filter(item -> item != null && !item.isBlank())
-            .map(String::trim).distinct().limit(8).toList();
-    }
-
     private EvaluationReport buildReport(String sessionId, List<QaRecord> qaRecords,
                                           List<QuestionEvalDTO> evaluations,
                                           String overallFeedback,
                                           List<String> strengths, List<String> improvements) {
-        List<QuestionEvaluation> questionDetails = new ArrayList<>();
-        List<ReferenceAnswer> referenceAnswers = new ArrayList<>();
-        Map<String, List<Integer>> categoryScoresMap = new HashMap<>();
-
-        long answeredCount = qaRecords.stream()
-            .filter(q -> q.userAnswer() != null && !q.userAnswer().isBlank())
-            .count();
-
-        int evalSize = evaluations != null ? evaluations.size() : 0;
-
-        for (int i = 0; i < qaRecords.size(); i++) {
-            QaRecord q = qaRecords.get(i);
-            QuestionEvalDTO eval = i < evalSize ? evaluations.get(i) : null;
-
-            boolean hasAnswer = q.userAnswer() != null && !q.userAnswer().isBlank();
-            int score = hasAnswer && eval != null ? eval.score() : 0;
-            String feedback = eval != null && eval.feedback() != null
-                ? eval.feedback() : "该题未成功生成评估反馈。";
-            String refAnswer = eval != null && eval.referenceAnswer() != null
-                ? eval.referenceAnswer() : "";
-            List<String> keyPoints = eval != null && eval.keyPoints() != null
-                ? eval.keyPoints() : List.of();
-
-            questionDetails.add(new QuestionEvaluation(
-                q.questionIndex(), q.question(), q.category(), q.userAnswer(), score, feedback
-            ));
-            referenceAnswers.add(new ReferenceAnswer(
-                q.questionIndex(), q.question(), refAnswer, keyPoints
-            ));
-            categoryScoresMap.computeIfAbsent(q.category(), k -> new ArrayList<>()).add(score);
-        }
-
-        List<CategoryScore> categoryScores = categoryScoresMap.entrySet().stream()
-            .map(e -> new CategoryScore(
-                e.getKey(),
-                (int) e.getValue().stream().mapToInt(Integer::intValue).average().orElse(0),
-                e.getValue().size()
-            ))
-            .collect(Collectors.toList());
-
-        int overallScore = answeredCount == 0 ? 0
-            : (int) questionDetails.stream().mapToInt(QuestionEvaluation::score).average().orElse(0);
-
-        return new EvaluationReport(
-            sessionId, qaRecords.size(), overallScore, categoryScores, questionDetails,
-            overallFeedback,
-            strengths != null ? strengths : List.of(),
-            improvements != null ? improvements : List.of(),
-            referenceAnswers
-        );
+        return reportAssembler.buildReport(sessionId, qaRecords, evaluations, overallFeedback,
+            strengths, improvements);
     }
 
     private String buildCategorySummary(List<QaRecord> qaRecords, List<QuestionEvalDTO> evaluations) {
-        Map<String, List<Integer>> categoryScores = new HashMap<>();
-        for (int i = 0; i < qaRecords.size(); i++) {
-            QaRecord q = qaRecords.get(i);
-            QuestionEvalDTO eval = i < evaluations.size() ? evaluations.get(i) : null;
-            int score = 0;
-            if (eval != null && q.userAnswer() != null && !q.userAnswer().isBlank()) {
-                score = eval.score();
-            }
-            categoryScores.computeIfAbsent(q.category(), k -> new ArrayList<>()).add(score);
-        }
-        return categoryScores.entrySet().stream()
-            .map(entry -> {
-                int avg = (int) entry.getValue().stream().mapToInt(Integer::intValue).average().orElse(0);
-                return String.format("- %s: 平均分 %d, 题数 %d", entry.getKey(), avg, entry.getValue().size());
-            })
-            .sorted()
-            .collect(Collectors.joining("\n"));
+        return reportAssembler.buildCategorySummary(qaRecords, evaluations);
     }
 
     private String buildQuestionHighlights(List<QaRecord> qaRecords, List<QuestionEvalDTO> evaluations) {
-        List<String> highlights = new ArrayList<>();
-        for (int i = 0; i < qaRecords.size(); i++) {
-            QaRecord q = qaRecords.get(i);
-            QuestionEvalDTO eval = i < evaluations.size() ? evaluations.get(i) : null;
-            int score = eval != null ? eval.score() : 0;
-            String feedback = eval != null && eval.feedback() != null ? eval.feedback() : "";
-            String shortQ = q.question().length() > 50 ? q.question().substring(0, 50) + "..." : q.question();
-            String shortF = feedback.length() > 80 ? feedback.substring(0, 80) + "..." : feedback;
-            highlights.add(String.format("- Q%d | %s | 分数:%d | 反馈:%s", q.questionIndex() + 1, shortQ, score, shortF));
-        }
-        return highlights.stream().limit(20).collect(Collectors.joining("\n"));
+        return reportAssembler.buildQuestionHighlights(qaRecords, evaluations);
     }
 }
