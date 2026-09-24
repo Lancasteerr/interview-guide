@@ -18,7 +18,6 @@ import interview.guide.modules.interview.dto.SubmitAnswerRequest;
 import interview.guide.modules.interview.dto.SubmitAnswerResponse;
 import interview.guide.modules.interview.dto.InterviewSessionDTO.SessionStatus;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
@@ -47,10 +46,10 @@ public class InterviewSessionService {
     private final InterviewPersistenceService persistenceService;
     private final InterviewSessionCache sessionCache;
     private final ObjectMapper objectMapper;
-    private final LlmProviderRegistry llmProviderRegistry;
     private final RedisService redisService;
     private final InterviewSessionStateService stateService;
     private final InterviewAnswerSubmissionService answerSubmissionService;
+    private final InterviewReportGenerationService reportGenerationService;
 
     public InterviewSessionService(
         InterviewQuestionService questionService,
@@ -77,6 +76,14 @@ public class InterviewSessionService {
                 objectMapper,
                 evaluateStreamProducer,
                 new InterviewSessionStateService(persistenceService, sessionCache, objectMapper)
+            ),
+            new InterviewReportGenerationService(
+                new InterviewSessionStateService(persistenceService, sessionCache, objectMapper),
+                persistenceService,
+                sessionCache,
+                objectMapper,
+                llmProviderRegistry,
+                evaluationService
             )
         );
     }
@@ -92,16 +99,17 @@ public class InterviewSessionService {
         LlmProviderRegistry llmProviderRegistry,
         RedisService redisService,
         InterviewSessionStateService stateService,
-        InterviewAnswerSubmissionService answerSubmissionService) {
+        InterviewAnswerSubmissionService answerSubmissionService,
+        InterviewReportGenerationService reportGenerationService) {
         this.questionService = questionService;
         this.evaluationService = evaluationService;
         this.persistenceService = persistenceService;
         this.sessionCache = sessionCache;
         this.objectMapper = objectMapper;
-        this.llmProviderRegistry = llmProviderRegistry;
         this.redisService = redisService;
         this.stateService = stateService;
         this.answerSubmissionService = answerSubmissionService;
+        this.reportGenerationService = reportGenerationService;
     }
 
     /**
@@ -372,42 +380,7 @@ public class InterviewSessionService {
      * 生成评估报告
      */
     public InterviewReportDTO generateReport(String sessionId) {
-        CachedSession session = stateService.getOrRestoreSession(sessionId);
-
-        if (session.getStatus() != SessionStatus.COMPLETED && session.getStatus() != SessionStatus.EVALUATED) {
-            throw new BusinessException(ErrorCode.INTERVIEW_NOT_COMPLETED, "面试尚未完成，无法生成报告");
-        }
-
-        log.info("生成面试报告: {}", sessionId);
-
-        List<InterviewQuestionDTO> questions = session.getQuestions(objectMapper);
-
-        // 获取 LLM 客户端
-        String provider = null;
-        Optional<InterviewSessionEntity> entityOpt = persistenceService.findBySessionId(sessionId);
-        if (entityOpt.isPresent()) {
-            provider = entityOpt.get().getLlmProvider();
-        }
-        ChatClient chatClient = llmProviderRegistry.getChatClientOrDefault(provider);
-
-        InterviewReportDTO report = evaluationService.evaluateInterview(
-            chatClient,
-            sessionId,
-            session.getResumeText(),
-            questions
-        );
-
-        // 更新 Redis 缓存状态
-        sessionCache.updateSessionStatus(sessionId, SessionStatus.EVALUATED);
-
-        // 保存报告到数据库
-        try {
-            persistenceService.saveReport(sessionId, report);
-        } catch (Exception e) {
-            log.warn("保存报告到数据库失败: {}", e.getMessage());
-        }
-
-        return report;
+        return reportGenerationService.generateReport(sessionId);
     }
 
 }
