@@ -11,7 +11,6 @@ import interview.guide.infrastructure.redis.RedisService;
 import interview.guide.modules.interview.listener.EvaluateStreamProducer;
 import interview.guide.modules.interview.dto.CreateInterviewRequest;
 import interview.guide.modules.interview.model.HistoricalQuestion;
-import interview.guide.modules.interview.entity.InterviewAnswerEntity;
 import interview.guide.modules.interview.dto.InterviewQuestionDTO;
 import interview.guide.modules.interview.dto.InterviewReportDTO;
 import interview.guide.modules.interview.dto.InterviewSessionDTO;
@@ -19,11 +18,10 @@ import interview.guide.modules.interview.entity.InterviewSessionEntity;
 import interview.guide.modules.interview.dto.SubmitAnswerRequest;
 import interview.guide.modules.interview.dto.SubmitAnswerResponse;
 import interview.guide.modules.interview.dto.InterviewSessionDTO.SessionStatus;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
@@ -39,7 +37,6 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class InterviewSessionService {
 
     private static final String CREATE_LOCK_PREFIX = "interview:create:";
@@ -54,6 +51,51 @@ public class InterviewSessionService {
     private final EvaluateStreamProducer evaluateStreamProducer;
     private final LlmProviderRegistry llmProviderRegistry;
     private final RedisService redisService;
+    private final InterviewSessionStateService stateService;
+
+    public InterviewSessionService(
+        InterviewQuestionService questionService,
+        AnswerEvaluationService evaluationService,
+        InterviewPersistenceService persistenceService,
+        InterviewSessionCache sessionCache,
+        ObjectMapper objectMapper,
+        EvaluateStreamProducer evaluateStreamProducer,
+        LlmProviderRegistry llmProviderRegistry,
+        RedisService redisService) {
+        this(
+            questionService,
+            evaluationService,
+            persistenceService,
+            sessionCache,
+            objectMapper,
+            evaluateStreamProducer,
+            llmProviderRegistry,
+            redisService,
+            new InterviewSessionStateService(persistenceService, sessionCache, objectMapper)
+        );
+    }
+
+    @Autowired
+    public InterviewSessionService(
+        InterviewQuestionService questionService,
+        AnswerEvaluationService evaluationService,
+        InterviewPersistenceService persistenceService,
+        InterviewSessionCache sessionCache,
+        ObjectMapper objectMapper,
+        EvaluateStreamProducer evaluateStreamProducer,
+        LlmProviderRegistry llmProviderRegistry,
+        RedisService redisService,
+        InterviewSessionStateService stateService) {
+        this.questionService = questionService;
+        this.evaluationService = evaluationService;
+        this.persistenceService = persistenceService;
+        this.sessionCache = sessionCache;
+        this.objectMapper = objectMapper;
+        this.evaluateStreamProducer = evaluateStreamProducer;
+        this.llmProviderRegistry = llmProviderRegistry;
+        this.redisService = redisService;
+        this.stateService = stateService;
+    }
 
     /**
      * 创建新的面试会话
@@ -234,52 +276,14 @@ public class InterviewSessionService {
      * 获取会话信息（优先从缓存获取，缓存未命中则从数据库恢复）
      */
     public InterviewSessionDTO getSession(String sessionId) {
-        // 1. 尝试从 Redis 缓存获取
-        Optional<CachedSession> cachedOpt = sessionCache.getSession(sessionId);
-        if (cachedOpt.isPresent()) {
-            return toDTO(cachedOpt.get());
-        }
-
-        // 2. 缓存未命中，从数据库恢复
-        CachedSession restoredSession = restoreSessionFromDatabase(sessionId);
-        if (restoredSession == null) {
-            throw new BusinessException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND);
-        }
-
-        return toDTO(restoredSession);
+        return stateService.getSession(sessionId);
     }
 
     /**
      * 查找并恢复未完成的面试会话
      */
     public Optional<InterviewSessionDTO> findUnfinishedSession(Long resumeId) {
-        try {
-            // 1. 先从 Redis 缓存查找
-            Optional<String> cachedSessionIdOpt = sessionCache.findUnfinishedSessionId(resumeId);
-            if (cachedSessionIdOpt.isPresent()) {
-                String sessionId = cachedSessionIdOpt.get();
-                Optional<CachedSession> cachedOpt = sessionCache.getSession(sessionId);
-                if (cachedOpt.isPresent()) {
-                    log.debug("从 Redis 缓存找到未完成会话: resumeId={}, sessionId={}", resumeId, sessionId);
-                    return Optional.of(toDTO(cachedOpt.get()));
-                }
-            }
-
-            // 2. 缓存未命中，从数据库查找
-            Optional<InterviewSessionEntity> entityOpt = persistenceService.findUnfinishedSession(resumeId);
-            if (entityOpt.isEmpty()) {
-                return Optional.empty();
-            }
-
-            InterviewSessionEntity entity = entityOpt.get();
-            CachedSession restoredSession = restoreSessionFromEntity(entity);
-            if (restoredSession != null) {
-                return Optional.of(toDTO(restoredSession));
-            }
-        } catch (Exception e) {
-            log.error("恢复未完成会话失败: {}", e.getMessage(), e);
-        }
-        return Optional.empty();
+        return stateService.findUnfinishedSession(resumeId);
     }
 
     /**
@@ -288,74 +292,6 @@ public class InterviewSessionService {
     public InterviewSessionDTO findUnfinishedSessionOrThrow(Long resumeId) {
         return findUnfinishedSession(resumeId)
             .orElseThrow(() -> new BusinessException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND, "未找到未完成的面试会话"));
-    }
-
-    /**
-     * 从数据库恢复会话并缓存到 Redis
-     */
-    private CachedSession restoreSessionFromDatabase(String sessionId) {
-        try {
-            Optional<InterviewSessionEntity> entityOpt = persistenceService.findBySessionId(sessionId);
-            return entityOpt.map(this::restoreSessionFromEntity).orElse(null);
-        } catch (Exception e) {
-            log.error("从数据库恢复会话失败: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-
-    /**
-     * 从实体恢复会话并缓存到 Redis
-     */
-    private CachedSession restoreSessionFromEntity(InterviewSessionEntity entity) {
-        try {
-            // 解析问题列表
-            List<InterviewQuestionDTO> questions = objectMapper.readValue(
-                entity.getQuestionsJson(),
-                new TypeReference<>() {}
-            );
-
-            // 恢复已保存的答案
-            List<InterviewAnswerEntity> answers = persistenceService.findAnswersBySessionId(entity.getSessionId());
-            for (InterviewAnswerEntity answer : answers) {
-                int index = answer.getQuestionIndex();
-                if (index >= 0 && index < questions.size()) {
-                    InterviewQuestionDTO question = questions.get(index);
-                    questions.set(index, question.withAnswer(answer.getUserAnswer()));
-                }
-            }
-
-            SessionStatus status = convertStatus(entity.getStatus());
-
-            // 保存到 Redis 缓存
-            sessionCache.saveSession(
-                entity.getSessionId(),
-                entity.getResume() != null ? entity.getResume().getResumeText() : "",
-                entity.getResume() != null ? entity.getResume().getId() : null,
-                entity.getKnowledgeBaseId(),
-                entity.getInterviewCategory(),
-                questions,
-                entity.getCurrentQuestionIndex(),
-                status
-            );
-
-            log.info("从数据库恢复会话到 Redis: sessionId={}, currentIndex={}, status={}",
-                entity.getSessionId(), entity.getCurrentQuestionIndex(), entity.getStatus());
-
-            // 返回缓存的会话
-            return sessionCache.getSession(entity.getSessionId()).orElse(null);
-        } catch (Exception e) {
-            log.error("恢复会话失败: {}", e.getMessage(), e);
-            return null;
-        }
-    }
-
-    private SessionStatus convertStatus(InterviewSessionEntity.SessionStatus status) {
-        return switch (status) {
-            case CREATED -> SessionStatus.CREATED;
-            case IN_PROGRESS -> SessionStatus.IN_PROGRESS;
-            case COMPLETED -> SessionStatus.COMPLETED;
-            case EVALUATED -> SessionStatus.EVALUATED;
-        };
     }
 
     /**
@@ -379,7 +315,7 @@ public class InterviewSessionService {
      * 获取当前问题
      */
     public InterviewQuestionDTO getCurrentQuestion(String sessionId) {
-        CachedSession session = getOrRestoreSession(sessionId);
+        CachedSession session = stateService.getOrRestoreSession(sessionId);
         List<InterviewQuestionDTO> questions = session.getQuestions(objectMapper);
 
         if (session.getCurrentIndex() >= questions.size()) {
@@ -408,7 +344,7 @@ public class InterviewSessionService {
      * 如果是最后一题，自动触发异步评估
      */
     public SubmitAnswerResponse submitAnswer(SubmitAnswerRequest request) {
-        CachedSession session = getOrRestoreSession(request.sessionId());
+        CachedSession session = stateService.getOrRestoreSession(request.sessionId());
         List<InterviewQuestionDTO> questions = session.getQuestions(objectMapper);
 
         int index = request.questionIndex();
@@ -485,7 +421,7 @@ public class InterviewSessionService {
      * 暂存答案（不进入下一题）
      */
     public void saveAnswer(SubmitAnswerRequest request) {
-        CachedSession session = getOrRestoreSession(request.sessionId());
+        CachedSession session = stateService.getOrRestoreSession(request.sessionId());
         List<InterviewQuestionDTO> questions = session.getQuestions(objectMapper);
 
         int index = request.questionIndex();
@@ -526,7 +462,7 @@ public class InterviewSessionService {
      * 提前交卷（触发异步评估）
      */
     public void completeInterview(String sessionId) {
-        CachedSession session = getOrRestoreSession(sessionId);
+        CachedSession session = stateService.getOrRestoreSession(sessionId);
 
         if (session.getStatus() == SessionStatus.COMPLETED || session.getStatus() == SessionStatus.EVALUATED) {
             throw new BusinessException(ErrorCode.INTERVIEW_ALREADY_COMPLETED);
@@ -552,31 +488,10 @@ public class InterviewSessionService {
     }
 
     /**
-     * 获取或恢复会话（优先从缓存获取）
-     */
-    private CachedSession getOrRestoreSession(String sessionId) {
-        // 1. 尝试从 Redis 缓存获取
-        Optional<CachedSession> cachedOpt = sessionCache.getSession(sessionId);
-        if (cachedOpt.isPresent()) {
-            // 刷新 TTL
-            sessionCache.refreshSessionTTL(sessionId);
-            return cachedOpt.get();
-        }
-
-        // 2. 缓存未命中，从数据库恢复
-        CachedSession restoredSession = restoreSessionFromDatabase(sessionId);
-        if (restoredSession == null) {
-            throw new BusinessException(ErrorCode.INTERVIEW_SESSION_NOT_FOUND);
-        }
-
-        return restoredSession;
-    }
-
-    /**
      * 生成评估报告
      */
     public InterviewReportDTO generateReport(String sessionId) {
-        CachedSession session = getOrRestoreSession(sessionId);
+        CachedSession session = stateService.getOrRestoreSession(sessionId);
 
         if (session.getStatus() != SessionStatus.COMPLETED && session.getStatus() != SessionStatus.EVALUATED) {
             throw new BusinessException(ErrorCode.INTERVIEW_NOT_COMPLETED, "面试尚未完成，无法生成报告");
@@ -614,20 +529,4 @@ public class InterviewSessionService {
         return report;
     }
 
-    /**
-     * 将缓存会话转换为 DTO
-     */
-    private InterviewSessionDTO toDTO(CachedSession session) {
-        List<InterviewQuestionDTO> questions = session.getQuestions(objectMapper);
-        return new InterviewSessionDTO(
-            session.getSessionId(),
-            session.getResumeText(),
-            questions.size(),
-            session.getCurrentIndex(),
-            questions,
-            session.getStatus(),
-            session.getKnowledgeBaseId(),
-            session.getInterviewCategory()
-        );
-    }
 }
