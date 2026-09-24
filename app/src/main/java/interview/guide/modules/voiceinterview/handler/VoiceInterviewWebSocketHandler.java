@@ -665,8 +665,17 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                     Math.max(1, voiceInterviewProperties.getMaxConcurrentTtsPerSession()));
                 boolean chunkedEnabled = voiceInterviewProperties.isChunkedAudioEnabled();
                 long ttsTimeoutSec = Math.max(5, voiceInterviewProperties.getTtsTimeoutSeconds());
-                OrderedTtsChunkEmitter chunkEmitter = chunkedEnabled
-                    ? new OrderedTtsChunkEmitter(sessionId, session, ttsSemaphore, ttsTimeoutSec)
+                VoiceWebSocketTtsChunkEmitter chunkEmitter = chunkedEnabled
+                    ? new VoiceWebSocketTtsChunkEmitter(
+                        sessionId,
+                        session,
+                        ttsSemaphore,
+                        ttsTimeoutSec,
+                        ttsService,
+                        messageService,
+                        voicePipelineExecutor,
+                        this::convertPcmToWav
+                    )
                     : null;
                 List<CompletableFuture<byte[]>> ttsFutures = new ArrayList<>();
 
@@ -902,122 +911,6 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             case "start_phase":
                 interviewService.startPhase(sessionId, control.getPhase());
                 break;
-        }
-    }
-
-    private class OrderedTtsChunkEmitter {
-
-        private final String sessionId;
-        private final WebSocketSession session;
-        private final Semaphore ttsSemaphore;
-        private final long ttsTimeoutSec;
-        private final Map<Integer, CompletableFuture<byte[]>> futures = new ConcurrentHashMap<>();
-        private final AtomicInteger nextIndex = new AtomicInteger();
-        private final AtomicInteger emittedChunks = new AtomicInteger();
-        private final Object lock = new Object();
-        private final CompletableFuture<Integer> completion;
-        private volatile int totalChunks = -1;
-
-        OrderedTtsChunkEmitter(
-                String sessionId,
-                WebSocketSession session,
-                Semaphore ttsSemaphore,
-                long ttsTimeoutSec) {
-            this.sessionId = sessionId;
-            this.session = session;
-            this.ttsSemaphore = ttsSemaphore;
-            this.ttsTimeoutSec = ttsTimeoutSec;
-            this.completion = CompletableFuture.supplyAsync(this::drainChunks, voicePipelineExecutor);
-        }
-
-        void submit(String sentence) {
-            int index = nextIndex.getAndIncrement();
-            ttsSemaphore.acquireUninterruptibly();
-            CompletableFuture<byte[]> future = CompletableFuture.supplyAsync(() -> {
-                try {
-                    return ttsService.synthesize(sentence);
-                } finally {
-                    ttsSemaphore.release();
-                }
-            }, voicePipelineExecutor);
-
-            futures.put(index, future);
-            synchronized (lock) {
-                lock.notifyAll();
-            }
-        }
-
-        void finish() {
-            synchronized (lock) {
-                totalChunks = nextIndex.get();
-                lock.notifyAll();
-            }
-        }
-
-        int awaitCompletion() {
-            long timeoutSec = Math.max(ttsTimeoutSec + 2, (ttsTimeoutSec + 1) * Math.max(1, nextIndex.get()));
-            try {
-                return completion.get(timeoutSec, TimeUnit.SECONDS);
-            } catch (Exception e) {
-                log.warn("[Session: {}] Streaming TTS chunk emitter did not finish cleanly: {}",
-                    sessionId, e.getMessage());
-                completion.cancel(true);
-                int emitted = emittedChunks.get();
-                if (emitted > 0) {
-                    messageService.sendAudioComplete(session);
-                }
-                return emitted;
-            }
-        }
-
-        private int drainChunks() {
-            int index = 0;
-            try {
-                while (true) {
-                    CompletableFuture<byte[]> future = waitForFuture(index);
-                    if (future == null) {
-                        int emitted = emittedChunks.get();
-                        if (emitted > 0) {
-                            messageService.sendAudioComplete(session);
-                        }
-                        return emitted;
-                    }
-
-                    try {
-                        byte[] pcm = future.get(ttsTimeoutSec, TimeUnit.SECONDS);
-                        if (pcm != null && pcm.length > 0 && session.isOpen()) {
-                            messageService.sendAudioChunk(session, convertPcmToWav(pcm), index, false);
-                            emittedChunks.incrementAndGet();
-                        }
-                    } catch (Exception e) {
-                        future.cancel(true);
-                        log.warn("[Session: {}] Streaming TTS chunk {} failed", sessionId, index, e);
-                    } finally {
-                        futures.remove(index);
-                        index++;
-                    }
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                log.warn("[Session: {}] Streaming TTS chunk emitter interrupted", sessionId);
-                int emitted = emittedChunks.get();
-                if (emitted > 0) {
-                    messageService.sendAudioComplete(session);
-                }
-                return emitted;
-            }
-        }
-
-        private CompletableFuture<byte[]> waitForFuture(int index) throws InterruptedException {
-            synchronized (lock) {
-                while (!futures.containsKey(index)) {
-                    if (totalChunks >= 0 && index >= totalChunks) {
-                        return null;
-                    }
-                    lock.wait(100);
-                }
-                return futures.get(index);
-            }
         }
     }
 
