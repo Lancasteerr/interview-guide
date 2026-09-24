@@ -53,6 +53,7 @@ public class VoiceInterviewService {
     private final LlmProviderRegistry llmProviderRegistry;
     private final VoiceInterviewSessionCacheService sessionCacheService;
     private final VoiceInterviewPhaseService phaseService;
+    private final VoiceInterviewMessageService messageService;
 
     private static final String DEFAULT_USER_ID = "default";
     private static final Duration PENDING_EVALUATION_REQUEUE_DELAY = Duration.ofMinutes(3);
@@ -74,6 +75,7 @@ public class VoiceInterviewService {
         this.llmProviderRegistry = llmProviderRegistry;
         this.sessionCacheService = new VoiceInterviewSessionCacheService(redissonClient);
         this.phaseService = new VoiceInterviewPhaseService(properties);
+        this.messageService = new VoiceInterviewMessageService(sessionRepository, messageRepository);
     }
 
     /**
@@ -263,43 +265,7 @@ public class VoiceInterviewService {
             return;
         }
 
-        String normalizedUserText = VoiceInterviewMessageEntity.trimToNull(userText);
-        String normalizedAiText = VoiceInterviewMessageEntity.trimToNull(aiText);
-
-        boolean answerAttached = normalizedUserText != null
-            && fillLatestUnansweredQuestion(sessionIdLong, normalizedUserText);
-        if (normalizedAiText == null) {
-            return;
-        }
-
-        VoiceInterviewMessageEntity message = VoiceInterviewMessageEntity.builder()
-                .sessionId(sessionIdLong)
-                .messageType("DIALOGUE")
-                .phase(session.getCurrentPhase())
-                .userRecognizedText(normalizedUserText != null && !answerAttached
-                    ? normalizedUserText
-                    : null)
-                .aiGeneratedText(normalizedAiText)
-                .sequenceNum(getNextSequenceNum(sessionIdLong))
-                .build();
-
-        messageRepository.save(message);
-        log.debug("Saved message for session: {}, phase: {}, sequence: {}",
-                sessionId, session.getCurrentPhase(), message.getSequenceNum());
-    }
-
-    private boolean fillLatestUnansweredQuestion(Long sessionId, String userText) {
-        return messageRepository
-            .findFirstBySessionIdAndUserRecognizedTextIsNullAndAiGeneratedTextIsNotNullOrderBySequenceNumDesc(
-                sessionId)
-            .map(message -> {
-                message.setUserRecognizedText(userText);
-                messageRepository.save(message);
-                log.debug("Filled answer for voice message: sessionId={}, sequence={}",
-                    sessionId, message.getSequenceNum());
-                return true;
-            })
-            .orElse(false);
+        messageService.saveMessage(sessionIdLong, session, userText, aiText);
     }
 
     /**
@@ -311,8 +277,7 @@ public class VoiceInterviewService {
      */
     public List<VoiceInterviewMessageEntity> getConversationHistory(String sessionId) {
         Long sessionIdLong = parseSessionId(sessionId);
-        return messageRepository.findBySessionIdAndMessageTypeNotOrderBySequenceNumAsc(
-            sessionIdLong, VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY);
+        return messageService.getConversationHistory(sessionIdLong);
     }
 
     /**
@@ -320,8 +285,7 @@ public class VoiceInterviewService {
      */
     public Optional<VoiceInterviewMessageEntity> loadSummaryRow(String sessionId) {
         Long sessionIdLong = parseSessionId(sessionId);
-        return messageRepository.findFirstBySessionIdAndMessageTypeOrderBySequenceNumAsc(
-            sessionIdLong, VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY);
+        return messageService.loadSummaryRow(sessionIdLong);
     }
 
     /**
@@ -332,27 +296,7 @@ public class VoiceInterviewService {
     @Transactional(rollbackFor = Exception.class)
     public void saveSummaryRow(String sessionId, String summary, int coveredSequenceNum) {
         Long sessionIdLong = parseSessionId(sessionId);
-        sessionRepository.findByIdForUpdate(sessionIdLong)
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "会话不存在: " + sessionId));
-        VoiceInterviewMessageEntity row = messageRepository
-            .findFirstBySessionIdAndMessageTypeOrderBySequenceNumAsc(
-                sessionIdLong, VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY)
-            .orElseGet(() -> VoiceInterviewMessageEntity.builder()
-                .sessionId(sessionIdLong)
-                .messageType(VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY)
-                .sequenceNum(-1)
-                .build());
-        Integer existingBoundary = row.getSummaryCoveredSequenceNum();
-        if (existingBoundary != null && coveredSequenceNum < existingBoundary) {
-            log.warn("摘要覆盖边界回退被拒绝: sessionId={}, existing={}, incoming={}",
-                sessionId, existingBoundary, coveredSequenceNum);
-            return;
-        }
-        row.setAiGeneratedText(summary);
-        // 保留负 sequenceNum 排序语义，但不再作为覆盖边界的事实来源
-        row.setSequenceNum(Math.min(row.getSequenceNum() != null ? row.getSequenceNum() : -1, -1));
-        row.setSummaryCoveredSequenceNum(coveredSequenceNum);
-        messageRepository.save(row);
+        messageService.saveSummaryRow(sessionIdLong, sessionId, summary, coveredSequenceNum);
     }
 
     /**
@@ -364,18 +308,7 @@ public class VoiceInterviewService {
     @Transactional(rollbackFor = Exception.class)
     public void saveSummaryRowLegacy(String sessionId, String summary, int coveredTurns) {
         Long sessionIdLong = parseSessionId(sessionId);
-        sessionRepository.findByIdForUpdate(sessionIdLong)
-            .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "会话不存在: " + sessionId));
-        VoiceInterviewMessageEntity row = messageRepository
-            .findFirstBySessionIdAndMessageTypeOrderBySequenceNumAsc(
-                sessionIdLong, VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY)
-            .orElseGet(() -> VoiceInterviewMessageEntity.builder()
-                .sessionId(sessionIdLong)
-                .messageType(VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY)
-                .build());
-        row.setAiGeneratedText(summary);
-        row.setSequenceNum(-(coveredTurns + 1));
-        messageRepository.save(row);
+        messageService.saveSummaryRowLegacy(sessionIdLong, sessionId, summary, coveredTurns);
     }
 
     /**
@@ -557,13 +490,8 @@ public class VoiceInterviewService {
     /**
      * Get next sequence number for messages in a session
      */
-    private int getNextSequenceNum(Long sessionId) {
-        return (int) countDialogueMessages(sessionId) + 1;
-    }
-
     private long countDialogueMessages(Long sessionId) {
-        return messageRepository.countBySessionIdAndMessageTypeNot(
-            sessionId, VoiceInterviewMessageEntity.MESSAGE_TYPE_SUMMARY);
+        return messageService.countDialogueMessages(sessionId);
     }
 
     /**
