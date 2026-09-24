@@ -3,7 +3,6 @@ package interview.guide.common.ai;
 import com.openai.client.OpenAIClient;
 import interview.guide.common.config.LlmProviderProperties;
 import interview.guide.common.config.LlmProviderProperties.AdvisorConfig;
-import interview.guide.common.config.LlmProviderProperties.ProviderConfig;
 import interview.guide.common.config.RerankProperties;
 import interview.guide.common.ai.rerank.DashScopeDocumentReranker;
 import interview.guide.common.ai.rerank.DocumentReranker;
@@ -12,8 +11,6 @@ import interview.guide.common.ai.rerank.RerankResult;
 import interview.guide.common.ai.rerank.RerankExecutionMode;
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
-import interview.guide.modules.llmprovider.entity.LlmGlobalSettingEntity;
-import interview.guide.modules.llmprovider.entity.LlmProviderEntity;
 import interview.guide.modules.llmprovider.repository.LlmGlobalSettingRepository;
 import interview.guide.modules.llmprovider.repository.LlmProviderRepository;
 import interview.guide.modules.llmprovider.service.ApiKeyEncryptionService;
@@ -58,22 +55,12 @@ public class LlmProviderRegistry {
     private final Map<String, OpenAiChatModel> chatModelCache = new ConcurrentHashMap<>();
     private final Map<String, EmbeddingModel> embeddingModelCache = new ConcurrentHashMap<>();
     private final Map<String, RerankerResolution> rerankerCache = new ConcurrentHashMap<>();
-    private final LlmProviderRepository providerRepository;
-    private final LlmGlobalSettingRepository globalSettingRepository;
-    private final ApiKeyEncryptionService encryptionService;
+    private final LlmProviderResolver providerResolver;
     private final RerankProperties rerankProperties;
 
     private final ToolCallingManager toolCallingManager;
     private final ObservationRegistry observationRegistry;
     private final ToolCallback interviewSkillsToolCallback;
-    private static final Map<String, String> RECOMMENDED_EMBEDDING_MODELS = Map.of(
-        "dashscope", "text-embedding-v3",
-        "glm", "embedding-3",
-        "zhipu", "embedding-3",
-        "baidu", "Embedding-V1",
-        "minimax", "embo-01"
-    );
-
     @Autowired
     public LlmProviderRegistry(
             LlmProviderProperties properties,
@@ -85,9 +72,8 @@ public class LlmProviderRegistry {
             @Autowired(required = false) ObservationRegistry observationRegistry,
             @Autowired(required = false) @Qualifier("interviewSkillsToolCallback") ToolCallback interviewSkillsToolCallback) {
         this.properties = properties;
-        this.providerRepository = providerRepository;
-        this.globalSettingRepository = globalSettingRepository;
-        this.encryptionService = encryptionService;
+        this.providerResolver = new LlmProviderResolver(
+            properties, providerRepository, globalSettingRepository, encryptionService);
         this.rerankProperties = rerankProperties;
         this.toolCallingManager = toolCallingManager;
         this.observationRegistry = observationRegistry;
@@ -124,7 +110,7 @@ public class LlmProviderRegistry {
      * @return The default ChatClient instance
      */
     public ChatClient getDefaultChatClient() {
-        return getChatClient(resolveDefaultChatProviderId());
+        return getChatClient(providerResolver.resolveDefaultChatProviderId());
     }
 
     /**
@@ -132,7 +118,7 @@ public class LlmProviderRegistry {
      * 与 {@link #getDefaultChatClient()} 的区别在于不挂 Skill 工具与记忆 Advisor，避免无关上下文干扰。
      */
     public ChatClient getPlainChatClient() {
-        return getPlainChatClient(resolveDefaultChatProviderId());
+        return getPlainChatClient(providerResolver.resolveDefaultChatProviderId());
     }
 
     /**
@@ -140,7 +126,7 @@ public class LlmProviderRegistry {
      * the legacy "default" alias.
      */
     public ChatClient getChatClientOrDefault(String providerId) {
-        return getChatClient(resolveProviderId(providerId));
+        return getChatClient(providerResolver.resolveProviderId(providerId));
     }
 
     /**
@@ -148,7 +134,7 @@ public class LlmProviderRegistry {
      * 这些场景要求模型一次性返回可解析 JSON，不应混入工具调用消息。
      */
     public ChatClient getPlainChatClient(String providerId) {
-        String id = resolveProviderId(providerId);
+        String id = providerResolver.resolveProviderId(providerId);
         return clientCache.computeIfAbsent(id + ":plain", key -> createPlainChatClient(id));
     }
 
@@ -157,7 +143,7 @@ public class LlmProviderRegistry {
      * 不加 Memory Advisor（语音面试手动管理对话历史）。
      */
     public ChatClient getVoiceChatClient(String providerId) {
-        String id = resolveProviderId(providerId);
+        String id = providerResolver.resolveProviderId(providerId);
         return clientCache.computeIfAbsent(id + ":voice", key -> createVoiceChatClient(id));
     }
 
@@ -182,7 +168,7 @@ public class LlmProviderRegistry {
     }
 
     public EmbeddingModel getDefaultEmbeddingModel() {
-        return getEmbeddingModel(resolveDefaultEmbeddingProviderId());
+        return getEmbeddingModel(providerResolver.resolveDefaultEmbeddingProviderId());
     }
 
     /**
@@ -223,16 +209,17 @@ public class LlmProviderRegistry {
     }
 
     private RerankerResolution resolveReranker(String providerId) {
-        ProviderSnapshot config;
+        LlmProviderResolver.ProviderSnapshot config;
         try {
-            config = loadProviderOrThrow(providerId);
+            config = providerResolver.loadProviderOrThrow(providerId);
         } catch (Exception e) {
             log.warn("[LlmProviderRegistry] Reranker skipped: provider={}, reason={}",
                 providerId, RerankReason.NOT_CONFIGURED.metricValue());
             return new RerankerResolution(null, RerankReason.NOT_CONFIGURED);
         }
-        if (!config.supportsRerank() || isBlank(config.rerankModel())
-            || isBlank(config.rerankWorkspaceId()) || isBlank(config.apiKey())) {
+        if (!config.supportsRerank() || providerResolver.isBlank(config.rerankModel())
+            || providerResolver.isBlank(config.rerankWorkspaceId())
+            || providerResolver.isBlank(config.apiKey())) {
             log.warn("[LlmProviderRegistry] Reranker skipped: provider={}, reason={}",
                 providerId, RerankReason.NOT_CONFIGURED.metricValue());
             return new RerankerResolution(null, RerankReason.NOT_CONFIGURED);
@@ -306,7 +293,7 @@ public class LlmProviderRegistry {
     }
 
     private OpenAiChatModel buildChatModel(String providerId) {
-        ProviderSnapshot config = loadProviderOrThrow(providerId);
+        LlmProviderResolver.ProviderSnapshot config = providerResolver.loadProviderOrThrow(providerId);
         log.info("[LlmProviderRegistry] Building ChatModel - Provider: {}, BaseUrl: {}, Model: {}",
                  providerId, config.baseUrl(), config.model());
 
@@ -326,8 +313,8 @@ public class LlmProviderRegistry {
     }
 
     private EmbeddingModel createEmbeddingModel(String providerId) {
-        ProviderSnapshot config = loadProviderOrThrow(providerId);
-        if (!config.supportsEmbedding() || isBlank(config.embeddingModel())) {
+        LlmProviderResolver.ProviderSnapshot config = providerResolver.loadProviderOrThrow(providerId);
+        if (!config.supportsEmbedding() || providerResolver.isBlank(config.embeddingModel())) {
             throw new BusinessException(ErrorCode.PROVIDER_CONFIG_READ_FAILED,
                 "Provider '" + providerId + "' 未配置可用的 Embedding 模型，无法执行知识库向量化");
         }
@@ -346,7 +333,7 @@ public class LlmProviderRegistry {
         OpenAIClient openAiClient = ApiPathResolver.buildOpenAiClient(config.baseUrl(), config.apiKey());
         OpenAiEmbeddingOptions options = OpenAiEmbeddingOptions.builder()
             .model(config.embeddingModel())
-            .dimensions(resolveEmbeddingDimensions(config.embeddingDimensions()))
+            .dimensions(providerResolver.resolveEmbeddingDimensions(config.embeddingDimensions()))
             .build();
 
         return OpenAiEmbeddingModel.builder()
@@ -410,118 +397,6 @@ public class LlmProviderRegistry {
             .order(100)
             .build();
         return Optional.of(advisor);
-    }
-
-    private String resolveProviderId(String providerId) {
-        if (providerId == null || providerId.isBlank() || "default".equalsIgnoreCase(providerId.trim())) {
-            return resolveDefaultChatProviderId();
-        }
-        return providerId;
-    }
-
-    private String resolveDefaultChatProviderId() {
-        if (globalSettingRepository == null) {
-            return properties.getDefaultProvider();
-        }
-        return globalSettingRepository.findById(LlmGlobalSettingEntity.SINGLETON_ID)
-            .map(LlmGlobalSettingEntity::getDefaultChatProviderId)
-            .filter(id -> !isBlank(id))
-            .orElse(properties.getDefaultProvider());
-    }
-
-    private String resolveDefaultEmbeddingProviderId() {
-        if (globalSettingRepository == null) {
-            return !isBlank(properties.getDefaultEmbeddingProvider())
-                ? properties.getDefaultEmbeddingProvider()
-                : properties.getDefaultProvider();
-        }
-        return globalSettingRepository.findById(LlmGlobalSettingEntity.SINGLETON_ID)
-            .map(LlmGlobalSettingEntity::getDefaultEmbeddingProviderId)
-            .filter(id -> !isBlank(id))
-            .orElseGet(() -> !isBlank(properties.getDefaultEmbeddingProvider())
-                ? properties.getDefaultEmbeddingProvider()
-                : properties.getDefaultProvider());
-    }
-
-    private ProviderSnapshot loadProviderOrThrow(String providerId) {
-        if (providerRepository == null) {
-            return loadProviderFromPropertiesOrThrow(providerId);
-        }
-        LlmProviderEntity entity = providerRepository.findById(providerId)
-            .filter(LlmProviderEntity::isEnabled)
-            .orElseThrow(() -> new IllegalArgumentException("Unknown LLM provider: " + providerId));
-        return new ProviderSnapshot(
-            entity.getId(),
-            entity.getBaseUrl(),
-            encryptionService.decrypt(entity.getApiKeyNonce(), entity.getApiKeyCiphertext()),
-            entity.getModel(),
-            entity.getEmbeddingModel(),
-            entity.getEmbeddingDimensions(),
-            entity.isSupportsEmbedding(),
-            entity.getRerankModel(),
-            entity.getRerankWorkspaceId(),
-            entity.isSupportsRerank(),
-            entity.getTemperature()
-        );
-    }
-
-    private ProviderSnapshot loadProviderFromPropertiesOrThrow(String providerId) {
-        ProviderConfig config = properties.getProviders().get(providerId);
-        if (config == null) {
-            log.error("[LlmProviderRegistry] Provider config not found: {}", providerId);
-            throw new IllegalArgumentException("Unknown LLM provider: " + providerId);
-        }
-        boolean supportsEmbedding = Boolean.TRUE.equals(config.getSupportsEmbedding())
-            || !isBlank(config.getEmbeddingModel());
-        return new ProviderSnapshot(
-            providerId,
-            config.getBaseUrl(),
-            config.getApiKey(),
-            config.getModel(),
-            config.getEmbeddingModel(),
-            config.getEmbeddingDimensions(),
-            supportsEmbedding,
-            config.getRerankModel(),
-            config.getRerankWorkspaceId(),
-            Boolean.TRUE.equals(config.getSupportsRerank()),
-            config.getTemperature()
-        );
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.isBlank();
-    }
-
-    private Integer resolveEmbeddingDimensions(Integer configuredDimensions) {
-        if (configuredDimensions != null && configuredDimensions > 0) {
-            return configuredDimensions;
-        }
-        return properties.getEmbeddingDimensions();
-    }
-
-    private boolean looksLikeChatModel(String model) {
-        String lower = model.toLowerCase();
-        return lower.startsWith("glm-")
-            || lower.startsWith("deepseek")
-            || lower.startsWith("kimi")
-            || lower.startsWith("moonshot")
-            || lower.startsWith("qwen")
-            || lower.startsWith("ernie");
-    }
-
-    private record ProviderSnapshot(
-        String id,
-        String baseUrl,
-        String apiKey,
-        String model,
-        String embeddingModel,
-        Integer embeddingDimensions,
-        boolean supportsEmbedding,
-        String rerankModel,
-        String rerankWorkspaceId,
-        boolean supportsRerank,
-        Double temperature
-    ) {
     }
 
     private record RerankerResolution(DocumentReranker reranker, RerankReason reason) {
