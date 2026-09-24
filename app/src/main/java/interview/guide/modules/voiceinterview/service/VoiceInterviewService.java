@@ -17,9 +17,7 @@ import interview.guide.modules.voiceinterview.model.VoiceInterviewSessionStatus;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewEvaluationRepository;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewMessageRepository;
 import interview.guide.modules.voiceinterview.repository.VoiceInterviewSessionRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,23 +42,37 @@ import java.util.stream.Collectors;
  * </p>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class VoiceInterviewService {
 
     private final VoiceInterviewSessionRepository sessionRepository;
     private final VoiceInterviewMessageRepository messageRepository;
     private final VoiceInterviewEvaluationRepository evaluationRepository;
-    private final RedissonClient redissonClient;
     private final VoiceInterviewProperties properties;
     private final VoiceEvaluateStreamProducer voiceEvaluateStreamProducer;
     private final LlmProviderRegistry llmProviderRegistry;
+    private final VoiceInterviewSessionCacheService sessionCacheService;
 
-    private static final String SESSION_CACHE_KEY_PREFIX = "voice:interview:session:";
-    private static final int CACHE_TTL_HOURS = 1;
     private static final String DEFAULT_USER_ID = "default";
     private static final Duration PENDING_EVALUATION_REQUEUE_DELAY = Duration.ofMinutes(3);
     private static final Duration PROCESSING_EVALUATION_TIMEOUT = Duration.ofMinutes(30);
+
+    public VoiceInterviewService(
+            VoiceInterviewSessionRepository sessionRepository,
+            VoiceInterviewMessageRepository messageRepository,
+            VoiceInterviewEvaluationRepository evaluationRepository,
+            RedissonClient redissonClient,
+            VoiceInterviewProperties properties,
+            VoiceEvaluateStreamProducer voiceEvaluateStreamProducer,
+            LlmProviderRegistry llmProviderRegistry) {
+        this.sessionRepository = sessionRepository;
+        this.messageRepository = messageRepository;
+        this.evaluationRepository = evaluationRepository;
+        this.properties = properties;
+        this.voiceEvaluateStreamProducer = voiceEvaluateStreamProducer;
+        this.llmProviderRegistry = llmProviderRegistry;
+        this.sessionCacheService = new VoiceInterviewSessionCacheService(redissonClient);
+    }
 
     /**
      * Create a new voice interview session
@@ -93,7 +105,7 @@ public class VoiceInterviewService {
                 .build();
 
         VoiceInterviewSessionEntity saved = sessionRepository.save(session);
-        cacheSession(saved);
+        sessionCacheService.put(saved);
 
         log.info("Created voice interview session: {} with template: {}, phase: {}",
                 saved.getId(), effectiveSkillId, saved.getCurrentPhase());
@@ -145,7 +157,7 @@ public class VoiceInterviewService {
         session.setEvaluateStatus(AsyncTaskStatus.PENDING);
 
         sessionRepository.save(session);
-        invalidateSessionCache(session.getId());
+        sessionCacheService.invalidate(session.getId());
 
         log.info("Ended voice interview session: {}, duration: {} seconds, evaluation triggered",
                 session.getId(), session.getActualDuration());
@@ -175,9 +187,7 @@ public class VoiceInterviewService {
         }
 
         // Try cache first
-        String cacheKey = getSessionCacheKey(sessionId);
-        RBucket<VoiceInterviewSessionEntity> bucket = redissonClient.getBucket(cacheKey);
-        VoiceInterviewSessionEntity cached = bucket.get();
+        VoiceInterviewSessionEntity cached = sessionCacheService.get(sessionId);
 
         if (cached != null) {
             log.debug("Session {} found in cache", sessionId);
@@ -212,7 +222,7 @@ public class VoiceInterviewService {
             VoiceInterviewSessionEntity.InterviewPhase oldPhase = session.getCurrentPhase();
             session.setCurrentPhase(newPhase);
             sessionRepository.save(session);
-            cacheSession(session); // Update cache
+            sessionCacheService.put(session); // Update cache
 
             log.info("Session {} transitioned from phase {} to {}", sessionId, oldPhase, newPhase);
 
@@ -408,7 +418,7 @@ public class VoiceInterviewService {
         session.setPausedAt(LocalDateTime.now());
 
         sessionRepository.save(session);
-        invalidateSessionCache(sessionIdLong);
+        sessionCacheService.invalidate(sessionIdLong);
 
         log.info("Session {} paused, reason: {}", sessionId, reason);
     }
@@ -437,7 +447,7 @@ public class VoiceInterviewService {
         session.setResumedAt(LocalDateTime.now());
 
         VoiceInterviewSessionEntity saved = sessionRepository.save(session);
-        cacheSession(saved);
+        sessionCacheService.put(saved);
 
         log.info("Session {} resumed with {} messages in conversation history",
             sessionId, countDialogueMessages(sessionIdLong));
@@ -642,7 +652,7 @@ public class VoiceInterviewService {
                 session.setEvaluateStatus(status);
                 session.setEvaluateError(error);
                 sessionRepository.save(session);
-                invalidateSessionCache(sessionId);
+                sessionCacheService.invalidate(sessionId);
                 log.debug("Evaluation status updated: sessionId={}, status={}", sessionId, status);
             });
         } catch (Exception e) {
@@ -687,33 +697,6 @@ public class VoiceInterviewService {
         messageRepository.deleteBySessionId(sessionId);
         sessionRepository.deleteById(sessionId);
         log.info("Deleted voice interview session: {}", sessionId);
-    }
-
-    /**
-     * Cache session in Redis
-     */
-    private void cacheSession(VoiceInterviewSessionEntity session) {
-        String cacheKey = getSessionCacheKey(session.getId());
-        RBucket<VoiceInterviewSessionEntity> bucket = redissonClient.getBucket(cacheKey);
-        bucket.set(session, Duration.ofHours(CACHE_TTL_HOURS));
-        log.debug("Cached session: {}", session.getId());
-    }
-
-    /**
-     * Invalidate session cache in Redis
-     */
-    private void invalidateSessionCache(Long sessionId) {
-        String cacheKey = getSessionCacheKey(sessionId);
-        RBucket<VoiceInterviewSessionEntity> bucket = redissonClient.getBucket(cacheKey);
-        bucket.delete();
-        log.debug("Invalidated cache for session: {}", sessionId);
-    }
-
-    /**
-     * Generate Redis cache key for session
-     */
-    private String getSessionCacheKey(Long sessionId) {
-        return SESSION_CACHE_KEY_PREFIX + sessionId;
     }
 
     /**
@@ -762,7 +745,7 @@ public class VoiceInterviewService {
             session.setEvaluateError(null);
             session.setUpdatedAt(LocalDateTime.now());
             sessionRepository.save(session);
-            invalidateSessionCache(session.getId());
+            sessionCacheService.invalidate(session.getId());
             sendEvaluateTaskAfterCommit(session.getId());
             cleaned++;
         }
@@ -777,7 +760,7 @@ public class VoiceInterviewService {
             session.setEvaluateStatus(AsyncTaskStatus.FAILED);
             session.setEvaluateError("评估超时，请重新触发");
             sessionRepository.save(session);
-            invalidateSessionCache(session.getId());
+            sessionCacheService.invalidate(session.getId());
             cleaned++;
         }
 
