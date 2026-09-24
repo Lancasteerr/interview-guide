@@ -1,28 +1,18 @@
 package interview.guide.infrastructure.redis;
 
-import interview.guide.common.exception.BusinessException;
-import interview.guide.common.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RAtomicLong;
 import org.redisson.api.RKeys;
 import org.redisson.api.RList;
 import org.redisson.api.RLock;
-import org.redisson.api.RStream;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.options.KeysScanOptions;
-import org.redisson.api.stream.AutoClaimResult;
-import org.redisson.api.stream.StreamAddArgs;
-import org.redisson.api.stream.StreamCreateGroupArgs;
 import org.redisson.api.stream.StreamMessageId;
-import org.redisson.api.stream.StreamReadGroupArgs;
-import org.redisson.client.codec.StringCodec;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -45,11 +35,14 @@ public class RedisService {
 
     private final RedissonClient redissonClient;
     private final RedisDataAdapter dataAdapter;
-    private final ConcurrentMap<String, StreamMessageId> streamReclaimCursors = new ConcurrentHashMap<>();
+    private final RedisLockAdapter lockAdapter;
+    private final RedisStreamAdapter streamAdapter;
 
     public RedisService(RedissonClient redissonClient) {
         this.redissonClient = redissonClient;
         this.dataAdapter = new RedisDataAdapter(redissonClient);
+        this.lockAdapter = new RedisLockAdapter(redissonClient);
+        this.streamAdapter = new RedisStreamAdapter(redissonClient);
     }
 
     // ==================== 基础键值操作 ====================
@@ -153,30 +146,21 @@ public class RedisService {
      * 获取锁（阻塞等待）
      */
     public RLock getLock(String lockKey) {
-        return redissonClient.getLock(lockKey);
+        return lockAdapter.getLock(lockKey);
     }
 
     /**
      * 尝试获取锁（非阻塞）
      */
     public boolean tryLock(String lockKey, long waitTime, long leaseTime, TimeUnit unit) {
-        RLock lock = redissonClient.getLock(lockKey);
-        try {
-            return lock.tryLock(waitTime, leaseTime, unit);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
+        return lockAdapter.tryLock(lockKey, waitTime, leaseTime, unit);
     }
 
     /**
      * 释放锁
      */
     public void unlock(String lockKey) {
-        RLock lock = redissonClient.getLock(lockKey);
-        if (lock.isHeldByCurrentThread()) {
-            lock.unlock();
-        }
+        lockAdapter.unlock(lockKey);
     }
 
     /**
@@ -184,20 +168,7 @@ public class RedisService {
      */
     public <T> T executeWithLock(String lockKey, long waitTime, long leaseTime,
                                   TimeUnit unit, LockedOperation<T> operation) {
-        RLock lock = redissonClient.getLock(lockKey);
-        try {
-            if (lock.tryLock(waitTime, leaseTime, unit)) {
-                try {
-                    return operation.execute();
-                } finally {
-                    lock.unlock();
-                }
-            }
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "获取锁失败: " + lockKey);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "获取锁被中断: " + lockKey, e);
-        }
+        return lockAdapter.executeWithLock(lockKey, waitTime, leaseTime, unit, operation);
     }
 
     @FunctionalInterface
@@ -300,124 +271,23 @@ public class RedisService {
             int pendingClaimBatchSize,
             StreamMessageProcessor processor) {
 
-        RStream<String, String> stream = redissonClient.getStream(streamKey, StringCodec.INSTANCE);
-        Map<StreamMessageId, Map<String, String>> messages = reclaimPendingMessages(
-            stream,
+        return streamAdapter.consumeMessages(
             streamKey,
             groupName,
             consumerName,
+            count,
+            blockTimeoutMs,
+            pendingIdleTimeoutMs,
             pendingClaimBatchSize,
-            pendingIdleTimeoutMs
+            processor
         );
-        if (processMessages(messages, processor)) {
-            return true;
-        }
-
-        // 使用阻塞读取，让 Redis 服务端等待消息
-        try {
-            messages = stream.readGroup(
-                groupName,
-                consumerName,
-                StreamReadGroupArgs.neverDelivered()
-                    .count(count)
-                    .timeout(Duration.ofMillis(blockTimeoutMs))
-            );
-        } catch (ClassCastException e) {
-            // Redisson 4.0.0 bug: 无消息时返回 EmptyList 而非空 Map，内部强转失败。
-            // 等价于"本次无消息"，静默返回即可。
-            log.debug("Redisson 4.0.0 内部类型转换异常（空结果时触发），等价于本批无消息: stream={}, group={}",
-                streamKey, groupName);
-            return false;
-        }
-
-        if (messages == null || messages.isEmpty()) {
-            return false;
-        }
-
-        return processMessages(messages, processor);
-    }
-
-    private Map<StreamMessageId, Map<String, String>> reclaimPendingMessages(
-            RStream<String, String> stream,
-            String streamKey,
-            String groupName,
-            String consumerName,
-            int count,
-            long pendingIdleTimeoutMs) {
-        if (pendingIdleTimeoutMs <= 0 || count <= 0) {
-            return Map.of();
-        }
-
-        String cursorKey = streamKey + ":" + groupName;
-        StreamMessageId startId = streamReclaimCursors.getOrDefault(cursorKey, StreamMessageId.MIN);
-        AutoClaimResult<String, String> result;
-        try {
-            result = stream.autoClaim(
-                groupName,
-                consumerName,
-                pendingIdleTimeoutMs,
-                TimeUnit.MILLISECONDS,
-                startId,
-                count
-            );
-        } catch (ClassCastException e) {
-            // Redisson 4.0.0 空结果可能触发内部类型转换异常，等价于本轮无可回收消息。
-            log.debug("Redisson 4.0.0 内部类型转换异常（无可回收消息）: stream={}, group={}",
-                streamKey, groupName);
-            return Map.of();
-        }
-
-        StreamMessageId nextId = result.getNextId();
-        if (nextId == null || StreamMessageId.MIN.equals(nextId)) {
-            streamReclaimCursors.remove(cursorKey);
-        } else {
-            streamReclaimCursors.put(cursorKey, nextId);
-        }
-
-        List<StreamMessageId> deletedIds = result.getDeletedIds();
-        if (deletedIds != null && !deletedIds.isEmpty()) {
-            log.warn("Stream pending messages were trimmed before reclaim: stream={}, group={}, ids={}",
-                streamKey, groupName, deletedIds);
-        }
-
-        Map<StreamMessageId, Map<String, String>> messages = result.getMessages();
-        if (messages != null && !messages.isEmpty()) {
-            log.info("Reclaimed Redis Stream pending messages: stream={}, group={}, consumer={}, count={}",
-                streamKey, groupName, consumerName, messages.size());
-        }
-        return messages == null ? Map.of() : messages;
-    }
-
-    private boolean processMessages(
-            Map<StreamMessageId, Map<String, String>> messages,
-            StreamMessageProcessor processor) {
-        if (messages == null || messages.isEmpty()) {
-            return false;
-        }
-        for (Map.Entry<StreamMessageId, Map<String, String>> entry : messages.entrySet()) {
-            processor.process(entry.getKey(), entry.getValue());
-        }
-
-        return true;
     }
 
     /**
      * 创建消费者组（如果不存在）
      */
     public void createStreamGroup(String streamKey, String groupName) {
-        RStream<String, String> stream = redissonClient.getStream(streamKey, StringCodec.INSTANCE);
-        try {
-            stream.createGroup(StreamCreateGroupArgs.name(groupName).makeStream());
-            log.info("创建 Stream 消费者组: stream={}, group={}", streamKey, groupName);
-        } catch (Exception e) {
-            // 组已存在，忽略
-            if (e instanceof org.redisson.client.RedisException
-                    && e.getMessage() != null
-                    && e.getMessage().contains("BUSYGROUP")) {
-                return;
-            }
-            log.warn("创建消费者组失败: stream={}, group={}, error={}", streamKey, groupName, e.getMessage());
-        }
+        streamAdapter.createGroup(streamKey, groupName);
     }
 
     /**
@@ -436,14 +306,7 @@ public class RedisService {
      * @return 消息ID
      */
     public String streamAdd(String streamKey, Map<String, String> message, int maxLen) {
-        RStream<String, String> stream = redissonClient.getStream(streamKey, StringCodec.INSTANCE);
-        StreamAddArgs<String, String> args = StreamAddArgs.entries(message);
-        if (maxLen > 0) {
-            args.trimNonStrict().maxLen(maxLen);
-        }
-        StreamMessageId messageId = stream.add(args);
-        log.debug("发送 Stream 消息: stream={}, messageId={}, maxLen={}", streamKey, messageId, maxLen);
-        return messageId.toString();
+        return streamAdapter.add(streamKey, message, maxLen);
     }
 
     /**
@@ -451,25 +314,21 @@ public class RedisService {
      */
     public Map<StreamMessageId, Map<String, String>> streamReadGroup(
             String streamKey, String groupName, String consumerName, int count) {
-        RStream<String, String> stream = redissonClient.getStream(streamKey, StringCodec.INSTANCE);
-        return stream.readGroup(groupName, consumerName,
-            StreamReadGroupArgs.neverDelivered().count(count));
+        return streamAdapter.readGroup(streamKey, groupName, consumerName, count);
     }
 
     /**
      * 确认消息已处理
      */
     public void streamAck(String streamKey, String groupName, StreamMessageId... ids) {
-        RStream<String, String> stream = redissonClient.getStream(streamKey, StringCodec.INSTANCE);
-        stream.ack(groupName, ids);
+        streamAdapter.ack(streamKey, groupName, ids);
     }
 
     /**
      * 获取 Stream 长度
      */
     public long streamLen(String streamKey) {
-        RStream<String, String> stream = redissonClient.getStream(streamKey, StringCodec.INSTANCE);
-        return stream.size();
+        return streamAdapter.length(streamKey);
     }
 
     // ==================== 原子计数器 ====================
