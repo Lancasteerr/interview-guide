@@ -65,6 +65,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private final VoiceWebSocketMessageService messageService;
     private final VoiceWebSocketConversationService conversationService;
     private final VoiceWebSocketTimeoutService timeoutService;
+    private final VoiceWebSocketAsrCoordinator asrCoordinator;
 
     VoiceInterviewWebSocketHandler(
         ObjectMapper objectMapper,
@@ -121,6 +122,12 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             interviewService,
             sttService
         );
+        this.asrCoordinator = new VoiceWebSocketAsrCoordinator(
+            sttService,
+            messageService,
+            sessionRegistry,
+            utteranceMergeScheduler
+        );
         this.openingService = new VoiceWebSocketOpeningService(
             ttsService,
             voiceInterviewProperties,
@@ -153,8 +160,6 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private static final int WS_SEND_BUFFER_LIMIT_BYTES = 512 * 1024;
     /** AI 音频播放结束后的冷却期，防止扬声器尾音被麦克风拾取触发 STT */
     private static final long AI_SPEAK_COOLDOWN_MS = 800;
-    private static final int MAX_ASR_READY_RETRY = 2;
-    private static final long ASR_READY_CHECK_DELAY_SECONDS = 10;
 
     private static ScheduledExecutorService createUtteranceMergeScheduler() {
         ScheduledThreadPoolExecutor executor = new ScheduledThreadPoolExecutor(2, r -> {
@@ -192,7 +197,11 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
         log.info("WebSocket connection established for session: {}", sessionId);
 
         try {
-            startDashScopeStt(sessionId, safeSession);
+            asrCoordinator.start(
+                sessionId,
+                safeSession,
+                (text, isFinal) -> handleSttResult(sessionId, text, isFinal)
+            );
 
             // 发送欢迎消息
             messageService.sendMessage(safeSession, messageService.createWelcomeMessage());
@@ -319,68 +328,6 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
         return m != null && m.contains("ASR session not ready");
     }
 
-    private void startDashScopeStt(String sessionId, WebSocketSession session) {
-        sttService.startTranscription(
-                sessionId,
-                text -> handleSttResult(sessionId, text, true),
-                text -> handleSttResult(sessionId, text, false),
-                    () -> messageService.sendAsrReady(session),
-                error -> {
-                    log.error("STT error for session {}", sessionId, error);
-                    messageService.sendError(session, "语音识别失败: " + error.getMessage());
-                }
-        );
-
-        scheduleAsrReadyCheck(sessionId, session, 0);
-    }
-
-    private void scheduleAsrReadyCheck(String sessionId, WebSocketSession session, int retryCount) {
-        utteranceMergeScheduler.schedule(
-            () -> checkAsrReadyOrRetry(sessionId, session, retryCount),
-            ASR_READY_CHECK_DELAY_SECONDS,
-            TimeUnit.SECONDS
-        );
-    }
-
-    private void checkAsrReadyOrRetry(String sessionId, WebSocketSession session, int retryCount) {
-        if (session == null || !session.isOpen() || sttService.isReady(sessionId)) {
-            return;
-        }
-
-        if (retryCount < MAX_ASR_READY_RETRY) {
-            int nextRetry = retryCount + 1;
-            log.warn("[Session: {}] ASR not ready after {}s, retrying ({}/{})",
-                sessionId, ASR_READY_CHECK_DELAY_SECONDS, nextRetry, MAX_ASR_READY_RETRY);
-            messageService.sendAsrStatus(session, "asr_reconnecting", "语音识别连接较慢，正在自动重连");
-            restartDashScopeStt(sessionId);
-            scheduleAsrReadyCheck(sessionId, session, nextRetry);
-            return;
-        }
-
-        log.warn("[Session: {}] ASR still not ready after {} retries", sessionId, retryCount);
-        messageService.sendError(session, "语音识别连接准备超时，请检查语音服务配置或稍后重试");
-    }
-
-    /**
-     * DashScope ASR 断线后重连（回调与首次 start 一致）
-     */
-    private void restartDashScopeStt(String sessionId) {
-        WebSocketSession session = sessionRegistry.getSession(sessionId);
-        if (session == null || !session.isOpen()) {
-            return;
-        }
-        sttService.restartTranscription(
-                sessionId,
-                text -> handleSttResult(sessionId, text, true),
-                text -> handleSttResult(sessionId, text, false),
-                () -> messageService.sendAsrReady(session),
-                error -> {
-                    log.error("STT error for session {}", sessionId, error);
-                    messageService.sendError(session, "语音识别失败: " + error.getMessage());
-                }
-        );
-    }
-
     /**
      * Handle user audio message
      * Just send audio to STT transcriber (results come via callback)
@@ -411,7 +358,10 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 } else if (shouldRecoverAsrConnection(ex)) {
                     log.warn("[Session: {}] ASR send failed ({}), restarting DashScope and retrying chunk",
                             sessionId, ex.getMessage() != null ? ex.getMessage() : "unknown");
-                    restartDashScopeStt(sessionId);
+                    asrCoordinator.restart(
+                        sessionId,
+                        (text, isFinal) -> handleSttResult(sessionId, text, isFinal)
+                    );
                     boolean sent = false;
                     for (int i = 0; i < 15; i++) {
                         try {
