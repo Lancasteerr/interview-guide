@@ -12,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -45,6 +44,7 @@ public class QwenTtsService {
 
     private final QwenTtsConfiguration configuration;
     private final QwenTtsConnectionService connectionService;
+    private final QwenTtsEventService eventService = new QwenTtsEventService();
 
     // 保留旧字段作为反射/诊断兼容视图，合成流程统一读取 configuration。
     @Deprecated private String model;
@@ -269,80 +269,8 @@ public class QwenTtsService {
     private void handleServerEvent(JsonObject message, ByteArrayContainer audioContainer,
                                     CountDownLatch synthesisLatch, AtomicReference<Throwable> errorRef,
                                     AtomicReference<String> responseIdRef) {
-        try {
-            String eventType = message.get("type").getAsString();
-
-            if (log.isTraceEnabled()) {
-                log.trace("Received TTS event: {}, full message: {}", eventType, message);
-            } else {
-                log.debug("Received TTS event: {}", eventType);
-            }
-
-            switch (eventType) {
-                case "session.created":
-                    String sessionId = message.has("session") && message.get("session").isJsonObject()
-                            ? message.get("session").getAsJsonObject().get("id").getAsString()
-                            : "unknown";
-                    log.debug("TTS session created: {}", sessionId);
-                    break;
-
-                case "session.updated":
-                    log.debug("TTS session configuration updated");
-                    break;
-
-                case "response.audio.delta":
-                    // Audio chunk received - delta is a base64 string directly
-                    if (message.has("delta")) {
-                        String audioBase64 = message.get("delta").getAsString();
-                        if (audioBase64 != null && !audioBase64.isEmpty()) {
-                            byte[] audioChunk = Base64.getDecoder().decode(audioBase64);
-                            audioContainer.append(audioChunk);
-                            log.trace("Received audio chunk - {} bytes", audioChunk.length);
-                        }
-                    }
-                    break;
-
-                case "response.done":
-                    // Response completed - this is the final event in Qwen TTS API
-                    String responseId = responseIdRef.get();
-                    log.debug("TTS response completed - responseId: {}", responseId);
-                    synthesisLatch.countDown();
-                    break;
-
-                case "error":
-                    // Error event
-                    if (message.has("error")) {
-                        var errorElement = message.get("error");
-                        String errorType = "unknown";
-                        String errorCode = "unknown";
-                        String errorMessage = "Unknown error";
-
-                        if (errorElement.isJsonObject()) {
-                            JsonObject errorObj = errorElement.getAsJsonObject();
-                            errorType = errorObj.has("type") ? errorObj.get("type").getAsString() : "unknown";
-                            errorCode = errorObj.has("code") ? errorObj.get("code").getAsString() : "unknown";
-                            errorMessage = errorObj.has("message") ? errorObj.get("message").getAsString() : "Unknown error";
-                        } else {
-                            errorMessage = errorElement.toString();
-                        }
-
-                        String fullErrorMessage = String.format("TTS Error [%s/%s]: %s", errorType, errorCode, errorMessage);
-                        log.error("{}", fullErrorMessage);
-
-                        errorRef.set(new IllegalStateException(fullErrorMessage));
-                        synthesisLatch.countDown();
-                    }
-                    break;
-
-                default:
-                    log.trace("Unhandled TTS event type: {}", eventType);
-            }
-
-        } catch (Exception e) {
-            log.error("Error processing TTS server event", e);
-            errorRef.set(e);
-            synthesisLatch.countDown();
-        }
+        eventService.handleServerEvent(
+            message, audioContainer, synthesisLatch, errorRef, responseIdRef);
     }
 
     /**
@@ -350,7 +278,7 @@ public class QwenTtsService {
      * Uses ByteArrayOutputStream for amortized O(1) append performance
      * instead of O(n²) copying with manual array growth.
      */
-    private static class ByteArrayContainer {
+    static class ByteArrayContainer {
         private final java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
 
         public synchronized void append(byte[] chunk) {
