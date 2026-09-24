@@ -4,8 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import interview.guide.modules.voiceinterview.dto.WebSocketControlMessage;
-import interview.guide.modules.voiceinterview.dto.WebSocketSubtitleMessage;
-import interview.guide.modules.voiceinterview.entity.VoiceInterviewMessageEntity;
 import interview.guide.modules.voiceinterview.entity.VoiceInterviewSessionEntity;
 import interview.guide.modules.voiceinterview.config.VoiceInterviewProperties;
 import interview.guide.modules.voiceinterview.context.VoiceContextCompressor;
@@ -14,8 +12,8 @@ import interview.guide.modules.voiceinterview.service.QwenTtsService;
 import interview.guide.modules.voiceinterview.service.DashscopeLlmService;
 import interview.guide.modules.voiceinterview.service.VoiceInterviewService;
 import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -53,7 +51,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * </p>
  */
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler implements DisposableBean {
 
@@ -66,6 +63,55 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private final interview.guide.modules.voiceinterview.context.VoiceHistoryLoader voiceHistoryLoader;
     private final VoiceInterviewProperties voiceInterviewProperties;
     private final ObjectProvider<MeterRegistry> meterRegistryProvider;
+    private final VoiceWebSocketMessageService messageService;
+
+    VoiceInterviewWebSocketHandler(
+        ObjectMapper objectMapper,
+        QwenAsrService sttService,
+        QwenTtsService ttsService,
+        DashscopeLlmService llmService,
+        VoiceInterviewService interviewService,
+        VoiceContextCompressor voiceContextCompressor,
+        interview.guide.modules.voiceinterview.context.VoiceHistoryLoader voiceHistoryLoader,
+        VoiceInterviewProperties voiceInterviewProperties,
+        ObjectProvider<MeterRegistry> meterRegistryProvider) {
+        this(
+            objectMapper,
+            sttService,
+            ttsService,
+            llmService,
+            interviewService,
+            voiceContextCompressor,
+            voiceHistoryLoader,
+            voiceInterviewProperties,
+            meterRegistryProvider,
+            new VoiceWebSocketMessageService(objectMapper)
+        );
+    }
+
+    @Autowired
+    VoiceInterviewWebSocketHandler(
+        ObjectMapper objectMapper,
+        QwenAsrService sttService,
+        QwenTtsService ttsService,
+        DashscopeLlmService llmService,
+        VoiceInterviewService interviewService,
+        VoiceContextCompressor voiceContextCompressor,
+        interview.guide.modules.voiceinterview.context.VoiceHistoryLoader voiceHistoryLoader,
+        VoiceInterviewProperties voiceInterviewProperties,
+        ObjectProvider<MeterRegistry> meterRegistryProvider,
+        VoiceWebSocketMessageService messageService) {
+        this.objectMapper = objectMapper;
+        this.sttService = sttService;
+        this.ttsService = ttsService;
+        this.llmService = llmService;
+        this.interviewService = interviewService;
+        this.voiceContextCompressor = voiceContextCompressor;
+        this.voiceHistoryLoader = voiceHistoryLoader;
+        this.voiceInterviewProperties = voiceInterviewProperties;
+        this.meterRegistryProvider = meterRegistryProvider;
+        this.messageService = messageService;
+    }
 
     /**
      * 合并多段 STT 定稿后再触发 LLM 的延迟调度（与 {@link VoiceInterviewProperties#getUserUtteranceDebounceMs()} 配合）
@@ -169,49 +215,12 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             startDashScopeStt(sessionId, safeSession);
 
             // 发送欢迎消息
-            sendMessage(safeSession, createWelcomeMessage());
+            messageService.sendMessage(safeSession, messageService.createWelcomeMessage());
             // 自动开场：面试官先说开场语并直接提出第一个问题（仅首次连接、无历史消息时触发）
             triggerOpeningQuestionIfNeeded(sessionId, safeSession);
         } catch (Exception e) {
             log.error("Error establishing WebSocket connection for session {}", sessionId, e);
-            sendError(safeSession, "初始化语音识别失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Create welcome message
-     */
-    private String createWelcomeMessage() {
-        return toJson(Map.of(
-            "type", "control",
-            "action", "welcome",
-            "message", "连接成功，准备开始语音面试",
-            "timestamp", System.currentTimeMillis()
-        ));
-    }
-
-    private String toJson(Object obj) {
-        try {
-            return objectMapper.writeValueAsString(obj);
-        } catch (Exception e) {
-            log.error("Error serializing JSON", e);
-            return "{}";
-        }
-    }
-
-    /**
-     * Send message to WebSocket session
-     */
-    private void sendMessage(WebSocketSession session, String message) {
-        try {
-            if (session.isOpen()) {
-                session.sendMessage(new TextMessage(message));
-                log.debug("Message sent to session: length={}", message.length());
-            } else {
-                log.warn("Session is closed, cannot send message");
-            }
-        } catch (Exception e) {
-            log.error("Error sending message to session", e);
+            messageService.sendError(safeSession, "初始化语音识别失败: " + e.getMessage());
         }
     }
 
@@ -245,12 +254,12 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
                 // 先落库再推前端，确保用户提交时 DB 中已有该条消息
                 saveMessage(sessionId, null, aiReply);
-                sendTextMessage(session, aiReply, true);
+                messageService.sendTextMessage(session, aiReply, true);
 
                 // 语音随后下发
                 byte[] wavAudio = getOpeningWavAudio(aiReply);
                 if (wavAudio.length > 0 && session.isOpen()) {
-                    sendAudio(session, wavAudio, aiReply);
+                    messageService.sendAudio(session, wavAudio, aiReply);
                 }
 
                 log.info("Opening question sent for session {}", sessionId);
@@ -344,7 +353,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                         handleControl(sessionId, objectMapper.treeToValue(msg, WebSocketControlMessage.class));
                     } catch (Exception e) {
                         log.error("Error handling control message for session {}", sessionId, e);
-                        sendError(session, "控制消息处理失败: " + e.getMessage());
+                        messageService.sendError(session, "控制消息处理失败: " + e.getMessage());
                     }
                     break;
                 default:
@@ -353,7 +362,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
         } catch (Exception e) {
             log.error("Error handling message for session {}", sessionId, e);
-            sendError(session, "消息处理失败: " + e.getMessage());
+            messageService.sendError(session, "消息处理失败: " + e.getMessage());
         }
     }
 
@@ -420,10 +429,10 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 sessionId,
                 text -> handleSttResult(sessionId, text, true),
                 text -> handleSttResult(sessionId, text, false),
-                () -> sendAsrReady(session),
+                    () -> messageService.sendAsrReady(session),
                 error -> {
                     log.error("STT error for session {}", sessionId, error);
-                    sendError(session, "语音识别失败: " + error.getMessage());
+                    messageService.sendError(session, "语音识别失败: " + error.getMessage());
                 }
         );
 
@@ -447,14 +456,14 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             int nextRetry = retryCount + 1;
             log.warn("[Session: {}] ASR not ready after {}s, retrying ({}/{})",
                 sessionId, ASR_READY_CHECK_DELAY_SECONDS, nextRetry, MAX_ASR_READY_RETRY);
-            sendAsrStatus(session, "asr_reconnecting", "语音识别连接较慢，正在自动重连");
+            messageService.sendAsrStatus(session, "asr_reconnecting", "语音识别连接较慢，正在自动重连");
             restartDashScopeStt(sessionId);
             scheduleAsrReadyCheck(sessionId, session, nextRetry);
             return;
         }
 
         log.warn("[Session: {}] ASR still not ready after {} retries", sessionId, retryCount);
-        sendError(session, "语音识别连接准备超时，请检查语音服务配置或稍后重试");
+        messageService.sendError(session, "语音识别连接准备超时，请检查语音服务配置或稍后重试");
     }
 
     /**
@@ -469,10 +478,10 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 sessionId,
                 text -> handleSttResult(sessionId, text, true),
                 text -> handleSttResult(sessionId, text, false),
-                () -> sendAsrReady(session),
+                () -> messageService.sendAsrReady(session),
                 error -> {
                     log.error("STT error for session {}", sessionId, error);
-                    sendError(session, "语音识别失败: " + error.getMessage());
+                    messageService.sendError(session, "语音识别失败: " + error.getMessage());
                 }
         );
     }
@@ -526,7 +535,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                     }
                     if (!sent) {
                         log.error("[Session: {}] ASR still down after restart", sessionId);
-                        sendError(session, "语音识别连接中断，请刷新页面后重试");
+                        messageService.sendError(session, "语音识别连接中断，请刷新页面后重试");
                     }
                 } else {
                     throw ex;
@@ -536,7 +545,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
         } catch (Exception e) {
             log.error("Error handling user audio for session {}", sessionId, e);
             String errorMessage = getErrorMessage(e);
-            sendError(session, errorMessage);
+            messageService.sendError(session, errorMessage);
         }
     }
 
@@ -561,7 +570,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
         if (!isFinalSegment) {
             state.markSttActivity();
-            sendSubtitle(session, state.getMergeBufferPreviewWithPartial(recognizedText), false);
+            messageService.sendSubtitle(session, state.getMergeBufferPreviewWithPartial(recognizedText), false);
             return;
         }
 
@@ -570,7 +579,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
         // 合并多次 VAD 切段，只更新实时字幕；是否提交给 LLM 由前端手动 submit 控制
         state.appendFinalSttSegment(recognizedText);
-        sendSubtitle(session, state.getMergeBufferPreview(), false);
+        messageService.sendSubtitle(session, state.getMergeBufferPreview(), false);
     }
 
     /**
@@ -639,7 +648,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             VoiceInterviewSessionEntity sessionEntity = getSessionEntity(sessionId);
             if (sessionEntity == null) {
                 log.error("Session entity not found for session {}, cannot generate LLM response", sessionId);
-                sendError(session, "会话不存在，请重新开始面试");
+                messageService.sendError(session, "会话不存在，请重新开始面试");
                 return;
             }
 
@@ -674,7 +683,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                                 "status", "success"
                             );
                         }
-                        sendTextMessage(session, partialText, false);
+                        messageService.sendTextMessage(session, partialText, false);
                     },
                     sentence -> {
                         if (sentence == null || sentence.isBlank()) {
@@ -707,8 +716,8 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                     return;
                 }
 
-                sendSubtitle(session, userText, true);
-                sendTextMessage(session, aiReply, true);
+                messageService.sendSubtitle(session, userText, true);
+                messageService.sendTextMessage(session, aiReply, true);
                 saveMessage(sessionId, userText, aiReply);
 
                 // 按顺序收集所有 TTS 结果（带超时，防止单句 TTS 挂死阻塞整条管道）
@@ -723,7 +732,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                         try {
                             byte[] fallbackPcm = ttsService.synthesize(aiReply);
                             if (fallbackPcm != null && fallbackPcm.length > 0) {
-                                sendAudio(session, convertPcmToWav(fallbackPcm), aiReply);
+                                messageService.sendAudio(session, convertPcmToWav(fallbackPcm), aiReply);
                             }
                         } catch (Exception e) {
                             log.warn("[Session: {}] Fallback TTS failed: {}", sessionId, e.getMessage());
@@ -766,7 +775,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                                 byte[] wavAudio = convertPcmToWav(fallbackPcm);
                                 log.info("[Session: {}] Fallback TTS succeeded, WAV size: {} bytes",
                                     sessionId, wavAudio.length);
-                                sendAudio(session, wavAudio, aiReply);
+                                messageService.sendAudio(session, wavAudio, aiReply);
                                 audioSentByFallback = true;
                             }
                         } catch (Exception e) {
@@ -785,7 +794,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                             byte[] wavAudio = convertPcmToWav(mergedPcm);
                             log.info("[Session: {}] Sending merged audio - {} sentences, WAV size: {} bytes",
                                 sessionId, pcmChunks.size(), wavAudio.length);
-                            sendAudio(session, wavAudio, aiReply);
+                            messageService.sendAudio(session, wavAudio, aiReply);
                         } else {
                             log.error("[Session: {}] All TTS calls returned empty audio", sessionId);
                             incrementCounter("app.voice.interview.tts.empty_audio", "status", "empty");
@@ -803,8 +812,8 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                     return;
                 }
 
-                sendSubtitle(session, userText, true);
-                sendTextMessage(session, aiReply, true);
+                messageService.sendSubtitle(session, userText, true);
+                messageService.sendTextMessage(session, aiReply, true);
                 saveMessage(sessionId, userText, aiReply);
 
                 long ttsStartNanos = System.nanoTime();
@@ -822,7 +831,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                     incrementCounter("app.voice.interview.tts.empty_audio", "status", "empty");
                 } else {
                     byte[] wavAudio = convertPcmToWav(aiAudio);
-                    sendAudio(session, wavAudio, aiReply);
+                    messageService.sendAudio(session, wavAudio, aiReply);
                 }
             }
 
@@ -836,7 +845,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
             incrementCounter("app.voice.interview.turn.completed", "status", "failure");
             incrementCounter("app.voice.interview.errors", "stage", "turn");
             if (session.isOpen()) {
-                sendError(session, "AI响应失败: " + e.getMessage());
+                messageService.sendError(session, "AI响应失败: " + e.getMessage());
             }
         } finally {
             state.aiSpeaking.set(false);
@@ -894,87 +903,6 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 interviewService.startPhase(sessionId, control.getPhase());
                 break;
         }
-    }
-
-    private void sendSubtitle(WebSocketSession session, String text, boolean isFinal) {
-        WebSocketSubtitleMessage subtitle = WebSocketSubtitleMessage.builder()
-                .type("subtitle")
-                .text(text)
-                .isFinal(isFinal)
-                .build();
-        sendMessage(session, toJson(subtitle));
-    }
-
-    private void sendAudio(WebSocketSession session, byte[] audio, String text) {
-        if (!session.isOpen()) {
-            return;
-        }
-        String base64Audio = Base64.getEncoder().encodeToString(audio);
-        log.info("Sending audio to frontend - WAV size: {} bytes, Base64 length: {}",
-                audio.length, base64Audio.length());
-        sendMessage(session, toJson(Map.of(
-                "type", "audio",
-                "data", base64Audio,
-                "text", text
-        )));
-    }
-
-    private void sendTextMessage(WebSocketSession session, String text) {
-        sendTextMessage(session, text, false);
-    }
-
-    private void sendTextMessage(WebSocketSession session, String text, boolean isFinal) {
-        sendMessage(session, toJson(Map.of(
-                "type", "text",
-                "content", text,
-                "final", isFinal
-        )));
-    }
-
-    private void sendError(WebSocketSession session, String error) {
-        sendMessage(session, toJson(Map.of("type", "error", "message", error)));
-    }
-
-    private void sendAsrReady(WebSocketSession session) {
-        sendAsrStatus(session, "asr_ready", "语音识别已就绪");
-    }
-
-    private void sendAsrStatus(WebSocketSession session, String action, String message) {
-        if (session == null || !session.isOpen()) {
-            return;
-        }
-        sendMessage(session, toJson(Map.of(
-            "type", "control",
-            "action", action,
-            "message", message,
-            "timestamp", System.currentTimeMillis()
-        )));
-    }
-
-    private void sendAudioChunk(WebSocketSession session, byte[] wavAudio, int index, boolean isLast) {
-        if (!session.isOpen()) {
-            return;
-        }
-        String base64Audio = Base64.getEncoder().encodeToString(wavAudio);
-        sendMessage(session, toJson(Map.of(
-                "type", "audio_chunk",
-                "data", base64Audio,
-                "index", index,
-                "isLast", isLast
-        )));
-        log.debug("[Session] Sent audio chunk index={}, isLast={}, size={} bytes", index, isLast, wavAudio.length);
-    }
-
-    private void sendAudioComplete(WebSocketSession session) {
-        if (session == null || !session.isOpen()) {
-            return;
-        }
-        sendMessage(session, toJson(Map.of(
-            "type", "control",
-            "action", "audio_complete",
-            "message", "面试官语音播放完成",
-            "timestamp", System.currentTimeMillis()
-        )));
     }
 
     private class OrderedTtsChunkEmitter {
@@ -1036,7 +964,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 completion.cancel(true);
                 int emitted = emittedChunks.get();
                 if (emitted > 0) {
-                    sendAudioComplete(session);
+                    messageService.sendAudioComplete(session);
                 }
                 return emitted;
             }
@@ -1050,7 +978,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                     if (future == null) {
                         int emitted = emittedChunks.get();
                         if (emitted > 0) {
-                            sendAudioComplete(session);
+                            messageService.sendAudioComplete(session);
                         }
                         return emitted;
                     }
@@ -1058,7 +986,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                     try {
                         byte[] pcm = future.get(ttsTimeoutSec, TimeUnit.SECONDS);
                         if (pcm != null && pcm.length > 0 && session.isOpen()) {
-                            sendAudioChunk(session, convertPcmToWav(pcm), index, false);
+                            messageService.sendAudioChunk(session, convertPcmToWav(pcm), index, false);
                             emittedChunks.incrementAndGet();
                         }
                     } catch (Exception e) {
@@ -1074,7 +1002,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
                 log.warn("[Session: {}] Streaming TTS chunk emitter interrupted", sessionId);
                 int emitted = emittedChunks.get();
                 if (emitted > 0) {
-                    sendAudioComplete(session);
+                    messageService.sendAudioComplete(session);
                 }
                 return emitted;
             }
@@ -1166,12 +1094,11 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private void sendPauseWarning(String sessionId) {
         WebSocketSession session = sessionRegistry.getSession(sessionId);
         if (session != null && session.isOpen()) {
-            sendMessage(session, toJson(Map.of(
-                "type", "control",
-                "action", "pause_timeout_warning",
-                "message", "会话将在30秒后暂停，请继续说话或点击继续",
-                "timestamp", System.currentTimeMillis()
-            )));
+            messageService.sendControl(
+                session,
+                "pause_timeout_warning",
+                "会话将在30秒后暂停，请继续说话或点击继续"
+            );
         }
     }
 
@@ -1184,12 +1111,11 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
 
         try {
             if (session != null && session.isOpen()) {
-                sendMessage(session, toJson(Map.of(
-                    "type", "control",
-                    "action", "pause_timeout",
-                    "message", "会话因超时已暂停,可在历史记录中恢复",
-                    "timestamp", System.currentTimeMillis()
-                )));
+                messageService.sendControl(
+                    session,
+                    "pause_timeout",
+                    "会话因超时已暂停,可在历史记录中恢复"
+                );
             }
 
             // 2. Save session state to database
