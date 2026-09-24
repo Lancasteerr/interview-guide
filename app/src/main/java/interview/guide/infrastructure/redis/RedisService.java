@@ -2,14 +2,11 @@ package interview.guide.infrastructure.redis;
 
 import interview.guide.common.exception.BusinessException;
 import interview.guide.common.exception.ErrorCode;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RAtomicLong;
-import org.redisson.api.RBucket;
 import org.redisson.api.RKeys;
 import org.redisson.api.RList;
 import org.redisson.api.RLock;
-import org.redisson.api.RMap;
 import org.redisson.api.RStream;
 import org.redisson.api.RedissonClient;
 import org.redisson.api.options.KeysScanOptions;
@@ -44,11 +41,16 @@ import java.util.function.Function;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class RedisService {
 
     private final RedissonClient redissonClient;
+    private final RedisDataAdapter dataAdapter;
     private final ConcurrentMap<String, StreamMessageId> streamReclaimCursors = new ConcurrentHashMap<>();
+
+    public RedisService(RedissonClient redissonClient) {
+        this.redissonClient = redissonClient;
+        this.dataAdapter = new RedisDataAdapter(redissonClient);
+    }
 
     // ==================== 基础键值操作 ====================
 
@@ -56,67 +58,56 @@ public class RedisService {
      * 设置值（无过期时间）
      */
     public <T> void set(String key, T value) {
-        RBucket<T> bucket = redissonClient.getBucket(key);
-        bucket.set(value);
+        dataAdapter.set(key, value);
     }
 
     /**
      * 设置值（带过期时间）
      */
     public <T> void set(String key, T value, Duration ttl) {
-        RBucket<T> bucket = redissonClient.getBucket(key);
-        bucket.set(value, ttl);
+        dataAdapter.set(key, value, ttl);
     }
 
     /**
      * 获取值
      */
     public <T> T get(String key) {
-        RBucket<T> bucket = redissonClient.getBucket(key);
-        return bucket.get();
+        return dataAdapter.get(key);
     }
 
     /**
      * 获取值，如果不存在则使用 loader 加载并缓存
      */
     public <T> T getOrLoad(String key, Duration ttl, Function<String, T> loader) {
-        RBucket<T> bucket = redissonClient.getBucket(key);
-        T value = bucket.get();
-        if (value == null) {
-            value = loader.apply(key);
-            if (value != null) {
-                bucket.set(value, ttl);
-            }
-        }
-        return value;
+        return dataAdapter.getOrLoad(key, ttl, loader);
     }
 
     /**
      * 删除键
      */
     public boolean delete(String key) {
-        return redissonClient.getBucket(key).delete();
+        return dataAdapter.delete(key);
     }
 
     /**
      * 检查键是否存在
      */
     public boolean exists(String key) {
-        return redissonClient.getBucket(key).isExists();
+        return dataAdapter.exists(key);
     }
 
     /**
      * 设置过期时间
      */
     public boolean expire(String key, Duration ttl) {
-        return redissonClient.getBucket(key).expire(ttl);
+        return dataAdapter.expire(key, ttl);
     }
 
     /**
      * 获取剩余过期时间（毫秒）
      */
     public long getTimeToLive(String key) {
-        return redissonClient.getBucket(key).remainTimeToLive();
+        return dataAdapter.getTimeToLive(key);
     }
 
     // ==================== Hash 操作 ====================
@@ -125,40 +116,35 @@ public class RedisService {
      * 设置 Hash 字段
      */
     public <K, V> void hSet(String key, K field, V value) {
-        RMap<K, V> map = redissonClient.getMap(key);
-        map.put(field, value);
+        dataAdapter.hSet(key, field, value);
     }
 
     /**
      * 获取 Hash 字段
      */
     public <K, V> V hGet(String key, K field) {
-        RMap<K, V> map = redissonClient.getMap(key);
-        return map.get(field);
+        return dataAdapter.hGet(key, field);
     }
 
     /**
      * 获取整个 Hash
      */
     public <K, V> Map<K, V> hGetAll(String key) {
-        RMap<K, V> map = redissonClient.getMap(key);
-        return map.readAllMap();
+        return dataAdapter.hGetAll(key);
     }
 
     /**
      * 删除 Hash 字段
      */
     public <K, V> boolean hDelete(String key, K field) {
-        RMap<K, V> map = redissonClient.getMap(key);
-        return map.remove(field) != null;
+        return dataAdapter.hDelete(key, field);
     }
 
     /**
      * 检查 Hash 字段是否存在
      */
     public <K> boolean hExists(String key, K field) {
-        RMap<K, Object> map = redissonClient.getMap(key);
-        return map.containsKey(field);
+        return dataAdapter.hExists(key, field);
     }
 
     // ==================== 分布式锁 ====================
