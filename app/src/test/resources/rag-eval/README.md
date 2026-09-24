@@ -8,17 +8,25 @@
 
 ```bash
 # 基线：显式关闭 rerank（Chunk 800 + 关闭改写，rag-eval Profile 固定）
-RUN_RAG_EVAL=true RAG_EVAL_MODE=baseline ./gradlew :app:ragEvaluation --no-daemon
+$env:RUN_RAG_EVAL="true" 
+$env:RAG_EVAL_MODE="baseline" 
+./gradlew :app:ragEvaluation --no-daemon
 
 # 单臂 rerank：显式强制调用已配置的 rerank Provider
-RUN_RAG_EVAL=true RAG_EVAL_MODE=rerank ./gradlew :app:ragEvaluation --no-daemon
+$env:RUN_RAG_EVAL="true" 
+$env:RAG_EVAL_MODE="rerank" 
+./gradlew :app:ragEvaluation --no-daemon
 
 # 配对对照：一次运行同时执行 vector-only 与 vector+rerank
-RUN_RAG_EVAL=true RAG_EVAL_MODE=paired-rerank \
-  APP_AI_RAG_REWRITE_ENABLED=false ./gradlew :app:ragEvaluation --no-daemon
+$env:RUN_RAG_EVAL="true" 
+$env:RAG_EVAL_MODE="paired-rerank"
+$env:APP_AI_RAG_REWRITE_ENABLED="false" 
+./gradlew :app:ragEvaluation --no-daemon
 
 # 独立 Query 改写实验（仍是单臂，不属于 paired-rerank）
-RUN_RAG_EVAL=true APP_AI_RAG_REWRITE_ENABLED=true ./gradlew :app:ragEvaluation --no-daemon
+$env:RUN_RAG_EVAL="true" 
+$env:APP_AI_RAG_REWRITE_ENABLED="true" 
+./gradlew :app:ragEvaluation --no-daemon
 ```
 
 `RAG_EVAL_MODE` 未设置时默认为 `baseline`。`baseline` 使用 `DISABLED`，`rerank` 使用
