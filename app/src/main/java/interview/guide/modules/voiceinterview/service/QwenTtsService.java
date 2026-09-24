@@ -46,49 +46,43 @@ import java.util.concurrent.atomic.AtomicReference;
 @Service
 public class QwenTtsService {
 
-    // Runtime configuration values (loaded from VoiceInterviewProperties; setters kept for tests)
-    private String model;
+    private final QwenTtsConfiguration configuration;
 
-    private String apiKey;
-
-    private String voice;
-
-    private String format;
-
-    private Integer sampleRate;
-
-    private String mode;
-
-    private String languageType;
-
-    private Float speechRate;
-
-    private Integer volume;
-
-    private int connectTimeoutSeconds;
+    // 保留旧字段作为反射/诊断兼容视图，合成流程统一读取 configuration。
+    @Deprecated private String model;
+    @Deprecated private String apiKey;
+    @Deprecated private String voice;
+    @Deprecated private String format;
+    @Deprecated private Integer sampleRate;
+    @Deprecated private String mode;
+    @Deprecated private String languageType;
+    @Deprecated private Float speechRate;
+    @Deprecated private Integer volume;
+    @Deprecated private int connectTimeoutSeconds;
 
     public QwenTtsService(VoiceInterviewProperties voiceInterviewProperties) {
-        applyTtsConfig(voiceInterviewProperties);
+        this.configuration = new QwenTtsConfiguration(voiceInterviewProperties);
+        syncLegacyConfigurationView();
     }
 
     public void reload(VoiceInterviewProperties voiceInterviewProperties) {
-        applyTtsConfig(voiceInterviewProperties);
+        configuration.reload(voiceInterviewProperties);
+        syncLegacyConfigurationView();
         log.info("QwenTtsService reloaded: model={}, voice={}, connectTimeoutSeconds={}",
-                model, voice, connectTimeoutSeconds);
+                configuration.model(), configuration.voice(), configuration.connectTimeoutSeconds());
     }
 
-    private void applyTtsConfig(VoiceInterviewProperties voiceInterviewProperties) {
-        VoiceInterviewProperties.QwenTtsConfig tts = voiceInterviewProperties.getQwen().getTts();
-        this.model = tts.getModel();
-        this.apiKey = tts.getApiKey();
-        this.voice = tts.getVoice();
-        this.format = tts.getFormat();
-        this.sampleRate = tts.getSampleRate();
-        this.mode = tts.getMode();
-        this.languageType = tts.getLanguageType();
-        this.speechRate = tts.getSpeechRate();
-        this.volume = tts.getVolume();
-        this.connectTimeoutSeconds = Math.max(1, voiceInterviewProperties.getTtsConnectTimeoutSeconds());
+    private void syncLegacyConfigurationView() {
+        this.model = configuration.model();
+        this.apiKey = configuration.apiKey();
+        this.voice = configuration.voice();
+        this.format = configuration.format();
+        this.sampleRate = configuration.sampleRate();
+        this.mode = configuration.mode();
+        this.languageType = configuration.languageType();
+        this.speechRate = configuration.speechRate();
+        this.volume = configuration.volume();
+        this.connectTimeoutSeconds = configuration.connectTimeoutSeconds();
     }
 
     /**
@@ -100,11 +94,11 @@ public class QwenTtsService {
      */
     @PostConstruct
     public void init() {
-        if (apiKey == null || apiKey.trim().isEmpty()) {
+        if (!configuration.hasApiKey()) {
             throw new IllegalStateException("API key must be configured before initializing QwenTtsService");
         }
         log.info("QwenTtsService initialized with model: {}, voice: {}, sampleRate: {}Hz",
-                 model, voice, sampleRate);
+                 configuration.model(), configuration.voice(), configuration.sampleRate());
     }
 
     /**
@@ -144,8 +138,8 @@ public class QwenTtsService {
         try {
             // Build QwenTtsRealtimeParam with connection settings
             QwenTtsRealtimeParam param = QwenTtsRealtimeParam.builder()
-                    .model(model)
-                    .apikey(apiKey)
+                    .model(configuration.model())
+                    .apikey(configuration.apiKey())
                     .build();
 
             // Create callback handler for WebSocket events
@@ -178,19 +172,19 @@ public class QwenTtsService {
 
                 // Configure session with TTS parameters
                 QwenTtsRealtimeConfig config = QwenTtsRealtimeConfig.builder()
-                        .voice(voice)
+                        .voice(configuration.voice())
                         .responseFormat(getAudioFormat())
-                        .mode(mode)  // "commit" mode
-                        .languageType(languageType)
-                        .speechRate(speechRate)
-                        .volume(volume)
+                        .mode(configuration.mode())  // "commit" mode
+                        .languageType(configuration.languageType())
+                        .speechRate(configuration.speechRate())
+                        .volume(configuration.volume())
                         .build();
 
                 // Update session with configuration
                 qwenTtsRealtime.updateSession(config);
 
                 log.info("[TTS] Session configured with voice: {}, triggering synthesis for text (length: {})",
-                         voice, text.length());
+                         configuration.voice(), text.length());
 
                 // Send text for synthesis using commit mode
                 qwenTtsRealtime.appendText(text);
@@ -275,10 +269,12 @@ public class QwenTtsService {
                 });
 
         try {
-            boolean completed = connectionFinishedLatch.await(connectTimeoutSeconds, TimeUnit.SECONDS);
+            boolean completed = connectionFinishedLatch.await(
+                    configuration.connectTimeoutSeconds(), TimeUnit.SECONDS);
             if (!completed) {
                 throw new TimeoutException(
-                        "TTS WebSocket connection timed out after " + connectTimeoutSeconds + " seconds");
+                        "TTS WebSocket connection timed out after "
+                            + configuration.connectTimeoutSeconds() + " seconds");
             }
         } finally {
             if (connectThread.isAlive()) {
@@ -433,38 +429,47 @@ public class QwenTtsService {
     // Setter methods for configuration (used by Spring @Value injection or tests)
 
     public void setModel(String model) {
+        configuration.setModel(model);
         this.model = model;
     }
 
     public void setApiKey(String apiKey) {
+        configuration.setApiKey(apiKey);
         this.apiKey = apiKey;
     }
 
     public void setVoice(String voice) {
+        configuration.setVoice(voice);
         this.voice = voice;
     }
 
     public void setFormat(String format) {
+        configuration.setFormat(format);
         this.format = format;
     }
 
     public void setSampleRate(Integer sampleRate) {
+        configuration.setSampleRate(sampleRate);
         this.sampleRate = sampleRate;
     }
 
     public void setMode(String mode) {
+        configuration.setMode(mode);
         this.mode = mode;
     }
 
     public void setLanguageType(String languageType) {
+        configuration.setLanguageType(languageType);
         this.languageType = languageType;
     }
 
     public void setSpeechRate(Float speechRate) {
+        configuration.setSpeechRate(speechRate);
         this.speechRate = speechRate;
     }
 
     public void setVolume(Integer volume) {
+        configuration.setVolume(volume);
         this.volume = volume;
     }
 }
