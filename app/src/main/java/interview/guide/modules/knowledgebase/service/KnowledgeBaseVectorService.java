@@ -5,21 +5,16 @@ import interview.guide.common.exception.ErrorCode;
 import interview.guide.common.log.ErrorLogSanitizer;
 import interview.guide.common.transaction.TransactionalExecutor;
 import interview.guide.modules.knowledgebase.config.KnowledgeBaseVectorProperties;
-import jakarta.annotation.PostConstruct;
 import interview.guide.modules.knowledgebase.repository.VectorRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.transformer.splitter.TextSplitter;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -30,21 +25,10 @@ import java.util.stream.Collectors;
 @Service
 public class KnowledgeBaseVectorService {
     
-    /**
-     * 阿里云 DashScope Embedding API 批量大小限制
-     */
-    private static final int MAX_BATCH_SIZE = 10;
-    private static final String TEMP_KB_ID_PREFIX = "pending:";
-    private static final String METADATA_KB_ID = "kb_id";
-    private static final String METADATA_TARGET_KB_ID = "kb_target_id";
-    private static final String METADATA_VECTOR_JOB_ID = "kb_vector_job_id";
-    private static final String METADATA_CHUNK_STRATEGY = "chunk_strategy";
     private final VectorStore vectorStore;
-    private final TextSplitter textSplitter;
     private final VectorRepository vectorRepository;
     private final TransactionalExecutor transactionalExecutor;
-    private final KnowledgeBaseVectorProperties vectorProperties;
-    private final KnowledgeBasePersistenceService persistenceService;
+    private final KnowledgeBaseVectorizationService vectorizationService;
 
     @Autowired
     public KnowledgeBaseVectorService(
@@ -57,10 +41,8 @@ public class KnowledgeBaseVectorService {
         this.vectorStore = vectorStore;
         this.vectorRepository = vectorRepository;
         this.transactionalExecutor = transactionalExecutor;
-        this.vectorProperties = vectorProperties;
-        this.persistenceService = persistenceService;
-        // Chunk 策略由 app.ai.rag.vectorization 配置驱动（仅 Spring AI 原生参数，无 overlap）
-        this.textSplitter = vectorProperties.createTextSplitter();
+        this.vectorizationService = new KnowledgeBaseVectorizationService(
+            vectorStore, vectorRepository, transactionalExecutor, vectorProperties, persistenceService);
     }
 
     KnowledgeBaseVectorService(VectorStore vectorStore, VectorRepository vectorRepository) {
@@ -88,72 +70,7 @@ public class KnowledgeBaseVectorService {
      */
     public void vectorizeAndStore(Long knowledgeBaseId, String content, String attemptId,
                                   Runnable progressHeartbeat) {
-        String jobId = null;
-        try {
-            if (knowledgeBaseId == null) {
-                throw new IllegalArgumentException("knowledgeBaseId不能为空");
-            }
-            jobId = UUID.randomUUID().toString();
-            log.info("开始向量化知识库: kbId={}, jobId={}, contentLength={}",
-                knowledgeBaseId, jobId, content.length());
-
-            // 1. 将文本分块
-            List<Document> chunks = textSplitter.apply(
-                List.of(new Document(content))
-            );
-            
-            log.info("文本分块完成: {} 个chunks", chunks.size());
-            
-            // 2. 为每个 chunk 添加临时 metadata，成功后再提升为正式 kb_id。
-            applyPendingMetadata(chunks, knowledgeBaseId, jobId);
-
-            // 分块完成心跳
-            progressHeartbeat.run();
-
-            // 3. 分批向量化并存储（阿里云 DashScope API 限制 batch size <= 10）
-            int totalChunks = chunks.size();
-            int batchCount = (totalChunks + MAX_BATCH_SIZE - 1) / MAX_BATCH_SIZE; // 向上取整
-            log.info("开始分批向量化: 总共 {} 个chunks，分 {} 批处理，每批最多 {} 个",
-                    totalChunks, batchCount, MAX_BATCH_SIZE);
-            for (int i = 0; i < batchCount; i++) {
-                int start = i * MAX_BATCH_SIZE;
-                int end = Math.min(start + MAX_BATCH_SIZE, totalChunks);
-                List<Document> batch = chunks.subList(start, end);
-                log.debug("处理第 {}/{} 批: chunks {}-{}", i + 1, batchCount, start + 1, end);
-                vectorStore.add(batch);
-                // Embedding 批次心跳（调用方节流）
-                progressHeartbeat.run();
-            }
-            String configJson = vectorConfigJson();
-            if (attemptId != null && persistenceService != null) {
-                persistenceService.activateVectorJobAndUpdateSnapshot(
-                    knowledgeBaseId, attemptId, jobId, totalChunks, configJson);
-            } else {
-                activateVectorJob(knowledgeBaseId, jobId);
-                // 兼容直接调用：提升成功后再以独立短事务写入快照
-                updateVectorizationSnapshot(knowledgeBaseId, totalChunks, configJson);
-            }
-            log.info("知识库向量化完成: kbId={}, jobId={}, chunks={}, batches={}",
-                    knowledgeBaseId, jobId, totalChunks, batchCount);
-        } catch (Exception e) {
-            cleanupPendingVectorJob(knowledgeBaseId, jobId);
-            log.error("向量化知识库失败: kbId={}, jobId={}, error={}",
-                knowledgeBaseId, jobId, ErrorLogSanitizer.summarize(e),
-                ErrorLogSanitizer.forLogging(e));
-            throw new BusinessException(ErrorCode.KNOWLEDGE_BASE_VECTORIZATION_FAILED,
-                "向量化知识库失败");
-        }
-    }
-
-    private void applyPendingMetadata(List<Document> chunks, Long knowledgeBaseId, String jobId) {
-        String pendingKbId = TEMP_KB_ID_PREFIX + knowledgeBaseId + ":" + jobId;
-        chunks.forEach(chunk -> {
-            chunk.getMetadata().put(METADATA_KB_ID, pendingKbId);
-            chunk.getMetadata().put(METADATA_TARGET_KB_ID, knowledgeBaseId.toString());
-            chunk.getMetadata().put(METADATA_VECTOR_JOB_ID, jobId);
-            // 在 add 前写入策略标识：promote 只改 kb_id，不会回填
-            chunk.getMetadata().put(METADATA_CHUNK_STRATEGY, vectorProperties.getStrategyVersion());
-        });
+        vectorizationService.vectorizeAndStore(knowledgeBaseId, content, attemptId, progressHeartbeat);
     }
     
     /**
@@ -280,61 +197,6 @@ public class KnowledgeBaseVectorService {
 
     private void deleteByKnowledgeBaseIdStrict(Long knowledgeBaseId) {
         runVectorRepositoryMutation(() -> vectorRepository.deleteByKnowledgeBaseId(knowledgeBaseId));
-    }
-
-    private void activateVectorJob(Long knowledgeBaseId, String jobId) {
-        runVectorRepositoryMutation(() -> {
-            vectorRepository.deleteByKnowledgeBaseId(knowledgeBaseId);
-            vectorRepository.promoteVectorJob(knowledgeBaseId, jobId);
-        });
-    }
-
-    /**
-     * 向量化成功后的配置快照：chunkCount、vectorConfig（无密钥 JSON）、vectorizedAt。
-     * 失败（含清理）路径不会调用；与 Embedding 写入不在同一事务。
-     */
-    private void updateVectorizationSnapshot(Long knowledgeBaseId, int chunkCount,
-                                             String configJson) {
-        if (persistenceService == null) {
-            return;
-        }
-        Runnable update = () -> persistenceService.updateVectorizationSnapshot(
-            knowledgeBaseId, chunkCount, configJson);
-        if (transactionalExecutor == null) {
-            update.run();
-            return;
-        }
-        transactionalExecutor.run(update);
-    }
-
-    private String vectorConfigJson() {
-        Map<String, Object> config = new LinkedHashMap<>();
-        config.put("splitter", vectorProperties.getSplitter());
-        config.put("chunkSize", vectorProperties.getChunkSize());
-        config.put("minChunkSizeChars", vectorProperties.getMinChunkSizeChars());
-        config.put("minChunkLengthToEmbed", vectorProperties.getMinChunkLengthToEmbed());
-        config.put("maxNumChunks", vectorProperties.getMaxNumChunks());
-        config.put("keepSeparator", vectorProperties.isKeepSeparator());
-        config.put("punctuationMarks", vectorProperties.getPunctuationMarks());
-        config.put("strategyVersion", vectorProperties.getStrategyVersion());
-        try {
-            return new tools.jackson.databind.ObjectMapper().writeValueAsString(config);
-        } catch (tools.jackson.core.JacksonException e) {
-            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "向量化配置快照序列化失败");
-        }
-    }
-
-    private void cleanupPendingVectorJob(Long knowledgeBaseId, String jobId) {
-        if (jobId == null) {
-            return;
-        }
-        try {
-            runVectorRepositoryMutation(() -> vectorRepository.deleteByVectorJobId(jobId));
-        } catch (Exception cleanupError) {
-            log.warn("清理临时向量数据失败，可后续按 jobId 补偿: kbId={}, jobId={}, error={}",
-                knowledgeBaseId, jobId, ErrorLogSanitizer.summarize(cleanupError),
-                ErrorLogSanitizer.forLogging(cleanupError));
-        }
     }
 
     private void runVectorRepositoryMutation(Runnable action) {
