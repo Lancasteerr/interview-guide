@@ -61,6 +61,7 @@ public class LlmProviderConfigService {
   private final QwenAsrService asrService;
   private final QwenTtsService ttsService;
   private final LlmProviderConnectivityTester connectivityTester;
+  private final VoiceProviderConfigService voiceConfigService;
 
   private static final Map<String, String> RECOMMENDED_EMBEDDING_MODELS = Map.of(
       "dashscope", "text-embedding-v3",
@@ -91,6 +92,8 @@ public class LlmProviderConfigService {
     this.asrService = asrService;
     this.ttsService = ttsService;
     this.connectivityTester = new LlmProviderConnectivityTester();
+    this.voiceConfigService = new VoiceProviderConfigService(
+        voiceProperties, asrService, ttsService, yamlPath, envPath, this::maskApiKey);
   }
 
   public LlmProviderConfigService(
@@ -242,19 +245,7 @@ public class LlmProviderConfigService {
   public AsrConfigDTO getAsrConfig() {
     rwLock.readLock().lock();
     try {
-      VoiceInterviewProperties.AsrConfig asr = voiceProperties.getQwen().getAsr();
-      return AsrConfigDTO.builder()
-          .url(asr.getUrl())
-          .model(asr.getModel())
-          .maskedApiKey(maskApiKey(asr.getApiKey()))
-          .language(asr.getLanguage())
-          .format(asr.getFormat())
-          .sampleRate(asr.getSampleRate())
-          .enableTurnDetection(asr.isEnableTurnDetection())
-          .turnDetectionType(asr.getTurnDetectionType())
-          .turnDetectionThreshold(asr.getTurnDetectionThreshold())
-          .turnDetectionSilenceDurationMs(asr.getTurnDetectionSilenceDurationMs())
-          .build();
+      return voiceConfigService.getAsrConfig();
     } finally {
       rwLock.readLock().unlock();
     }
@@ -263,18 +254,7 @@ public class LlmProviderConfigService {
   public TtsConfigDTO getTtsConfig() {
     rwLock.readLock().lock();
     try {
-      VoiceInterviewProperties.QwenTtsConfig tts = voiceProperties.getQwen().getTts();
-      return TtsConfigDTO.builder()
-          .model(tts.getModel())
-          .maskedApiKey(maskApiKey(tts.getApiKey()))
-          .voice(tts.getVoice())
-          .format(tts.getFormat())
-          .sampleRate(tts.getSampleRate())
-          .mode(tts.getMode())
-          .languageType(tts.getLanguageType())
-          .speechRate(tts.getSpeechRate())
-          .volume(tts.getVolume())
-          .build();
+      return voiceConfigService.getTtsConfig();
     } finally {
       rwLock.readLock().unlock();
     }
@@ -295,27 +275,7 @@ public class LlmProviderConfigService {
   public ProviderTestResult testAsrConfig() {
     rwLock.readLock().lock();
     try {
-      VoiceInterviewProperties.AsrConfig asr = voiceProperties.getQwen().getAsr();
-      try {
-        java.net.URI wsUri = java.net.URI.create(asr.getUrl());
-        String host = wsUri.getHost();
-        int port = wsUri.getPort() > 0 ? wsUri.getPort() : (wsUri.getScheme().equals("wss") ? 443 : 80);
-        java.net.InetSocketAddress address = new java.net.InetSocketAddress(host, port);
-        java.net.Socket socket = new java.net.Socket();
-        socket.connect(address, 5000);
-        socket.close();
-        return ProviderTestResult.builder()
-            .success(true)
-            .message("ASR 服务网络端口可达: " + host + "；尚未验证 API Key、模型权限及语音识别能力")
-            .model(asr.getModel())
-            .build();
-      } catch (Exception e) {
-        return ProviderTestResult.builder()
-            .success(false)
-            .message("ASR 连接失败: " + e.getMessage())
-            .model(asr.getModel())
-            .build();
-      }
+      return voiceConfigService.testAsrConfig();
     } finally {
       rwLock.readLock().unlock();
     }
@@ -522,29 +482,7 @@ public class LlmProviderConfigService {
   public void updateAsrConfig(AsrConfigRequest request) {
     rwLock.writeLock().lock();
     try {
-      VoiceInterviewProperties.AsrConfig asr = voiceProperties.getQwen().getAsr();
-      VoiceInterviewProperties.QwenTtsConfig tts = voiceProperties.getQwen().getTts();
-      if (request.url() != null) asr.setUrl(request.url());
-      if (request.model() != null) asr.setModel(request.model());
-      if (request.language() != null) asr.setLanguage(request.language());
-      if (request.format() != null) asr.setFormat(request.format());
-      if (request.sampleRate() != null) asr.setSampleRate(request.sampleRate());
-      if (request.enableTurnDetection() != null) asr.setEnableTurnDetection(request.enableTurnDetection());
-      if (request.turnDetectionType() != null) asr.setTurnDetectionType(request.turnDetectionType());
-      if (request.turnDetectionThreshold() != null) asr.setTurnDetectionThreshold(request.turnDetectionThreshold());
-      if (request.turnDetectionSilenceDurationMs() != null) asr.setTurnDetectionSilenceDurationMs(request.turnDetectionSilenceDurationMs());
-      if (request.apiKey() != null) {
-        asr.setApiKey(request.apiKey());
-        tts.setApiKey(request.apiKey());
-        updateEnvValue("AI_BAILIAN_API_KEY", request.apiKey());
-      }
-
-      writeAsrConfigToYaml(asr);
-      asrService.reload(voiceProperties);
-      if (request.apiKey() != null) {
-        ttsService.reload(voiceProperties);
-      }
-      log.info("Updated ASR config");
+      voiceConfigService.updateAsrConfig(request);
     } finally {
       rwLock.writeLock().unlock();
     }
@@ -553,28 +491,7 @@ public class LlmProviderConfigService {
   public void updateTtsConfig(TtsConfigRequest request) {
     rwLock.writeLock().lock();
     try {
-      VoiceInterviewProperties.AsrConfig asr = voiceProperties.getQwen().getAsr();
-      VoiceInterviewProperties.QwenTtsConfig tts = voiceProperties.getQwen().getTts();
-      if (request.model() != null) tts.setModel(request.model());
-      if (request.voice() != null) tts.setVoice(request.voice());
-      if (request.format() != null) tts.setFormat(request.format());
-      if (request.sampleRate() != null) tts.setSampleRate(request.sampleRate());
-      if (request.mode() != null) tts.setMode(request.mode());
-      if (request.languageType() != null) tts.setLanguageType(request.languageType());
-      if (request.speechRate() != null) tts.setSpeechRate(request.speechRate());
-      if (request.volume() != null) tts.setVolume(request.volume());
-      if (request.apiKey() != null) {
-        tts.setApiKey(request.apiKey());
-        asr.setApiKey(request.apiKey());
-        updateEnvValue("AI_BAILIAN_API_KEY", request.apiKey());
-      }
-
-      writeTtsConfigToYaml(tts);
-      ttsService.reload(voiceProperties);
-      if (request.apiKey() != null) {
-        asrService.reload(voiceProperties);
-      }
-      log.info("Updated TTS config");
+      voiceConfigService.updateTtsConfig(request);
     } finally {
       rwLock.writeLock().unlock();
     }
@@ -922,39 +839,6 @@ public class LlmProviderConfigService {
     mutateYamlText(ErrorCode.PROVIDER_CONFIG_WRITE_FAILED, "写入默认 Provider 配置失败", editor -> {
       editor.setScalar(new String[]{"app", "ai", "default-provider"}, defaultProvider);
       editor.removeSection(new String[]{"app", "ai"}, "module-defaults");
-    });
-  }
-
-  private void writeAsrConfigToYaml(VoiceInterviewProperties.AsrConfig asr) {
-    mutateYamlText(ErrorCode.VOICE_CONFIG_WRITE_FAILED, "写入 ASR 配置失败", editor -> {
-      LinkedHashMap<String, Object> values = new LinkedHashMap<>();
-      values.put("url", asr.getUrl());
-      values.put("model", asr.getModel());
-      values.put("api-key", "${AI_BAILIAN_API_KEY}");
-      values.put("language", asr.getLanguage());
-      values.put("format", asr.getFormat());
-      values.put("sample-rate", asr.getSampleRate());
-      values.put("enable-turn-detection", asr.isEnableTurnDetection());
-      values.put("turn-detection-type", asr.getTurnDetectionType());
-      values.put("turn-detection-threshold", asr.getTurnDetectionThreshold());
-      values.put("turn-detection-silence-duration-ms", asr.getTurnDetectionSilenceDurationMs());
-      editor.setBlock(new String[]{"app", "voice-interview", "qwen"}, "asr", values);
-    });
-  }
-
-  private void writeTtsConfigToYaml(VoiceInterviewProperties.QwenTtsConfig tts) {
-    mutateYamlText(ErrorCode.VOICE_CONFIG_WRITE_FAILED, "写入 TTS 配置失败", editor -> {
-      LinkedHashMap<String, Object> values = new LinkedHashMap<>();
-      values.put("model", tts.getModel());
-      values.put("api-key", "${AI_BAILIAN_API_KEY}");
-      values.put("voice", tts.getVoice());
-      values.put("format", tts.getFormat());
-      values.put("sample-rate", tts.getSampleRate());
-      values.put("mode", tts.getMode());
-      values.put("language-type", tts.getLanguageType());
-      values.put("speech-rate", tts.getSpeechRate());
-      values.put("volume", tts.getVolume());
-      editor.setBlock(new String[]{"app", "voice-interview", "qwen"}, "tts", values);
     });
   }
 
