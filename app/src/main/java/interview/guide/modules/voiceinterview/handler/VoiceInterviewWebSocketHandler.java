@@ -64,6 +64,7 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private final ObjectProvider<MeterRegistry> meterRegistryProvider;
     private final VoiceWebSocketMessageService messageService;
     private final VoiceWebSocketConversationService conversationService;
+    private final VoiceWebSocketTimeoutService timeoutService;
 
     VoiceInterviewWebSocketHandler(
         ObjectMapper objectMapper,
@@ -114,6 +115,12 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
         this.meterRegistryProvider = meterRegistryProvider;
         this.messageService = messageService;
         this.conversationService = conversationService;
+        this.timeoutService = new VoiceWebSocketTimeoutService(
+            sessionRegistry,
+            messageService,
+            interviewService,
+            sttService
+        );
         this.openingService = new VoiceWebSocketOpeningService(
             ttsService,
             voiceInterviewProperties,
@@ -142,8 +149,6 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
     private final Map<String, Long> lastActivityTime = new ConcurrentHashMap<>();
     private final VoiceWebSocketSessionRegistry sessionRegistry =
         new VoiceWebSocketSessionRegistry(sessions, sessionStates, lastActivityTime);
-    private static final long WARNING_TIME_MS = (long) (4.5 * 60 * 1000);  // 4:30
-    private static final long PAUSE_TIMEOUT_MS = 5 * 60 * 1000;            // 5:00
     private static final int WS_SEND_TIME_LIMIT_MS = 10_000;
     private static final int WS_SEND_BUFFER_LIMIT_BYTES = 512 * 1024;
     /** AI 音频播放结束后的冷却期，防止扬声器尾音被麦克风拾取触发 STT */
@@ -843,84 +848,12 @@ public class VoiceInterviewWebSocketHandler extends TextWebSocketHandler impleme
      */
     @Scheduled(fixedRate = 30000)
     public void checkPauseTimeout() {
-        long now = System.currentTimeMillis();
-
-        sessionRegistry.forEachLastActivity((sessionId, lastTime) -> {
-            long elapsed = now - lastTime;
-
-            // Send warning at 4:30
-            if (elapsed > WARNING_TIME_MS && elapsed < PAUSE_TIMEOUT_MS) {
-                sendPauseWarning(sessionId);
-            }
-            // Timeout at 5:00
-            else if (elapsed >= PAUSE_TIMEOUT_MS) {
-                log.warn("Session {} inactive for {} minutes, pausing",
-                    sessionId, PAUSE_TIMEOUT_MS / 60000);
-                handlePauseTimeout(sessionId);
-            }
-        });
+        timeoutService.checkPauseTimeout();
     }
 
     @Scheduled(fixedRate = 60_000)
     public void cleanupStaleSessions() {
-        try {
-            int cleaned = interviewService.cleanupStaleSessions();
-            if (cleaned > 0) {
-                log.info("Stale session cleanup: {} sessions cleaned", cleaned);
-            }
-        } catch (Exception e) {
-            log.error("Error during stale session cleanup", e);
-        }
-    }
-
-    /**
-     * Send pause warning notification
-     * 发送暂停警告通知
-     */
-    private void sendPauseWarning(String sessionId) {
-        WebSocketSession session = sessionRegistry.getSession(sessionId);
-        if (session != null && session.isOpen()) {
-            messageService.sendControl(
-                session,
-                "pause_timeout_warning",
-                "会话将在30秒后暂停，请继续说话或点击继续"
-            );
-        }
-    }
-
-    /**
-     * Handle pause timeout - save state and disconnect
-     * 处理暂停超时 - 保存状态并断开连接
-     */
-    private void handlePauseTimeout(String sessionId) {
-        WebSocketSession session = sessionRegistry.getSession(sessionId);
-
-        try {
-            if (session != null && session.isOpen()) {
-                messageService.sendControl(
-                    session,
-                    "pause_timeout",
-                    "会话因超时已暂停,可在历史记录中恢复"
-                );
-            }
-
-            // 2. Save session state to database
-            interviewService.pauseSession(sessionId, "timeout");
-
-            // 3. Close WebSocket connection
-            if (session != null && session.isOpen()) {
-                session.close(CloseStatus.GOING_AWAY);
-            }
-
-            // 4. Cleanup - Stop ASR session to prevent resource leak
-            sttService.stopTranscription(sessionId);
-            sessionRegistry.remove(sessionId);
-
-            log.info("Session {} paused due to timeout", sessionId);
-
-        } catch (Exception e) {
-            log.error("Error handling pause timeout for session {}", sessionId, e);
-        }
+        timeoutService.cleanupStaleSessions();
     }
 
     /**
