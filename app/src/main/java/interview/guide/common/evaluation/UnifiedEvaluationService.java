@@ -1,11 +1,6 @@
 package interview.guide.common.evaluation;
 
 import interview.guide.common.ai.StructuredOutputInvoker;
-import interview.guide.common.evaluation.EvaluationReport.CategoryScore;
-import interview.guide.common.evaluation.EvaluationReport.QuestionEvaluation;
-import interview.guide.common.evaluation.EvaluationReport.ReferenceAnswer;
-import interview.guide.common.exception.ErrorCode;
-import interview.guide.common.log.ErrorLogSanitizer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -17,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -34,13 +28,10 @@ public class UnifiedEvaluationService {
     private static final Logger log = LoggerFactory.getLogger(UnifiedEvaluationService.class);
     private static final int MAX_REFERENCE_CONTEXT_CHARS = 6000;
 
-    private final PromptTemplate summarySystemPromptTemplate;
-    private final PromptTemplate summaryUserPromptTemplate;
-    private final BeanOutputConverter<SummaryDTO> summaryOutputConverter;
-    private final StructuredOutputInvoker structuredOutputInvoker;
     private final ResourceLoader resourceLoader;
     private final EvaluationReportAssembler reportAssembler = new EvaluationReportAssembler();
     private final EvaluationBatchService batchService;
+    private final EvaluationSummaryService summaryService;
 
     // 批次评估结果
     record BatchReportDTO(
@@ -79,18 +70,17 @@ public class UnifiedEvaluationService {
             StructuredOutputInvoker structuredOutputInvoker,
             ResourceLoader resourceLoader,
             InterviewEvaluationProperties evaluationProperties) throws IOException {
-        this.structuredOutputInvoker = structuredOutputInvoker;
         this.resourceLoader = resourceLoader;
         PromptTemplate systemPromptTemplate =
             new PromptTemplate(loadPrompt(evaluationProperties.getSystemPromptPath()));
         PromptTemplate userPromptTemplate =
             new PromptTemplate(loadPrompt(evaluationProperties.getUserPromptPath()));
-        this.summarySystemPromptTemplate =
+        PromptTemplate summarySystemPromptTemplate =
             new PromptTemplate(loadPrompt(evaluationProperties.getSummarySystemPromptPath()));
-        this.summaryUserPromptTemplate =
+        PromptTemplate summaryUserPromptTemplate =
             new PromptTemplate(loadPrompt(evaluationProperties.getSummaryUserPromptPath()));
         BeanOutputConverter<BatchReportDTO> outputConverter = new BeanOutputConverter<>(BatchReportDTO.class);
-        this.summaryOutputConverter = new BeanOutputConverter<>(SummaryDTO.class);
+        BeanOutputConverter<SummaryDTO> summaryOutputConverter = new BeanOutputConverter<>(SummaryDTO.class);
         this.batchService = new EvaluationBatchService(
             systemPromptTemplate,
             userPromptTemplate,
@@ -100,6 +90,13 @@ public class UnifiedEvaluationService {
             evaluationProperties.isFallbackSplitEnabled(),
             Math.max(0, evaluationProperties.getFallbackMaxExtraCalls()),
             Math.max(2, evaluationProperties.getFallbackMinGroups())
+        );
+        this.summaryService = new EvaluationSummaryService(
+            summarySystemPromptTemplate,
+            summaryUserPromptTemplate,
+            summaryOutputConverter,
+            structuredOutputInvoker,
+            reportAssembler
         );
     }
 
@@ -149,7 +146,7 @@ public class UnifiedEvaluationService {
         List<String> fallbackImprovements = reportAssembler.mergeListItems(batchResults, false);
 
         // 二次汇总
-        SummaryDTO summary = summarizeBatchResults(
+        SummaryDTO summary = summaryService.summarize(
             chatClient, sessionId, resumeContext, referenceBaseline, qaRecords,
             mergedEvaluations, fallbackFeedback, fallbackStrengths, fallbackImprovements
         );
@@ -193,37 +190,6 @@ public class UnifiedEvaluationService {
         return reportAssembler.mergeListItems(batchResults, strengthsMode);
     }
 
-    private SummaryDTO summarizeBatchResults(
-            ChatClient chatClient, String sessionId, String resumeContext, String referenceContext,
-            List<QaRecord> qaRecords, List<QuestionEvalDTO> evaluations,
-            String fallbackFeedback, List<String> fallbackStrengths, List<String> fallbackImprovements) {
-        try {
-            String summarySystem = summarySystemPromptTemplate.render();
-            Map<String, Object> vars = new HashMap<>();
-            vars.put("resumeText", resumeContext);
-            vars.put("referenceContext",
-                (referenceContext != null && !referenceContext.isBlank()) ? referenceContext : "无");
-            vars.put("categorySummary", reportAssembler.buildCategorySummary(qaRecords, evaluations));
-            vars.put("questionHighlights", reportAssembler.buildQuestionHighlights(qaRecords, evaluations));
-            vars.put("fallbackOverallFeedback", fallbackFeedback);
-            vars.put("fallbackStrengths", String.join("\n", fallbackStrengths));
-            vars.put("fallbackImprovements", String.join("\n", fallbackImprovements));
-            String summaryUser = summaryUserPromptTemplate.render(vars);
-
-            String systemWithFormat = summarySystem + "\n\n" + summaryOutputConverter.getFormat();
-            SummaryDTO dto = structuredOutputInvoker.invoke(
-                chatClient, systemWithFormat, summaryUser, summaryOutputConverter,
-                ErrorCode.INTERVIEW_EVALUATION_FAILED, "总结评估失败：", "总结评估", log
-            );
-
-            return reportAssembler.summarize(qaRecords, evaluations, dto, fallbackFeedback,
-                fallbackStrengths, fallbackImprovements);
-        } catch (Exception e) {
-            log.warn("二次汇总评估失败，降级到批次聚合结果: sessionId={}, error={}",
-                sessionId, ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
-            return new SummaryDTO(fallbackFeedback, fallbackStrengths, fallbackImprovements);
-        }
-    }
 
     private EvaluationReport buildReport(String sessionId, List<QaRecord> qaRecords,
                                           List<QuestionEvalDTO> evaluations,
