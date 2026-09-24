@@ -301,10 +301,20 @@ class RagEvaluationTest {
     report.put("rejection", Map.of("status", "NOT_EVALUATED"));
     report.put("badCases", badCases);
     report.put("faithfulnessReview", List.of());
-    report.put("arms", Map.of(
-        "vectorOnly", Map.of("samples", vectorResults),
-        "vectorRerank", Map.of("samples", rerankResults)));
-    report.put("comparison", new LinkedHashMap<>());
+    Map<String, Object> vectorArm = new LinkedHashMap<>();
+    vectorArm.put("metrics", buildMetrics(vectorResults));
+    vectorArm.put("samples", vectorResults);
+    Map<String, Object> rerankArm = new LinkedHashMap<>();
+    rerankArm.put("metrics", buildMetrics(rerankResults));
+    rerankArm.put("samples", rerankResults);
+    Map<String, Object> arms = new LinkedHashMap<>();
+    arms.put("vectorOnly", vectorArm);
+    arms.put("vectorRerank", rerankArm);
+    report.put("arms", arms);
+    Map<String, Object> comparison = RagEvalMetrics.pairedComparison(
+        vectorResults, rerankResults, pairedResults);
+    report.put("comparison", comparison);
+    report.put("status", comparison.get("comparisonStatus"));
     report.put("samples", pairedResults);
     report.put("datasetVersion", DATASET);
     report.put("datasetSize", samples.size());

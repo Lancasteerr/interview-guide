@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * RAG 测评指标计算单元测试（不调用模型）。
@@ -95,5 +96,90 @@ class RagEvalMetricsTest {
     assertThat(metrics).containsKeys(
         "retrievalMsP50", "retrievalMsP95", "rerankMsP50", "rerankMsP95", "rewriteMsP50");
     assertThat(metrics).containsKeys("generationMsP50", "endToEndMsP50");
+  }
+
+  @Test
+  @DisplayName("配对指标输出 delta 以及命中、排名、覆盖率胜负平")
+  void pairedComparisonComputesDeltaAndWinners() {
+    Map<String, Object> vectorA = result("a", sample(
+        "RETRIEVED", false, false, true, 5, 0.5, false), "DISABLED");
+    Map<String, Object> vectorB = result("b", sample(
+        "NO_RESULT", false, false, false, null, 0.0, false), "DISABLED");
+    Map<String, Object> vectorOos = result("oos", sample(
+        "NO_RESULT", true, false, false, null, 1.0, true), "DISABLED");
+    Map<String, Object> rerankA = result("a", sample(
+        "RETRIEVED", false, false, true, 1, 1.0, false), "SUCCESS");
+    Map<String, Object> rerankB = result("b", sample(
+        "RETRIEVED", false, false, true, 3, 0.5, false), "SUCCESS");
+    Map<String, Object> rerankOos = result("oos", sample(
+        "NO_RESULT", true, false, false, null, 1.0, true), "SKIPPED");
+
+    List<Map<String, Object>> paired = List.of(
+        pair("a"), pair("b"), pair("oos"));
+    Map<String, Object> comparison = RagEvalMetrics.pairedComparison(
+        List.of(vectorA, vectorB, vectorOos),
+        List.of(rerankA, rerankB, rerankOos),
+        paired);
+
+    Map<String, Object> delta = (Map<String, Object>) comparison.get("metricDelta");
+    assertThat(delta).containsEntry("Hit@K(%)", 50.0)
+        .containsEntry("MRR", 0.5667)
+        .containsEntry("EvidenceRecall@K", 0.5);
+    Map<String, Object> wins = (Map<String, Object>) comparison.get("wins");
+    assertThat((Map<String, Object>) wins.get("hit"))
+        .containsEntry("wins", 1L).containsEntry("losses", 0L).containsEntry("ties", 1L);
+    assertThat((Map<String, Object>) wins.get("firstHitRank"))
+        .containsEntry("wins", 2L).containsEntry("losses", 0L).containsEntry("ties", 0L);
+    assertThat(comparison.get("candidateSetMismatchCount")).isEqualTo(0L);
+    assertThat((Map<String, Long>) comparison.get("rerankStatusCounts"))
+        .containsEntry("SUCCESS", 2L).containsEntry("SKIPPED", 1L);
+    assertThat(comparison.get("comparisonStatus")).isEqualTo("VALID");
+  }
+
+  @Test
+  @DisplayName("两个实验臂样本 ID 不一致时拒绝生成对照结论")
+  void pairedComparisonRejectsMismatchedIds() {
+    Map<String, Object> vector = result("a", sample(
+        "RETRIEVED", false, false, true, 1, 1.0, false), "DISABLED");
+    Map<String, Object> rerank = result("b", sample(
+        "RETRIEVED", false, false, true, 1, 1.0, false), "SUCCESS");
+
+    assertThatThrownBy(() -> RagEvalMetrics.pairedComparison(
+        List.of(vector), List.of(rerank), List.of()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("样本 ID 集合不一致");
+  }
+
+  @Test
+  @DisplayName("HARNESS_ERROR 不参与配对胜负统计")
+  void harnessErrorsAreExcludedFromPairedWins() {
+    Map<String, Object> vector = result("a", sample(
+        "HARNESS_ERROR", false, false, null, null, 0.0, false), "DISABLED");
+    Map<String, Object> rerank = result("a", sample(
+        "RETRIEVED", false, false, true, 1, 1.0, false), "SUCCESS");
+
+    Map<String, Object> comparison = RagEvalMetrics.pairedComparison(
+        List.of(vector), List.of(rerank), List.of(pair("a")));
+
+    assertThat((Map<String, Object>) ((Map<String, Object>) comparison.get("wins")).get("hit"))
+        .containsEntry("wins", 0L)
+        .containsEntry("losses", 0L)
+        .containsEntry("ties", 0L);
+  }
+
+  private Map<String, Object> result(String id, Map<String, Object> sample, String status) {
+    sample.put("id", id);
+    sample.put("rerankStatus", status);
+    sample.put("rerankReason", "SUCCESS".equals(status) ? "none" : "disabled");
+    return sample;
+  }
+
+  private Map<String, Object> pair(String id) {
+    Map<String, Object> pair = new java.util.HashMap<>();
+    pair.put("id", id);
+    pair.put("pairStatus", "VALID");
+    pair.put("candidateSetSame", true);
+    pair.put("queryContextSame", true);
+    return pair;
   }
 }

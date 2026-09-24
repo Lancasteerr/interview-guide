@@ -1,6 +1,7 @@
 package interview.guide.rag;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -103,6 +104,177 @@ public final class RagEvalMetrics {
     double recall = tp + fn == 0 ? 0 : (double) tp / (tp + fn);
     m.put("f1", precision + recall == 0 ? 0 : round(2 * precision * recall / (precision + recall)));
     return m;
+  }
+
+  /**
+   * 比较同一批样本的 vector-only 与 vector+rerank 两个实验臂。
+   * 配对结果只统计有效的站内样本，拒答样本仍保留在状态与一致性统计中。
+   */
+  public static Map<String, Object> pairedComparison(
+      List<Map<String, Object>> vectorResults,
+      List<Map<String, Object>> rerankResults,
+      List<Map<String, Object>> pairedResults) {
+    Map<String, Map<String, Object>> vectorById = indexById(vectorResults, "vectorOnly");
+    Map<String, Map<String, Object>> rerankById = indexById(rerankResults, "vectorRerank");
+    Map<String, Map<String, Object>> pairedById = indexById(pairedResults, "paired");
+    if (!vectorById.keySet().equals(rerankById.keySet())) {
+      throw new IllegalArgumentException("两个评测实验臂的样本 ID 集合不一致");
+    }
+    if (!vectorById.keySet().equals(pairedById.keySet())) {
+      throw new IllegalArgumentException("配对结果的样本 ID 集合不一致");
+    }
+
+    Map<String, Object> comparison = new LinkedHashMap<>();
+    comparison.put("sampleCount", vectorById.size());
+    comparison.put("validPairCount", pairedResults.stream()
+        .filter(r -> "VALID".equals(r.get("pairStatus"))).count());
+    comparison.put("invalidPairCount", pairedResults.stream()
+        .filter(r -> "INVALID".equals(r.get("pairStatus"))).count());
+    comparison.put("candidateSetMismatchCount", pairedResults.stream()
+        .filter(r -> Boolean.FALSE.equals(r.get("candidateSetSame"))).count());
+    comparison.put("queryContextMismatchCount", pairedResults.stream()
+        .filter(r -> Boolean.FALSE.equals(r.get("queryContextSame"))).count());
+
+    Map<String, Object> vectorMetrics = metricsOf(vectorResults);
+    Map<String, Object> rerankMetrics = metricsOf(rerankResults);
+    Map<String, Object> delta = new LinkedHashMap<>();
+    for (String key : List.of("Hit@K(%)", "MRR", "EvidenceRecall@K")) {
+      Number vector = number(vectorMetrics.get(key));
+      Number rerank = number(rerankMetrics.get(key));
+      if (vector != null && rerank != null) {
+        delta.put(key, round(rerank.doubleValue() - vector.doubleValue()));
+      }
+    }
+    comparison.put("metricDelta", delta);
+
+    Map<String, Object> wins = new LinkedHashMap<>();
+    wins.put("hit", compareBoolean(vectorById, rerankById));
+    wins.put("firstHitRank", compareRank(vectorById, rerankById));
+    wins.put("evidenceRecall", compareRecall(vectorById, rerankById));
+    comparison.put("wins", wins);
+
+    Map<String, Long> statusCounts = new LinkedHashMap<>();
+    rerankResults.forEach(result -> statusCounts.merge(
+        String.valueOf(result.get("rerankStatus")), 1L, Long::sum));
+    comparison.put("rerankStatusCounts", statusCounts);
+    long invalidPairCount = (Long) comparison.get("invalidPairCount");
+    long candidateSetMismatchCount = (Long) comparison.get("candidateSetMismatchCount");
+    long queryContextMismatchCount = (Long) comparison.get("queryContextMismatchCount");
+    comparison.put("comparisonStatus",
+        invalidPairCount == 0 && candidateSetMismatchCount == 0 && queryContextMismatchCount == 0
+            ? "VALID" : "INVALID");
+    return comparison;
+  }
+
+  private static Map<String, Map<String, Object>> indexById(
+      List<Map<String, Object>> results, String arm) {
+    Map<String, Map<String, Object>> indexed = new HashMap<>();
+    for (Map<String, Object> result : results) {
+      Object id = result.get("id");
+      if (!(id instanceof String sampleId) || sampleId.isBlank()
+          || indexed.put(sampleId, result) != null) {
+        throw new IllegalArgumentException(arm + " 实验臂存在空或重复样本 ID");
+      }
+    }
+    return indexed;
+  }
+
+  private static Map<String, Object> compareBoolean(
+      Map<String, Map<String, Object>> vectorById,
+      Map<String, Map<String, Object>> rerankById) {
+    long wins = 0;
+    long losses = 0;
+    long ties = 0;
+    for (String id : vectorById.keySet()) {
+      if (!comparable(vectorById.get(id), rerankById.get(id))) {
+        continue;
+      }
+      boolean vector = Boolean.TRUE.equals(vectorById.get(id).get("hit"));
+      boolean rerank = Boolean.TRUE.equals(rerankById.get(id).get("hit"));
+      if (vector == rerank) {
+        ties++;
+      } else if (rerank) {
+        wins++;
+      } else {
+        losses++;
+      }
+    }
+    return counts(wins, losses, ties);
+  }
+
+  private static Map<String, Object> compareRank(
+      Map<String, Map<String, Object>> vectorById,
+      Map<String, Map<String, Object>> rerankById) {
+    long wins = 0;
+    long losses = 0;
+    long ties = 0;
+    for (String id : vectorById.keySet()) {
+      if (!comparable(vectorById.get(id), rerankById.get(id))) {
+        continue;
+      }
+      Integer vector = integer(vectorById.get(id).get("firstHitRank"));
+      Integer rerank = integer(rerankById.get(id).get("firstHitRank"));
+      int vectorRank = vector == null ? Integer.MAX_VALUE : vector;
+      int rerankRank = rerank == null ? Integer.MAX_VALUE : rerank;
+      if (vectorRank == rerankRank) {
+        ties++;
+      } else if (rerankRank < vectorRank) {
+        wins++;
+      } else {
+        losses++;
+      }
+    }
+    return counts(wins, losses, ties);
+  }
+
+  private static Map<String, Object> compareRecall(
+      Map<String, Map<String, Object>> vectorById,
+      Map<String, Map<String, Object>> rerankById) {
+    long wins = 0;
+    long losses = 0;
+    long ties = 0;
+    for (String id : vectorById.keySet()) {
+      if (!comparable(vectorById.get(id), rerankById.get(id))) {
+        continue;
+      }
+      double vector = number(vectorById.get(id).get("evidenceRecall"), 0.0);
+      double rerank = number(rerankById.get(id).get("evidenceRecall"), 0.0);
+      if (Double.compare(vector, rerank) == 0) {
+        ties++;
+      } else if (rerank > vector) {
+        wins++;
+      } else {
+        losses++;
+      }
+    }
+    return counts(wins, losses, ties);
+  }
+
+  private static boolean comparable(Map<String, Object> vector, Map<String, Object> rerank) {
+    return !Boolean.TRUE.equals(vector.get("shouldReject"))
+        && !"HARNESS_ERROR".equals(vector.get("outcome"))
+        && !"HARNESS_ERROR".equals(rerank.get("outcome"));
+  }
+
+  private static Map<String, Object> counts(long wins, long losses, long ties) {
+    Map<String, Object> counts = new LinkedHashMap<>();
+    counts.put("wins", wins);
+    counts.put("losses", losses);
+    counts.put("ties", ties);
+    return counts;
+  }
+
+  private static Number number(Object value) {
+    return value instanceof Number number ? number : null;
+  }
+
+  private static double number(Object value, double fallback) {
+    Number number = number(value);
+    return number == null ? fallback : number.doubleValue();
+  }
+
+  private static Integer integer(Object value) {
+    return value instanceof Number number ? number.intValue() : null;
   }
 
   private static void putStagePercentiles(Map<String, Object> m, String p50Key, String p95Key,

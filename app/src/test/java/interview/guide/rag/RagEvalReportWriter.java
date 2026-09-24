@@ -52,6 +52,9 @@ public final class RagEvalReportWriter {
     sb.append("## 运行环境\n\n");
     Map<String, Object> env = (Map<String, Object>) report.get("environment");
     env.forEach((k, v) -> sb.append("- ").append(k).append(": ").append(v).append("\n"));
+    if ("paired-rerank".equals(report.get("evaluationMode"))) {
+      return toPairedMarkdown(report, sb);
+    }
     sb.append("\n## 汇总指标\n\n");
     Map<String, Object> metrics = (Map<String, Object>) report.get("metrics");
     metrics.forEach((group, value) -> {
@@ -98,6 +101,73 @@ public final class RagEvalReportWriter {
           .append(" | ").append(s.get("firstHitRank"))
           .append(" | ").append(s.get("evidenceRecall"))
           .append(" | ").append(s.get("totalMs"))
+          .append(" |\n");
+    }
+    return sb.toString();
+  }
+  @SuppressWarnings("unchecked")
+  private static String toPairedMarkdown(Map<String, Object> report, StringBuilder sb) {
+    sb.append("\n- generationEvaluation: ")
+        .append(report.getOrDefault("generationEvaluation", false))
+        .append("\n- rejectionEvaluation: ")
+        .append(report.getOrDefault("rejectionEvaluation", "NOT_EVALUATED"))
+        .append("\n");
+    sb.append("\n## 配对实验指标\n\n");
+    Map<String, Map<String, Object>> arms = (Map<String, Map<String, Object>>) report
+        .getOrDefault("arms", Map.of());
+    for (String armName : List.of("vectorOnly", "vectorRerank")) {
+      Map<String, Object> arm = arms.get(armName);
+      if (arm == null) {
+        continue;
+      }
+      sb.append("### ").append(armName).append("\n\n");
+      Map<String, Object> metrics = (Map<String, Object>) arm.getOrDefault("metrics", Map.of());
+      metrics.forEach((group, value) -> {
+        sb.append("#### ").append(group).append("\n\n");
+        if (value instanceof Map<?, ?> values) {
+          values.forEach((key, metric) -> sb.append("- ").append(key)
+              .append(": ").append(metric).append("\n"));
+        }
+        sb.append("\n");
+      });
+    }
+
+    sb.append("## 对照差异\n\n");
+    sb.append("- status: ").append(report.getOrDefault("status", "UNKNOWN")).append("\n");
+    Map<String, Object> comparison = (Map<String, Object>) report
+        .getOrDefault("comparison", Map.of());
+    comparison.forEach((key, value) -> sb.append("- ").append(key)
+        .append(": ").append(value).append("\n"));
+
+    sb.append("\n## 配对坏例\n\n");
+    List<Map<String, Object>> bad = (List<Map<String, Object>>) report
+        .getOrDefault("badCases", List.of());
+    if (bad.isEmpty()) {
+      sb.append("（无）\n");
+    }
+    for (Map<String, Object> item : bad) {
+      sb.append("### ").append(item.get("id"))
+          .append(" [").append(item.get("reason")).append("]\n\n")
+          .append("- arm: ").append(item.get("arm")).append("\n")
+          .append("- detail: ").append(item.get("detail")).append("\n\n");
+    }
+
+    sb.append("## 逐样本配对明细\n\n");
+    List<Map<String, Object>> samples = (List<Map<String, Object>>) report
+        .getOrDefault("samples", List.of());
+    sb.append("| id | split | vector hit/rank | rerank hit/rank | vector recall | rerank recall | rerank status | pair |\n");
+    sb.append("|---|---|---|---|---:|---:|---|---|\n");
+    for (Map<String, Object> sample : samples) {
+      Map<String, Object> vector = (Map<String, Object>) sample.getOrDefault("vectorOnly", Map.of());
+      Map<String, Object> rerank = (Map<String, Object>) sample.getOrDefault("vectorRerank", Map.of());
+      sb.append("| ").append(sample.get("id"))
+          .append(" | ").append(sample.get("split"))
+          .append(" | ").append(vector.get("hit")).append("/").append(vector.get("firstHitRank"))
+          .append(" | ").append(rerank.get("hit")).append("/").append(rerank.get("firstHitRank"))
+          .append(" | ").append(vector.get("evidenceRecall"))
+          .append(" | ").append(rerank.get("evidenceRecall"))
+          .append(" | ").append(rerank.get("rerankStatus"))
+          .append(" | ").append(sample.get("pairStatus"))
           .append(" |\n");
     }
     return sb.toString();
