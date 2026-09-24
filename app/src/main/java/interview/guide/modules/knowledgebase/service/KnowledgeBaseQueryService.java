@@ -1,7 +1,6 @@
 package interview.guide.modules.knowledgebase.service;
 
 import interview.guide.common.ai.LlmProviderRegistry;
-import interview.guide.common.ai.PromptSecurityConstants;
 import interview.guide.common.ai.rerank.RerankResult;
 import interview.guide.common.ai.rerank.RerankedDocument;
 import interview.guide.common.ai.rerank.RerankExecutionMode;
@@ -14,25 +13,17 @@ import interview.guide.modules.knowledgebase.dto.QueryRequest;
 import interview.guide.modules.knowledgebase.dto.QueryResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.UserMessage;
-import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.document.Document;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
-import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -44,25 +35,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Service
 public class KnowledgeBaseQueryService {
     private static final String NO_RESULT_RESPONSE = "抱歉，在选定的知识库中未检索到相关信息。请换一个更具体的关键词或补充上下文后再试。";
-    private static final int STREAM_PROBE_CHARS = 120;
-    private static final int MAX_REWRITE_HISTORY_CHAR = 200;
 
     private final LlmProviderRegistry llmProviderRegistry;
     private final RagMetrics ragMetrics;
     private final KnowledgeBaseVectorService vectorService;
     private final KnowledgeBaseListService listService;
     private final KnowledgeBaseCountService countService;
-    private final PromptTemplate systemPromptTemplate;
-    private final PromptTemplate userPromptTemplate;
-    private final PromptTemplate rewritePromptTemplate;
-    private final boolean rewriteEnabled;
+    private final KnowledgeBaseRagPromptService ragPromptService;
+    private final KnowledgeBaseRagResponseService ragResponseService;
     private final boolean mergeOriginalQuery;
-    private final int shortQueryLength;
-    private final int topkShort;
-    private final int topkMedium;
-    private final int topkLong;
-    private final double minScoreShort;
-    private final double minScoreDefault;
 
     public KnowledgeBaseQueryService(
             LlmProviderRegistry llmProviderRegistry,
@@ -77,26 +58,10 @@ public class KnowledgeBaseQueryService {
         this.vectorService = vectorService;
         this.listService = listService;
         this.countService = countService;
-        this.systemPromptTemplate = new PromptTemplate(
-            resourceLoader.getResource(queryProperties.getSystemPromptPath())
-                .getContentAsString(StandardCharsets.UTF_8)
-        );
-        this.userPromptTemplate = new PromptTemplate(
-            resourceLoader.getResource(queryProperties.getUserPromptPath())
-                .getContentAsString(StandardCharsets.UTF_8)
-        );
-        this.rewritePromptTemplate = new PromptTemplate(
-            resourceLoader.getResource(queryProperties.getRewritePromptPath())
-                .getContentAsString(StandardCharsets.UTF_8)
-        );
-        this.rewriteEnabled = queryProperties.getRewrite().isEnabled();
+        this.ragPromptService = new KnowledgeBaseRagPromptService(
+            llmProviderRegistry, ragMetrics, queryProperties, resourceLoader);
+        this.ragResponseService = new KnowledgeBaseRagResponseService(NO_RESULT_RESPONSE);
         this.mergeOriginalQuery = queryProperties.getSearch().isMergeOriginalQuery();
-        this.shortQueryLength = queryProperties.getSearch().getShortQueryLength();
-        this.topkShort = queryProperties.getSearch().getTopkShort();
-        this.topkMedium = queryProperties.getSearch().getTopkMedium();
-        this.topkLong = queryProperties.getSearch().getTopkLong();
-        this.minScoreShort = queryProperties.getSearch().getMinScoreShort();
-        this.minScoreDefault = queryProperties.getSearch().getMinScoreDefault();
     }
 
     private ChatClient getChatClient() {
@@ -132,7 +97,7 @@ public class KnowledgeBaseQueryService {
             return NO_RESULT_RESPONSE;
         }
 
-        QueryContext queryContext = null;
+        KnowledgeBaseRagQueryPlan queryContext = null;
         long retrievalNanos = 0;
         try {
             countService.updateQuestionCounts(knowledgeBaseIds);
@@ -204,18 +169,14 @@ public class KnowledgeBaseQueryService {
      * 构建系统提示词
      */
     private String buildSystemPrompt() {
-        return systemPromptTemplate.render()
-            + PromptSecurityConstants.ANTI_INJECTION_INSTRUCTION;
+        return ragPromptService.buildSystemPrompt();
     }
 
     /**
      * 构建用户提示词
      */
     private String buildUserPrompt(String context, String question) {
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("context", context);
-        variables.put("question", question);
-        return userPromptTemplate.render(variables);
+        return ragPromptService.buildUserPrompt(context, question);
     }
 
     /**
@@ -296,7 +257,7 @@ public class KnowledgeBaseQueryService {
 
             // 2. Query rewrite + 动态参数检索
             List<Message> effectiveHistory = sanitizeHistory(history);
-            QueryContext queryContext = buildQueryContext(question, effectiveHistory);
+            KnowledgeBaseRagQueryPlan queryContext = buildQueryContext(question, effectiveHistory);
             List<String> attemptedQueries = new ArrayList<>();
             long retrievalStart = System.nanoTime();
             List<Document> retrievedDocs = retrieveRelevantDocs(
@@ -403,7 +364,7 @@ public class KnowledgeBaseQueryService {
      * 输出执行轨迹（收集器为 null 时直接返回）。
      */
     private void emitTrace(java.util.function.Consumer<RagQueryExecution> trace,
-                           String originalQuestion, QueryContext queryContext,
+                           String originalQuestion, KnowledgeBaseRagQueryPlan queryContext,
                            List<String> attemptedQueries, RerankResult rerankResult,
                            long retrievalMs, long generationMs,
                            String answer, String outcome) {
@@ -418,8 +379,8 @@ public class KnowledgeBaseQueryService {
                 i + 1, doc.getId(), doc.getText(), extractScore(doc), reranked.rerankScore(),
                 doc.getMetadata()));
         }
-        SearchParams params = queryContext != null ? queryContext.searchParams()
-            : new SearchParams(topkLong, minScoreDefault);
+        KnowledgeBaseRagSearchParams params = queryContext != null ? queryContext.searchParams()
+            : new KnowledgeBaseRagSearchParams(12, 0.28);
         long rewriteMs = queryContext != null ? queryContext.rewriteDurationMs() : 0;
         trace.accept(new RagQueryExecution(
             normalizeQuestion(originalQuestion),
@@ -486,11 +447,12 @@ public class KnowledgeBaseQueryService {
         String normalized = normalizeQuestion(question);
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalized.isBlank()) {
             return new RagQueryExecution(normalized, normalized, List.of(normalized),
-                topkLong, minScoreDefault, List.of(), 0, 0, 0,
+                ragPromptService.defaultSearchParams().topK(),
+                ragPromptService.defaultSearchParams().minScore(), List.of(), 0, 0, 0,
                 "DISABLED", "disabled", 0, NO_RESULT_RESPONSE, "NO_RESULT");
         }
         List<Message> effectiveHistory = sanitizeHistory(history);
-        QueryContext queryContext = buildQueryContext(question, effectiveHistory);
+        KnowledgeBaseRagQueryPlan queryContext = buildQueryContext(question, effectiveHistory);
         List<String> attemptedQueries = new ArrayList<>();
         long retrievalStart = System.nanoTime();
         List<Document> retrievedDocs = retrieveRelevantDocs(
@@ -536,17 +498,8 @@ public class KnowledgeBaseQueryService {
         return List.copyOf(docs);
     }
 
-    private QueryContext buildQueryContext(String originalQuestion, List<Message> history) {
-        String normalizedQuestion = normalizeQuestion(originalQuestion);
-        long rewriteStart = System.nanoTime();
-        String rewrittenQuestion = rewriteQuestion(normalizedQuestion, history);
-        long rewriteDurationMs = (System.nanoTime() - rewriteStart) / 1_000_000;
-        Set<String> candidates = new LinkedHashSet<>();
-        candidates.add(rewrittenQuestion);
-        candidates.add(normalizedQuestion);
-
-        SearchParams searchParams = resolveSearchParams(normalizedQuestion);
-        return new QueryContext(normalizedQuestion, new ArrayList<>(candidates), searchParams, rewriteDurationMs);
+    private KnowledgeBaseRagQueryPlan buildQueryContext(String originalQuestion, List<Message> history) {
+        return ragPromptService.buildQueryPlan(originalQuestion, history);
     }
 
     private List<Message> sanitizeHistory(List<Message> history) {
@@ -558,15 +511,15 @@ public class KnowledgeBaseQueryService {
 
 //       清洗
     private String normalizeQuestion(String question) {
-        return question == null ? "" : question.trim();
+        return ragPromptService.normalizeQuestion(question);
     }
 
 //    向量检索（attemptedQueries 非空时记录实际尝试过的候选，第一个命中后即返回）
-    private List<Document> retrieveRelevantDocs(QueryContext queryContext, List<Long> knowledgeBaseIds) {
+    private List<Document> retrieveRelevantDocs(KnowledgeBaseRagQueryPlan queryContext, List<Long> knowledgeBaseIds) {
         return retrieveRelevantDocs(queryContext, knowledgeBaseIds, null);
     }
 
-    private List<Document> retrieveRelevantDocs(QueryContext queryContext, List<Long> knowledgeBaseIds,
+    private List<Document> retrieveRelevantDocs(KnowledgeBaseRagQueryPlan queryContext, List<Long> knowledgeBaseIds,
                                                 List<String> attemptedQueries) {
         List<String> candidates = queryContext.candidateQueries();
         if (mergeOriginalQuery && candidates.size() > 1
@@ -605,7 +558,7 @@ public class KnowledgeBaseQueryService {
      * 按 Document ID 去重保留高分，null 分数排后、同分保持改写路优先的稳定顺序，
      * 按分数降序截取最终 Top K。两路均来自同一向量库与相似度定义，第一版用最大分数融合。
      */
-    private List<Document> retrieveAndMerge(QueryContext queryContext, List<Long> knowledgeBaseIds,
+    private List<Document> retrieveAndMerge(KnowledgeBaseRagQueryPlan queryContext, List<Long> knowledgeBaseIds,
                                             List<String> attemptedQueries) {
         Map<String, Document> merged = new LinkedHashMap<>();
         int topK = queryContext.searchParams().topK();
@@ -672,165 +625,16 @@ public class KnowledgeBaseQueryService {
         return Double.compare(scoreB, scoreA);
     }
 
-    private SearchParams resolveSearchParams(String question) {
-        int compactLength = question.replaceAll("\\s+", "").length();
-        if (compactLength <= shortQueryLength) {
-            return new SearchParams(topkShort, minScoreShort);
-        }
-        if (compactLength <= 12) {
-            return new SearchParams(topkMedium, minScoreDefault);
-        }
-        return new SearchParams(topkLong, minScoreDefault);
-    }
-
-//    改写
-    private String rewriteQuestion(String question, List<Message> history) {
-        if (!rewriteEnabled) {
-            ragMetrics.recordRewriteFallback("disabled");
-            return question;
-        }
-        if (question.isBlank()) {
-            ragMetrics.recordRewriteFallback("blank");
-            return question;
-        }
-        try {
-            Map<String, Object> variables = new HashMap<>();
-            variables.put("question", question);
-            variables.put("history", formatHistoryForRewrite(history));
-            String rewritePrompt = rewritePromptTemplate.render(variables);
-            String rewritten = getChatClient().prompt()
-                .user(rewritePrompt)
-                .call()
-                .content();
-            if (rewritten == null || rewritten.isBlank()) {
-                return question;
-            }
-            String normalized = rewritten.trim();
-            if (normalized.equals(question)) {
-                ragMetrics.recordRewriteFallback("unchanged");
-            }
-            log.info("Query rewrite 完成: originLength={}, rewrittenLength={}, changed={}, historySize={}",
-                question.length(), normalized.length(), !normalized.equals(question), history.size());
-            return normalized;
-        } catch (Exception e) {
-            ragMetrics.recordRewriteFallback("error");
-            log.warn("Query rewrite 失败，使用原问题继续检索: {}",
-                ErrorLogSanitizer.summarize(e), ErrorLogSanitizer.forLogging(e));
-            return question;
-        }
-    }
-
-    /**
-     * 将历史消息格式化为重写 prompt 中的文本摘要。
-     * 每条消息格式：用户: xxx / 助手: xxx
-     */
-    private String formatHistoryForRewrite(List<Message> history) {
-        if (history == null || history.isEmpty()) {
-            return "";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (Message msg : history) {
-            if (msg instanceof UserMessage) {
-                sb.append("用户: ").append(msg.getText()).append("\n");
-            } else if (msg instanceof AssistantMessage) {
-                // 截断过长的助手回复，避免 rewrite prompt 过长
-                String text = msg.getText();
-                if (text.length() > MAX_REWRITE_HISTORY_CHAR) {
-                    text = text.substring(0, MAX_REWRITE_HISTORY_CHAR) + "...";
-                }
-                sb.append("助手: ").append(text).append("\n");
-            }
-        }
-        return sb.toString().trim();
-    }
-
-    private boolean hasEffectiveHit(List<Document> docs) {
-        return docs != null && !docs.isEmpty();
+    private Flux<String> normalizeStreamOutput(Flux<String> rawFlux) {
+        return ragResponseService.normalizeStreamOutput(rawFlux);
     }
 
     private String normalizeAnswer(String answer) {
-        if (answer == null || answer.isBlank()) {
-            return NO_RESULT_RESPONSE;
-        }
-        String normalized = answer.trim();
-        if (isNoResultLike(normalized)) {
-            return NO_RESULT_RESPONSE;
-        }
-        return normalized;
+        return ragResponseService.normalizeAnswer(answer);
     }
 
-    private boolean isNoResultLike(String text) {
-        return text.contains("没有找到相关信息")
-            || text.contains("未检索到相关信息")
-            || text.contains("信息不足")
-            || text.contains("超出知识库范围")
-            || text.contains("无法根据提供内容回答");
+    private boolean hasEffectiveHit(List<Document> documents) {
+        return documents != null && !documents.isEmpty();
     }
 
-    /**
-     * 先观察前一小段流式内容，快速识别“无信息”模板。
-     * - 命中无信息：立即输出固定模板并结束，防止长篇拒答
-     * - 非无信息：尽快释放缓冲并继续实时透传
-     */
-    private Flux<String> normalizeStreamOutput(Flux<String> rawFlux) {
-        return Flux.create(sink -> {
-            StringBuilder probeBuffer = new StringBuilder();
-            AtomicBoolean passthrough = new AtomicBoolean(false);
-            AtomicBoolean completed = new AtomicBoolean(false);
-            final Disposable[] disposableRef = new Disposable[1];
-
-            disposableRef[0] = rawFlux.subscribe(
-                chunk -> {
-                    if (completed.get() || sink.isCancelled()) {
-                        return;
-                    }
-                    if (passthrough.get()) {
-                        sink.next(chunk);
-                        return;
-                    }
-
-                    probeBuffer.append(chunk);
-                    String probeText = probeBuffer.toString();
-                    if (isNoResultLike(probeText)) {
-                        completed.set(true);
-                        sink.next(NO_RESULT_RESPONSE);
-                        sink.complete();
-                        if (disposableRef[0] != null) {
-                            disposableRef[0].dispose();
-                        }
-                        return;
-                    }
-
-                    if (probeBuffer.length() >= STREAM_PROBE_CHARS) {
-                        passthrough.set(true);
-                        sink.next(probeText);
-                        probeBuffer.setLength(0);
-                    }
-                },
-                sink::error,
-                () -> {
-                    if (completed.get() || sink.isCancelled()) {
-                        return;
-                    }
-                    if (!passthrough.get()) {
-                        sink.next(normalizeAnswer(probeBuffer.toString()));
-                    }
-                    sink.complete();
-                }
-            );
-
-            sink.onCancel(() -> {
-                if (disposableRef[0] != null) {
-                    disposableRef[0].dispose();
-                }
-            });
-        });
-    }
-
-    private record SearchParams(int topK, double minScore) {
-    }
-
-    private record QueryContext(String originalQuestion, List<String> candidateQueries, SearchParams searchParams,
-                                long rewriteDurationMs) {
-    }
 }
