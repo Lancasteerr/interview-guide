@@ -63,6 +63,7 @@ public class InterviewSkillService {
     private final PromptTemplate jdSystemPromptTemplate;
     private final ResourceLoader resourceLoader;
     private final PromptSanitizer promptSanitizer;
+    private final InterviewSkillAllocationService allocationService = new InterviewSkillAllocationService();
 
     /** 预设 Skill 注册表，启动时从 classpath:skills/{skillId}/SKILL.md 加载 */
     private final Map<String, InterviewSkillProperties.SkillDefinition> presetRegistry = new TreeMap<>();
@@ -251,79 +252,11 @@ public class InterviewSkillService {
     }
 
     public Map<String, Integer> calculateAllocation(List<SkillCategoryDTO> categories, int totalQuestions) {
-        List<SkillCategoryDTO> alwaysOneCats = new ArrayList<>();
-        List<SkillCategoryDTO> coreCats = new ArrayList<>();
-        List<SkillCategoryDTO> normalCats = new ArrayList<>();
-
-        for (SkillCategoryDTO cat : categories) {
-            switch (cat.priority()) {
-                case "ALWAYS_ONE" -> alwaysOneCats.add(cat);
-                case "CORE" -> coreCats.add(cat);
-                default -> normalCats.add(cat);
-            }
-        }
-
-        Map<String, Integer> allocation = new LinkedHashMap<>();
-        int remaining = totalQuestions;
-
-        // Phase 1: ALWAYS_ONE 保底各 1 题
-        for (SkillCategoryDTO cat : alwaysOneCats) {
-            if (remaining > 0) {
-                allocation.put(cat.key(), 1);
-                remaining--;
-            }
-        }
-
-        // Phase 2: 先给所有类目各 1 题（CORE 优先），保证覆盖率
-        for (SkillCategoryDTO cat : coreCats) {
-            if (remaining > 0) {
-                allocation.put(cat.key(), 1);
-                remaining--;
-            }
-        }
-        for (SkillCategoryDTO cat : normalCats) {
-            if (remaining > 0) {
-                allocation.put(cat.key(), 1);
-                remaining--;
-            }
-        }
-
-        // Phase 3: 剩余名额按 CORE 优先轮转分配
-        while (remaining > 0) {
-            for (SkillCategoryDTO cat : coreCats) {
-                if (remaining <= 0) break;
-                allocation.merge(cat.key(), 1, Integer::sum);
-                remaining--;
-            }
-            for (SkillCategoryDTO cat : normalCats) {
-                if (remaining <= 0) break;
-                allocation.merge(cat.key(), 1, Integer::sum);
-                remaining--;
-            }
-            if (coreCats.isEmpty() && normalCats.isEmpty()) break;
-        }
-
-        // 确保所有类目都出现在 allocation 中
-        for (SkillCategoryDTO cat : coreCats) {
-            allocation.putIfAbsent(cat.key(), 0);
-        }
-        for (SkillCategoryDTO cat : normalCats) {
-            allocation.putIfAbsent(cat.key(), 0);
-        }
-
-        log.debug("题目分配: total={}, allocation={}", totalQuestions, allocation);
-        return allocation;
+        return allocationService.calculateAllocation(categories, totalQuestions);
     }
 
     public String buildAllocationDescription(Map<String, Integer> allocation, List<SkillCategoryDTO> categories) {
-        StringBuilder sb = new StringBuilder();
-        for (SkillCategoryDTO cat : categories) {
-            int count = allocation.getOrDefault(cat.key(), 0);
-            if (count > 0) {
-                sb.append("| ").append(cat.label()).append(" | ").append(count).append(" 题 | ").append(cat.priority()).append(" |\n");
-            }
-        }
-        return sb.toString();
+        return allocationService.buildDescription(allocation, categories);
     }
 
     public String buildReferenceSection(SkillDTO skill, Map<String, Integer> allocation) {
