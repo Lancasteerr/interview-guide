@@ -21,8 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -54,10 +52,9 @@ public class VoiceInterviewService {
     private final VoiceInterviewSessionCacheService sessionCacheService;
     private final VoiceInterviewPhaseService phaseService;
     private final VoiceInterviewMessageService messageService;
+    private final VoiceInterviewEvaluationLifecycleService evaluationService;
 
     private static final String DEFAULT_USER_ID = "default";
-    private static final Duration PENDING_EVALUATION_REQUEUE_DELAY = Duration.ofMinutes(3);
-    private static final Duration PROCESSING_EVALUATION_TIMEOUT = Duration.ofMinutes(30);
 
     public VoiceInterviewService(
             VoiceInterviewSessionRepository sessionRepository,
@@ -76,6 +73,8 @@ public class VoiceInterviewService {
         this.sessionCacheService = new VoiceInterviewSessionCacheService(redissonClient);
         this.phaseService = new VoiceInterviewPhaseService(properties);
         this.messageService = new VoiceInterviewMessageService(sessionRepository, messageRepository);
+        this.evaluationService = new VoiceInterviewEvaluationLifecycleService(
+            sessionRepository, voiceEvaluateStreamProducer, sessionCacheService);
     }
 
     /**
@@ -130,7 +129,7 @@ public class VoiceInterviewService {
         }
         log.info("Auto-ending IN_PROGRESS session {} after WebSocket disconnect", sessionId);
         endSession(session);
-        sendEvaluateTaskAfterCommit(sessionIdLong);
+        evaluationService.sendTaskAfterCommit(sessionIdLong);
     }
 
     /**
@@ -150,7 +149,7 @@ public class VoiceInterviewService {
         }
 
         endSession(session);
-        sendEvaluateTaskAfterCommit(sessionIdLong);
+        evaluationService.sendTaskAfterCommit(sessionIdLong);
     }
 
     private void endSession(VoiceInterviewSessionEntity session) {
@@ -498,18 +497,7 @@ public class VoiceInterviewService {
      * Update evaluation status on session entity (shared by Producer/Consumer/Controller)
      */
     public void updateEvaluateStatus(Long sessionId, AsyncTaskStatus status, String error) {
-        try {
-            sessionRepository.findById(sessionId).ifPresent(session -> {
-                session.setEvaluateStatus(status);
-                session.setEvaluateError(error);
-                sessionRepository.save(session);
-                sessionCacheService.invalidate(sessionId);
-                log.debug("Evaluation status updated: sessionId={}, status={}", sessionId, status);
-            });
-        } catch (Exception e) {
-            log.error("Failed to update evaluation status: sessionId={}, status={}, error={}",
-                    sessionId, status, e.getMessage(), e);
-        }
+        evaluationService.updateEvaluateStatus(sessionId, status, error);
     }
 
     /**
@@ -517,23 +505,7 @@ public class VoiceInterviewService {
      */
     @Transactional
     public void triggerEvaluation(Long sessionId) {
-        updateEvaluateStatus(sessionId, AsyncTaskStatus.PENDING, null);
-        sendEvaluateTaskAfterCommit(sessionId);
-    }
-
-    private void sendEvaluateTaskAfterCommit(Long sessionId) {
-        Runnable sendTask = () -> voiceEvaluateStreamProducer.sendEvaluateTask(sessionId.toString());
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            sendTask.run();
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                sendTask.run();
-            }
-        });
+        evaluationService.triggerEvaluation(sessionId);
     }
 
     /**
@@ -581,40 +553,10 @@ public class VoiceInterviewService {
             log.info("Cleaning up stale IN_PROGRESS session {}, started at {}",
                 session.getId(), session.getStartTime());
             endSession(session);
-            sendEvaluateTaskAfterCommit(session.getId());
+            evaluationService.sendTaskAfterCommit(session.getId());
             cleaned++;
         }
 
-        LocalDateTime pendingStaleThreshold = LocalDateTime.now()
-            .minus(PENDING_EVALUATION_REQUEUE_DELAY);
-        List<VoiceInterviewSessionEntity> pendingEvals = sessionRepository
-            .findByEvaluateStatusAndUpdatedAtBefore(AsyncTaskStatus.PENDING, pendingStaleThreshold);
-
-        for (VoiceInterviewSessionEntity session : pendingEvals) {
-            log.warn("Requeueing stale PENDING evaluation for session {}, last updated at {}",
-                session.getId(), session.getUpdatedAt());
-            session.setEvaluateError(null);
-            session.setUpdatedAt(LocalDateTime.now());
-            sessionRepository.save(session);
-            sessionCacheService.invalidate(session.getId());
-            sendEvaluateTaskAfterCommit(session.getId());
-            cleaned++;
-        }
-
-        LocalDateTime evalStaleThreshold = LocalDateTime.now()
-            .minus(PROCESSING_EVALUATION_TIMEOUT);
-        List<VoiceInterviewSessionEntity> stuckEvals = sessionRepository
-            .findByEvaluateStatusAndUpdatedAtBefore(AsyncTaskStatus.PROCESSING, evalStaleThreshold);
-
-        for (VoiceInterviewSessionEntity session : stuckEvals) {
-            log.info("Resetting stuck PROCESSING evaluation for session {}", session.getId());
-            session.setEvaluateStatus(AsyncTaskStatus.FAILED);
-            session.setEvaluateError("评估超时，请重新触发");
-            sessionRepository.save(session);
-            sessionCacheService.invalidate(session.getId());
-            cleaned++;
-        }
-
-        return cleaned;
+        return cleaned + evaluationService.recoverStaleEvaluations();
     }
 }
